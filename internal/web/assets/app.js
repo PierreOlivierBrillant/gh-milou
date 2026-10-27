@@ -1039,13 +1039,50 @@ async function chargerGroupes(force) {
     if (premiere) enEchec(liste, "Les groupes n'ont pas pu être chargés.");
     return;
   }
+  retenirGroupes(donnees);
+  // Un inventaire périmé est montré aussitôt, et dit de quand il date : la
+  // relecture que le serveur vient de lancer le remplace dès qu'elle aboutit.
+  if (donnees.stale) relireGroupes(donnees.stale);
+  else if (!relectureGroupes) direSourceDesGroupes('');
+  // La détection relit tout l'inventaire : elle n'a lieu que là où elle sert.
+}
+
+// retenirGroupes range ce que le serveur dit des groupes, et les dessine.
+function retenirGroupes(donnees) {
   // Seuls les groupes de l'organisation choisie sont montrés : c'est elle qui
   // cadre tout ce que l'interface propose.
   etat.groupes = (donnees.classrooms || []).filter((groupe) =>
     groupe.org.toLowerCase() === etat.organisation.toLowerCase());
   etat.sessions = donnees.sessions || [];
   dessinerParcours();
-  // La détection relit tout l'inventaire : elle n'a lieu que là où elle sert.
+}
+
+// relireGroupes attend la relecture de l'inventaire, puis redessine la liste.
+// Une seule attente à la fois : revenir à l'accueil pendant qu'elle court n'en
+// ajoute pas une seconde. Son échec ne se dit que dans la note : la liste
+// montrée reste utilisable, et la note dit de quand elle date.
+let relectureGroupes = null;
+
+function relireGroupes(age) {
+  direSourceDesGroupes(`Dépôts relus il y a ${age} — mise à jour en cours…`);
+  if (relectureGroupes) return;
+  relectureGroupes = (async () => {
+    try {
+      retenirGroupes(await api('GET', '/api/classrooms?fresh=1'));
+      direSourceDesGroupes('');
+    } catch (erreur) {
+      direSourceDesGroupes(
+        `Dépôts relus il y a ${age} : la mise à jour a échoué (${erreur.message}).`, true);
+    } finally {
+      relectureGroupes = null;
+    }
+  })();
+}
+
+function direSourceDesGroupes(texte, alerte = false) {
+  $('parcours-source-texte').textContent = texte;
+  $('parcours-source-texte').classList.toggle('alerte', alerte);
+  $('parcours-source').hidden = !texte;
 }
 
 // nomDeSession retrouve le nom long d'une session.

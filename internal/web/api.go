@@ -132,6 +132,7 @@ func (s *Server) handleClearCache(writer http.ResponseWriter, _ *http.Request) {
 	s.mutex.Lock()
 	s.inventory = map[string][]groups.RepoInfo{}
 	s.squads = map[string][]teams.Info{}
+	s.squadNames = map[string][]teams.Info{}
 	s.resolvers = map[string]*identity.Resolver{}
 	s.mutex.Unlock()
 	writeJSON(writer, http.StatusOK, map[string]any{
@@ -227,29 +228,123 @@ func (s *Server) roleWarning(org string) string {
 // repos charge les dépôts de l'organisation : mémoire, puis cache, puis API.
 func (s *Server) repos(org string, force bool) ([]groups.RepoInfo, string, error) {
 	if !force {
-		s.mutex.Lock()
-		known, found := s.inventory[org]
-		s.mutex.Unlock()
-		if found {
-			return known, "mémoire", nil
-		}
-		var cached []groups.RepoInfo
-		if s.deps.Cache.Get(cache.ReposKey(org), cache.ReposTTL, &cached) && len(cached) > 0 {
-			s.remember(org, cached)
-			return cached, "cache (" + s.deps.Cache.Describe() + ")", nil
+		if known, source, found := s.knownRepos(org); found {
+			return known, source, nil
 		}
 	}
-
-	fetched, err := s.deps.Client.ListOrgRepos(org, nil)
+	fetched, err := s.fetchRepos(org)
 	if err != nil {
 		return nil, "", err
 	}
+	return fetched, "GitHub", nil
+}
+
+// knownRepos rend l'inventaire qu'on peut tenir pour à jour : celui de la
+// mémoire, ou celui du cache tant qu'il vaut.
+func (s *Server) knownRepos(org string) ([]groups.RepoInfo, string, bool) {
+	s.mutex.Lock()
+	known, found := s.inventory[org]
+	s.mutex.Unlock()
+	if found {
+		return known, "mémoire", true
+	}
+	var cached []groups.RepoInfo
+	if s.deps.Cache.Get(cache.ReposKey(org), cache.ReposTTL, &cached) && len(cached) > 0 {
+		s.remember(org, cached)
+		return cached, "cache (" + s.deps.Cache.Describe() + ")", true
+	}
+	return nil, "", false
+}
+
+// reposOrStale rend aussitôt l'inventaire, fût-il périmé, à un écran qui ne
+// fait que le montrer. Le matin, le cache de la veille ne vaut plus, et le
+// relire coûte une seconde par centaine de dépôts — l'écran restait vide tout
+// ce temps. Il montre maintenant ce qu'on savait hier, pendant que la relecture
+// part en arrière-plan ; « age » dit de quand date ce qu'il montre, et reste
+// vide quand l'inventaire est à jour.
+//
+// Rien ne s'écrit d'après un inventaire périmé : les autres écrans passent par
+// « repos », qui attend la relecture plutôt que d'en lancer une seconde.
+func (s *Server) reposOrStale(org string) (repos []groups.RepoInfo, source, age string, err error) {
+	if known, source, found := s.knownRepos(org); found {
+		return known, source, "", nil
+	}
+	var stale []groups.RepoInfo
+	if vieux, found := s.deps.Cache.Peek(cache.ReposKey(org), &stale); found && len(stale) > 0 {
+		s.fond.Go(func() { _, _ = s.fetchRepos(org) })
+		return stale, "cache périmé", cache.Age(vieux), nil
+	}
+	repos, source, err = s.repos(org, false)
+	return repos, source, "", err
+}
+
+// releve est une relecture de l'inventaire en cours. Ceux qui en ont besoin
+// pendant qu'elle court l'attendent : deux relectures de front coûteraient
+// deux fois les mêmes pages, pour le même résultat.
+type releve struct {
+	fini  chan struct{}
+	repos []groups.RepoInfo
+	err   error
+	// detache dit qu'une écriture est passée pendant la relecture ; il ne se
+	// lit et ne s'écrit que sous le verrou du serveur.
+	detache bool
+}
+
+// fetchRepos relit l'inventaire sur GitHub, ou attend la relecture déjà en
+// route.
+//
+// Une écriture survenue pendant la relecture la détache (voir detacher) : ce
+// qu'elle a lu n'est retenu ni en mémoire ni dans le cache — partie avant
+// l'écriture, elle l'ignore peut-être, et la retenir effacerait ce que
+// l'écriture vient d'y corriger. Ceux qui l'attendaient en relancent une.
+func (s *Server) fetchRepos(org string) ([]groups.RepoInfo, error) {
+	s.mutex.Lock()
+	if enCours, found := s.releves[org]; found {
+		s.mutex.Unlock()
+		<-enCours.fini
+		s.mutex.Lock()
+		detache := enCours.detache
+		s.mutex.Unlock()
+		if detache {
+			return s.fetchRepos(org)
+		}
+		return enCours.repos, enCours.err
+	}
+	enCours := &releve{fini: make(chan struct{})}
+	s.releves[org] = enCours
+	s.mutex.Unlock()
+	defer close(enCours.fini)
+
+	fetched, err := s.deps.Client.ListOrgRepos(org, nil)
 	// Les dépôts de service sont écartés ici, une fois : rien de ce qui suit
 	// n'a alors à se demander si « .github » est un groupe.
-	fetched = groups.Ordinary(fetched)
-	s.deps.Cache.Set(cache.ReposKey(org), fetched)
-	s.remember(org, fetched)
-	return fetched, "GitHub", nil
+	if err == nil {
+		fetched = groups.Ordinary(fetched)
+	}
+	enCours.repos, enCours.err = fetched, err
+
+	// Le cache s'écrit sous le verrou : une écriture qui détacherait la
+	// relecture entre les deux verrait son oubli recouvert.
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.releves[org] != enCours {
+		return fetched, err
+	}
+	delete(s.releves, org)
+	if err == nil {
+		s.inventory[org] = fetched
+		s.deps.Cache.Set(cache.ReposKey(org), fetched)
+	}
+	return fetched, err
+}
+
+// detacher retire la relecture en cours de ce qui sera retenu. Il s'appelle
+// sous le verrou, au moment où une écriture change l'inventaire.
+func (s *Server) detacher(org string) {
+	if enCours, found := s.releves[org]; found {
+		enCours.detache = true
+		delete(s.releves, org)
+	}
 }
 
 // remember retient l'inventaire d'une organisation pour la suite de la session.
@@ -263,6 +358,7 @@ func (s *Server) remember(org string, repos []groups.RepoInfo) {
 func (s *Server) forget(org string) {
 	s.mutex.Lock()
 	delete(s.inventory, org)
+	s.detacher(org)
 	s.mutex.Unlock()
 	s.deps.Cache.Forget(cache.ReposKey(org))
 }
@@ -272,16 +368,8 @@ func (s *Server) forget(org string) {
 // et rien n'en est retenu localement.
 func (s *Server) orgTeams(org string, force bool) ([]teams.Info, error) {
 	if !force {
-		s.mutex.Lock()
-		known, found := s.squads[org]
-		s.mutex.Unlock()
-		if found {
+		if known, found := s.knownTeams(org); found {
 			return known, nil
-		}
-		var cached []teams.Info
-		if s.deps.Cache.Get(cache.TeamsKey(org), cache.TeamsTTL, &cached) {
-			s.rememberTeams(org, cached)
-			return cached, nil
 		}
 	}
 
@@ -294,6 +382,53 @@ func (s *Server) orgTeams(org string, force bool) ([]teams.Info, error) {
 	return fetched, nil
 }
 
+// knownTeams rend les équipes déjà lues, membres compris : celles de la
+// mémoire, ou celles du cache tant qu'il vaut.
+func (s *Server) knownTeams(org string) ([]teams.Info, bool) {
+	s.mutex.Lock()
+	known, found := s.squads[org]
+	s.mutex.Unlock()
+	if found {
+		return known, true
+	}
+	var cached []teams.Info
+	if s.deps.Cache.Get(cache.TeamsKey(org), cache.TeamsTTL, &cached) {
+		s.rememberTeams(org, cached)
+		return cached, true
+	}
+	return nil, false
+}
+
+// teamNames rend les équipes de l'organisation pour un écran qui n'a besoin
+// que de leurs noms : la liste des groupes, qui y lit quels travaux sont
+// d'équipe. Lire leurs membres coûte deux requêtes par équipe — plus de quatre
+// secondes pour trente équipes, dès que le cache des équipes a plus d'une
+// heure —, pour un écran qui ne les montre pas.
+//
+// Ce qui est lu ici n'est pas retenu comme « les équipes » : des équipes sans
+// membres feraient croire aux écrans qui les composent qu'elles sont vides.
+// Une lecture qui échoue rend une liste vide, comme avant : les travaux
+// paraissent alors individuels, sans que rien d'autre ne soit refusé.
+func (s *Server) teamNames(org string) []teams.Info {
+	if known, found := s.knownTeams(org); found {
+		return known
+	}
+	s.mutex.Lock()
+	named, found := s.squadNames[org]
+	s.mutex.Unlock()
+	if found {
+		return named
+	}
+	named, err := s.deps.Client.TeamNames(org)
+	if err != nil {
+		return nil
+	}
+	s.mutex.Lock()
+	s.squadNames[org] = named
+	s.mutex.Unlock()
+	return named
+}
+
 func (s *Server) rememberTeams(org string, list []teams.Info) {
 	s.mutex.Lock()
 	s.squads[org] = list
@@ -304,6 +439,7 @@ func (s *Server) rememberTeams(org string, list []teams.Info) {
 func (s *Server) forgetTeams(org string) {
 	s.mutex.Lock()
 	delete(s.squads, org)
+	delete(s.squadNames, org)
 	s.mutex.Unlock()
 	s.deps.Cache.Forget(cache.TeamsKey(org))
 }
@@ -314,6 +450,7 @@ func (s *Server) forgetTeams(org string) {
 func (s *Server) updateInventory(org string, apply func([]groups.RepoInfo) []groups.RepoInfo) {
 	s.mutex.Lock()
 	known, found := s.inventory[org]
+	s.detacher(org)
 	s.mutex.Unlock()
 
 	if !found {

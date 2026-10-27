@@ -26,6 +26,31 @@ func TestSetGet(t *testing.T) {
 	}
 }
 
+// Une entrée périmée reste lisible pour qui le demande explicitement, avec son
+// âge : c'est ce qu'on montre le temps de la relire.
+func TestPeekLitUneEntreePerimeeEtDitSonAge(t *testing.T) {
+	c := cache.NewIn(t.TempDir(), true)
+	c.Set("profile:jlpicard", "Jean-Luc Picard")
+
+	var nom string
+	if c.Get("profile:jlpicard", -time.Second, &nom) {
+		t.Fatal("Get ne doit pas servir une entrée périmée")
+	}
+	age, trouve := c.Peek("profile:jlpicard", &nom)
+	if !trouve || nom != "Jean-Luc Picard" {
+		t.Fatalf("Peek = %q, %v", nom, trouve)
+	}
+	if age < 0 || age > time.Minute {
+		t.Errorf("âge = %v", age)
+	}
+	if _, trouve := c.Peek("profile:absent", &nom); trouve {
+		t.Error("une clé absente ne doit rien rendre")
+	}
+	if _, trouve := cache.NewIn(t.TempDir(), false).Peek("profile:jlpicard", &nom); trouve {
+		t.Error("un cache désactivé ne doit rien rendre")
+	}
+}
+
 func TestGetPerime(t *testing.T) {
 	dossier := t.TempDir()
 	c := cache.NewIn(dossier, true)

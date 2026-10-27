@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/config"
@@ -72,22 +73,46 @@ func gensDe(cours classroom.Classroom) []roster.Person {
 // handleClassrooms liste les groupes de l'organisation : ceux que les dépôts
 // dessinent, et ceux qu'on a déclarés sans qu'un travail n'ait encore été
 // distribué.
+//
+// Un inventaire périmé est montré tel quel (voir reposOrStale), et la réponse
+// dit son âge : la page le redemande alors avec « fresh=1 », qui attend la
+// relecture partie en arrière-plan. « refresh=1 » en exige une neuve.
 func (s *Server) handleClassrooms(writer http.ResponseWriter, request *http.Request) {
 	org := s.org()
-	repos, source, err := s.repos(org, request.URL.Query().Get("refresh") == "1")
+	refresh := request.URL.Query().Get("refresh") == "1"
+	fresh := refresh || request.URL.Query().Get("fresh") == "1"
+	// Les équipes disent lesquels des travaux sont d'équipe ; leur absence
+	// n'empêche rien — le groupe n'a alors que des travaux individuels. Elles
+	// se lisent pendant l'inventaire : quand ni l'un ni l'autre n'est en cache,
+	// l'écran n'attend que le plus long des deux.
+	var infos []teams.Info
+	var lecture sync.WaitGroup
+	lecture.Go(func() { infos = s.teamNames(org) })
+	// Le registre aussi : la liste le demandera deux fois, et sa première
+	// lecture coûte un aller-retour que rien n'oblige à faire après les autres.
+	lecture.Go(func() { s.names(org) })
+	var repos []groups.RepoInfo
+	var source, age string
+	var err error
+	if fresh {
+		repos, source, err = s.repos(org, refresh)
+	} else {
+		repos, source, age, err = s.reposOrStale(org)
+	}
+	lecture.Wait()
 	if err != nil {
 		fail(writer, err)
 		return
 	}
 
-	// Les équipes disent lesquels des travaux sont d'équipe ; leur absence
-	// n'empêche rien — le groupe n'a alors que des travaux individuels.
-	infos, _ := s.orgTeams(org, false)
-
 	visibles := s.visibles(org, repos)
 	// Ce qu'on vient d'ouvrir sera regardé : les historiques et les accès des
 	// cours de la session en cours partent les chercher pendant qu'on choisit.
-	s.precharger(org, visibles, repos)
+	// Pas d'après un inventaire périmé, qui ignore les dépôts d'hier soir : la
+	// page redemande la liste à jour, et c'est elle qui le lancera.
+	if age == "" {
+		s.precharger(org, visibles, repos)
+	}
 
 	liste := make([]classroomPayload, 0, len(visibles))
 	courts := make([]string, 0, len(visibles))
@@ -102,9 +127,13 @@ func (s *Server) handleClassrooms(writer http.ResponseWriter, request *http.Requ
 		courts = append(courts, cours.Session)
 	}
 
-	writeJSON(writer, http.StatusOK, map[string]any{
+	reponse := map[string]any{
 		"classrooms": liste, "sessions": classroom.SessionsOf(courts), "org": org,
-	})
+	}
+	if age != "" {
+		reponse["stale"] = age
+	}
+	writeJSON(writer, http.StatusOK, reponse)
 }
 
 // classroomInput est ce que l'interface envoie pour déclarer un groupe ou

@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/PierreOlivierBrillant/gh-milou/internal/cache"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/fakegh"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/web"
 )
 
 // Les équipes de l'interface web, de bout en bout : elles sont créées sur le
@@ -536,6 +538,48 @@ func TestUnTravailDEquipeNExigePasLesNomsComplets(t *testing.T) {
 		map[string]any{"name": "projet", "teams": true}, &apercu)
 	if len(apercu.Items) != 1 || apercu.Items[0].Name != "a26.5n6.01.projet.eq1" {
 		t.Fatalf("le dépôt devrait porter le nom de l'équipe : %+v", apercu.Items)
+	}
+}
+
+// La liste des groupes reconnaît un travail d'équipe au nom de ses dépôts : le
+// nom des équipes suffit, et leur composition — deux requêtes par équipe — n'est
+// pas lue pour un écran qui ne la montre pas.
+func TestLaListeDesGroupesNeLitPasLaCompositionDesEquipes(t *testing.T) {
+	state := fakegh.NewState()
+	state.AddRepo("acme", "a26.5n6.01.tp1.emilie-cote", true)
+	state.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
+	state.AddTeam("acme", "a26.5n6.01.eq1", "emilie-cote", "jlpicard")
+	// Sans cache, rien ne se précharge en arrière-plan : les seules requêtes
+	// comptées sont celles de la liste.
+	h := nouveauAvec(t, state, func(deps *web.Deps) {
+		deps.Cache = cache.NewIn(t.TempDir(), false)
+	})
+
+	var liste struct {
+		Classrooms []struct {
+			Scope       string `json:"scope"`
+			Teams       int    `json:"teams"`
+			Assignments []struct {
+				Name string `json:"name"`
+				Kind string `json:"kind"`
+			} `json:"assignments"`
+		} `json:"classrooms"`
+	}
+	h.json(http.MethodGet, "/api/classrooms", nil, &liste)
+
+	if len(liste.Classrooms) != 1 || liste.Classrooms[0].Teams != 1 {
+		t.Fatalf("liste = %+v", liste.Classrooms)
+	}
+	natures := map[string]string{}
+	for _, travail := range liste.Classrooms[0].Assignments {
+		natures[travail.Name] = travail.Kind
+	}
+	if natures["projet"] != "équipe" || natures["tp1"] != "individuel" {
+		t.Errorf("natures = %v", natures)
+	}
+	equipe := "/orgs/acme/teams/" + fakegh.TeamSlug("a26.5n6.01.eq1")
+	if lus := state.CallCount(equipe+"/members") + state.CallCount(equipe+"/invitations"); lus != 0 {
+		t.Errorf("%d lecture(s) de la composition d'une équipe pour lister les groupes", lus)
 	}
 }
 

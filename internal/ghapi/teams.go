@@ -128,14 +128,11 @@ func teamPath(org, slug string) string {
 	return "orgs/" + url.PathEscape(org) + "/teams/" + url.PathEscape(strings.TrimSpace(slug))
 }
 
-// LoadOrgTeams lit les équipes de l'organisation et leur composition. Les
-// membres se lisent une équipe à la fois : les requêtes partent en parallèle,
-// car une organisation d'établissement peut en compter des centaines.
-//
-// Une équipe dont les membres restent illisibles n'arrête pas le tout : elle
-// est rendue sans eux, et l'interface la montre vide plutôt que de refuser
-// d'afficher quoi que ce soit.
-func (c *Client) LoadOrgTeams(org string, jobs int) ([]teams.Info, error) {
+// TeamNames lit les équipes de l'organisation sans leur composition. C'est ce
+// qu'il faut pour savoir quels travaux sont d'équipe — le nom suffit —, et cela
+// tient en une requête par centaine d'équipes, là où leurs membres en coûtent
+// deux par équipe.
+func (c *Client) TeamNames(org string) ([]teams.Info, error) {
 	listees, err := c.ListOrgTeams(org)
 	if err != nil {
 		return nil, err
@@ -145,6 +142,21 @@ func (c *Client) LoadOrgTeams(org string, jobs int) ([]teams.Info, error) {
 		found = append(found, teams.Info{
 			Slug: item.Slug, Name: item.Name, Description: item.Description,
 		})
+	}
+	return found, nil
+}
+
+// LoadOrgTeams lit les équipes de l'organisation et leur composition. Les
+// membres se lisent une équipe à la fois : les requêtes partent en parallèle,
+// car une organisation d'établissement peut en compter des centaines.
+//
+// Une équipe dont les membres restent illisibles n'arrête pas le tout : elle
+// est rendue sans eux, et l'interface la montre vide plutôt que de refuser
+// d'afficher quoi que ce soit.
+func (c *Client) LoadOrgTeams(org string, jobs int) ([]teams.Info, error) {
+	found, err := c.TeamNames(org)
+	if err != nil {
+		return nil, err
 	}
 	if jobs < 1 {
 		jobs = 1

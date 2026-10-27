@@ -79,11 +79,16 @@ type Server struct {
 	handler  http.Handler
 	stop     chan struct{}
 	stopOnce sync.Once
+	// fond compte les relectures d'inventaire parties en arrière-plan : elles
+	// écrivent dans le cache, et la fermeture leur laisse le temps de finir.
+	fond sync.WaitGroup
 
 	mutex      sync.Mutex
 	settings   config.Settings
 	inventory  map[string][]groups.RepoInfo  // organisation → dépôts connus
+	releves    map[string]*releve            // organisation → relecture de l'inventaire en cours
 	squads     map[string][]teams.Info       // organisation → équipes connues
+	squadNames map[string][]teams.Info       // organisation → équipes sans leurs membres
 	resolvers  map[string]*identity.Resolver // organisation → noms complets
 	registries map[string]*registry.Store    // organisation → registre des étudiants
 	// indexStores retient, par organisation, le dépôt des index d'empreintes.
@@ -125,7 +130,9 @@ func New(deps Deps) (*Server, error) {
 		stop:        make(chan struct{}),
 		settings:    deps.Settings,
 		inventory:   map[string][]groups.RepoInfo{},
+		releves:     map[string]*releve{},
 		squads:      map[string][]teams.Info{},
+		squadNames:  map[string][]teams.Info{},
 		resolvers:   map[string]*identity.Resolver{},
 		registries:  map[string]*registry.Store{},
 		indexStores: map[string]*exchange.Store{},
@@ -191,6 +198,17 @@ func (s *Server) Serve(lifetime context.Context) error {
 
 	// Ce qui se préparait en arrière-plan n'a plus personne à servir.
 	s.warmer.Stop()
+	// Une relecture d'inventaire en route ne s'interrompt pas non plus ; elle
+	// a le même délai que le préchargement pour poser ce qu'elle a lu.
+	relue := make(chan struct{})
+	go func() {
+		defer close(relue)
+		s.fond.Wait()
+	}()
+	select {
+	case <-relue:
+	case <-time.After(preload.Arret):
+	}
 
 	// Les flux d'événements restent ouverts : la fermeture est bornée.
 	shutdown, cancel := context.WithTimeout(context.Background(), 2*time.Second)
