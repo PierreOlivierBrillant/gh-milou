@@ -64,7 +64,26 @@ type Store struct {
 	// de la branche avant même d'atteindre GitHub, où ils s'excluraient au prix
 	// d'un aller-retour.
 	mutex sync.Mutex
+
+	// recent retient la dernière lecture et son heure (voir Recheck). Il a son
+	// propre verrou : une lecture n'a pas à attendre qu'une écriture, qui
+	// tient « mutex » le temps de ses allers-retours, soit finie.
+	recentMutex sync.Mutex
+	recent      Snapshot
+	recentAt    time.Time
 }
+
+// Recheck est le temps pendant lequel une lecture du registre vaut sans qu'on
+// relève la tête de sa branche.
+//
+// Un seul écran demande les noms plusieurs fois — pour lister les groupes, pour
+// dater les envois, pour ouvrir un groupe —, et chaque demande coûtait un
+// aller-retour à GitHub pour s'entendre dire que rien n'avait bougé : une
+// demi-seconde au moins par écran, cache plein ou pas. Ce qui s'écrit depuis
+// ce processus est retenu aussitôt ; ce qu'un collègue écrit ailleurs se voit
+// au plus une minute plus tard. Une écriture, elle, relève toujours la tête
+// réelle : elle ne passe pas par ici.
+const Recheck = time.Minute
 
 // New ouvre le registre d'une organisation. Le cache peut être nil.
 func New(client *ghapi.Client, org string, local *cache.Cache) *Store {
@@ -139,13 +158,63 @@ type keptSet struct {
 // Le fichier est lu au commit exact qu'on vient de relever, non à la branche :
 // entre les deux requêtes, quelqu'un peut avoir écrit, et la lecture doit
 // rester d'une seule pièce.
-func (s *Store) Load() (Snapshot, error) { return s.load(true) }
+func (s *Store) Load() (Snapshot, error) {
+	if recent, valable := s.recently(); valable {
+		return recent, nil
+	}
+	return s.load(true)
+}
+
+// recently rend la dernière lecture si elle a moins de « Recheck ». Sans cache
+// local, il n'y en a jamais : un cache désactivé demande que tout soit relu.
+func (s *Store) recently() (Snapshot, bool) {
+	if s.local == nil {
+		return Snapshot{}, false
+	}
+	s.recentMutex.Lock()
+	defer s.recentMutex.Unlock()
+	if s.recentAt.IsZero() || s.now().Sub(s.recentAt) >= Recheck {
+		return Snapshot{}, false
+	}
+	return s.recent, true
+}
+
+// remember retient une lecture que GitHub vient de confirmer. Un registre
+// relu du disque faute de réseau ne l'est pas : la prochaine lecture doit
+// retenter GitHub, pas répéter la panne pendant une minute.
+func (s *Store) remember(snapshot Snapshot) {
+	if s.local == nil || snapshot.Stale {
+		return
+	}
+	s.recentMutex.Lock()
+	defer s.recentMutex.Unlock()
+	s.recent, s.recentAt = snapshot, s.now()
+}
+
+// unremember oublie la dernière lecture : la tête vient de changer sans que le
+// contenu qu'on retient le dise.
+func (s *Store) unremember() {
+	s.recentMutex.Lock()
+	defer s.recentMutex.Unlock()
+	s.recent, s.recentAt = Snapshot{}, time.Time{}
+}
 
 // load lit le registre ; « offline » autorise le repli sur le disque.
 //
 // Une écriture ne s'en autorise jamais : elle a besoin de la tête réelle de la
 // branche, et écrire depuis une lecture périmée serait de toute façon refusé.
+// Ce qu'elle relève sert quand même aux lectures qui suivent.
 func (s *Store) load(offline bool) (Snapshot, error) {
+	snapshot, err := s.read(offline)
+	if err == nil {
+		s.remember(snapshot)
+	}
+	return snapshot, err
+}
+
+// read relève la tête de la branche, et ne retélécharge le registre que si
+// elle a bougé depuis ce que le disque retient.
+func (s *Store) read(offline bool) (Snapshot, error) {
 	head, err := s.client.BranchHead(s.org, RepoName, Branch)
 	if err != nil {
 		// Seule une panne de liaison justifie le repli. Un refus de GitHub —
@@ -302,6 +371,7 @@ func (s *Store) Apply(change Change) (*Set, error) {
 		if err == nil {
 			// Ce qu'on vient d'écrire est de notre main : rien à signaler.
 			s.keep(commit, suivant, nil)
+			s.remember(Snapshot{Set: suivant, Head: commit, Seeded: true})
 			return suivant, nil
 		}
 		if !errors.Is(err, ghapi.ErrNotFastForward) {
@@ -524,6 +594,7 @@ func (s *Store) ForgetHistory() (string, error) {
 	if s.local != nil {
 		s.local.Forget(cache.RegistryKey(s.org))
 	}
+	s.unremember()
 	return orphelin, nil
 }
 

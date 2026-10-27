@@ -170,6 +170,25 @@ func (c *Cache) Get(key string, maxAge time.Duration, target any) bool {
 	return json.Unmarshal(item.Value, target) == nil
 }
 
+// Peek lit une valeur quel que soit son âge, et rend cet âge. Ce qui a vieilli
+// ne sert qu'à montrer quelque chose le temps d'aller chercher mieux : jamais à
+// décider d'une écriture, qui doit partir de ce que Get accepte.
+func (c *Cache) Peek(key string, target any) (time.Duration, bool) {
+	if !c.Enabled {
+		return 0, false
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	item, found := c.load()[key]
+	if !found || len(item.Value) == 0 {
+		return 0, false
+	}
+	if json.Unmarshal(item.Value, target) != nil {
+		return 0, false
+	}
+	return time.Since(time.Unix(int64(item.At), 0)), true
+}
+
 // Set enregistre une valeur et l'horodate.
 func (c *Cache) Set(key string, value any) {
 	if !c.Enabled {

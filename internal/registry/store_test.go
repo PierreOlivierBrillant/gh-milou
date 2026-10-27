@@ -263,6 +263,63 @@ func TestUneLectureInchangeeNeReteleschargeRien(t *testing.T) {
 	}
 }
 
+// Un écran demande les noms plusieurs fois : la tête de la branche n'est
+// relevée qu'une fois par minute, et ce qu'on vient d'écrire vaut lecture.
+func TestLaTeteNEstReleveeQuUneFoisParMinute(t *testing.T) {
+	state := fakegh.NewState()
+	serveur := fakegh.New(state)
+	t.Cleanup(serveur.Close)
+	local := cache.NewIn(t.TempDir(), true)
+	store := registry.New(clientVers(t, serveur), "acme", local)
+
+	if _, err := store.Apply(registry.Learn(personne("Émilie Côté", "ecote"))); err != nil {
+		t.Fatal(err)
+	}
+	const tete = "GET /repos/acme/.cohorte/git/ref/heads/main"
+	releves := state.CallCount(tete)
+
+	for range 3 {
+		snapshot, err := store.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot.Set.Name("ecote") != "Émilie Côté" {
+			t.Fatalf("snapshot = %+v", snapshot)
+		}
+	}
+	if apres := state.CallCount(tete); apres != releves {
+		t.Errorf("%d relevé(s) de la tête juste après l'avoir écrite", apres-releves)
+	}
+
+	store.Avancer(registry.Recheck)
+	for range 3 {
+		if _, err := store.Load(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if apres := state.CallCount(tete); apres != releves+1 {
+		t.Errorf("%d relevé(s) de la tête une minute plus tard, attendu 1", apres-releves)
+	}
+}
+
+// Sans cache, le registre se relit à chaque fois : c'est ce qu'on a demandé.
+func TestSansCacheLaTeteSeReleveAChaqueLecture(t *testing.T) {
+	store, serveur := magasin(t, nil)
+	if _, err := store.Apply(registry.Learn(personne("Émilie Côté", "ecote"))); err != nil {
+		t.Fatal(err)
+	}
+	const tete = "GET /repos/acme/.cohorte/git/ref/heads/main"
+	releves := serveur.State.CallCount(tete)
+	for range 2 {
+		if _, err := store.Load(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if apres := serveur.State.CallCount(tete); apres != releves+2 {
+		t.Errorf("%d relevé(s) de la tête pour deux lectures sans cache", apres-releves)
+	}
+}
+
 // Le commit change dès que quelqu'un écrit : le fichier est alors relu.
 func TestUnCommitDifferentFaitRelireLeFichier(t *testing.T) {
 	state := fakegh.NewState()
@@ -283,6 +340,7 @@ func TestUnCommitDifferentFaitRelireLeFichier(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	store.Avancer(registry.Recheck)
 	snapshot, err := store.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -308,6 +366,7 @@ func TestHorsLigneLeRegistreConnuSertEtLeDit(t *testing.T) {
 		t.Fatal(err)
 	}
 	serveur.Close() // plus de GitHub
+	store.Avancer(registry.Recheck)
 
 	snapshot, err := store.Load()
 	if err != nil {
@@ -342,6 +401,7 @@ func TestUnJetonRefuseNeSeReplieePasSurLeDisque(t *testing.T) {
 	}
 	state.FailOn["GET /repos/acme/.cohorte/git/ref/heads/main"] = fakegh.Failure{
 		Status: 401, Message: "Bad credentials"}
+	store.Avancer(registry.Recheck)
 
 	if _, err := store.Load(); err == nil {
 		t.Fatal("un jeton refusé doit remonter, pas se replier sur le disque")
