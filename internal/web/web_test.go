@@ -96,6 +96,17 @@ func nouveauAvec(t *testing.T, state *fakegh.State, ajuster func(*web.Deps)) *ha
 		t.Fatalf("interface web : %v", err)
 	}
 
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("bocal à témoins : %v", err)
+	}
+	// Le navigateur a son propre transport : ses connexions ne sont qu'à lui,
+	// et les fermer ne dérange aucun autre client.
+	navigateur := &http.Client{
+		Jar: jar, Timeout: 20 * time.Second,
+		Transport: http.DefaultTransport.(*http.Transport).Clone(),
+	}
+
 	lifetime, arret := context.WithCancel(context.Background())
 	fini := make(chan struct{})
 	go func() {
@@ -105,17 +116,20 @@ func nouveauAvec(t *testing.T, state *fakegh.State, ajuster func(*web.Deps)) *ha
 		}
 	}()
 	t.Cleanup(func() {
+		// Quand une requête part avant que la précédente ait rendu sa
+		// connexion, le transport en compose une seconde, puis la garde sans
+		// jamais s'en servir. Le serveur la voit neuve, et Shutdown ne tient
+		// une connexion neuve pour inactive qu'au bout de cinq secondes : il
+		// attendrait sa borne de deux secondes, un test sur trois. On rend
+		// donc les connexions inactives avant d'arrêter.
+		navigateur.CloseIdleConnections()
 		arret()
 		<-fini
 	})
 
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		t.Fatalf("bocal à témoins : %v", err)
-	}
 	h := &harnais{
 		t: t, State: state, Github: client, Serveur: serveur, Base: serveur.Address(),
-		Client: &http.Client{Jar: jar, Timeout: 20 * time.Second}, Groupes: fichierGroupes,
+		Client: navigateur, Groupes: fichierGroupes,
 	}
 	// L'adresse remise dans le terminal ouvre la session et pose le témoin.
 	reponse, err := h.Client.Get(serveur.URL())
