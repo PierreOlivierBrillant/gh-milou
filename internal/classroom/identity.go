@@ -40,19 +40,10 @@ func (i Identity) Username() string {
 	return i.Accounts[0]
 }
 
-// designations rend tout ce qui désigne la personne dans une liste de classe,
-// sous la forme de designation : chacun de ses comptes, et son matricule. Un
+// Designations rend tout ce qui désigne la personne dans une liste de classe,
+// sous la forme de Designation : chacun de ses comptes, et son matricule. Un
 // compte et un matricule n'y sont jamais confondus, même écrits pareil.
-func (i Identity) designations() []string {
-	cles := make([]string, 0, len(i.Accounts)+1)
-	for _, compte := range i.Accounts {
-		cles = append(cles, designation(roster.Person{Username: compte}))
-	}
-	if cle := designation(roster.Person{StudentID: i.StudentID}); cle != "" {
-		cles = append(cles, cle)
-	}
-	return cles
-}
+func (i Identity) Designations() []string { return designationsDe(i.Person()) }
 
 // Person rend la personne sous la forme que le reste attend.
 func (i Identity) Person() roster.Person {

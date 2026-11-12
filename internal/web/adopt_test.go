@@ -1,6 +1,7 @@
 package web_test
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -179,6 +180,109 @@ func TestPlusieursEtudiantsDeplacesEnsemble(t *testing.T) {
 	if len(reste.Students) != 1 || reste.Students[0].Username != "emilie-cote" {
 		t.Fatalf("groupe de départ : %+v", reste.Students)
 	}
+}
+
+// Une inscrite que seul son matricule désigne se déplace comme les autres : sa
+// ligne envoie son matricule, ses dépôts suivent, elle quitte la liste de
+// départ et figure une fois dans celle d'arrivée. Claire, sans compte elle
+// aussi, reste où elle est, avec son dépôt.
+func TestDeplacerQuiNAQueSonMatricule(t *testing.T) {
+	state := fakegh.NewState()
+	for _, nom := range []string{
+		"a26.5n6.01.tp1.jean-luc-picard", "a26.5n6.01.tp1.naomi-chery",
+		"a26.5n6.01.tp1.claire-otis",
+	} {
+		state.AddRepo("acme", nom, true)
+	}
+	h := nouveau(t, state)
+	depart := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
+	h.poserListe(depart, inscritParCompte("Jean-Luc Picard", "jlpicard"),
+		inscritParMatricule("Naomi Chéry", "2100456"),
+		inscritParMatricule("Claire Otis", "2100789"))
+	arrivee := h.groupe("a26", "5n6", "02", "Aminata Diallo", "aminata-d")
+
+	// Le dialogue compte les dépôts que la ligne lui montre : sans eux, il
+	// annonçait n'en renommer aucun, puis les renommait.
+	if naomi := h.ligneDe(depart, "Naomi Chéry"); len(naomi.Assignments) != 1 {
+		t.Errorf("la ligne de Naomi doit montrer son dépôt : %+v", naomi)
+	}
+
+	bilan := h.travail(http.MethodPost, "/api/classrooms/"+depart+"/students/move",
+		map[string]any{"usernames": []string{"2100456"}, "target": arrivee})
+	if bilan["status"] != "terminé" {
+		t.Fatalf("travail %v : %v", bilan["status"], bilan["failure"])
+	}
+	if bilan["label"] != "Déplacement de Naomi Chéry vers « Groupe 02 »" {
+		t.Errorf("titre du journal : %v", bilan["label"])
+	}
+	resultat, _ := bilan["result"].(map[string]any)
+	if resultat["count"] != float64(1) || resultat["renamed"] != float64(1) {
+		t.Fatalf("bilan : %+v", resultat)
+	}
+	if designees := fmt.Sprint(resultat["moved"]); designees != "[2100456]" {
+		t.Errorf("le bilan doit désigner Naomi par son matricule : %s", designees)
+	}
+
+	noms := h.depots()
+	sort.Strings(noms)
+	attendu := "a26.5n6.01.tp1.claire-otis,a26.5n6.01.tp1.jean-luc-picard," +
+		"a26.5n6.02.tp1.naomi-chery"
+	if strings.Join(noms, ",") != attendu {
+		t.Fatalf("dépôts : %v", noms)
+	}
+
+	if reste := nomsDe(h.liste(depart)); reste != "Claire Otis, Jean-Luc Picard" {
+		t.Errorf("groupe de départ : %s", reste)
+	}
+	if arrives := nomsDe(h.liste(arrivee)); arrives != "Aminata Diallo, Naomi Chéry" {
+		t.Errorf("groupe d'arrivée : %s", arrives)
+	}
+	if naomi := h.ligneDe(arrivee, "Naomi Chéry"); naomi.StudentID != "2100456" ||
+		len(naomi.Assignments) != 1 || naomi.Assignments[0].Repo != "a26.5n6.02.tp1.naomi-chery" {
+		t.Errorf("ligne de Naomi à l'arrivée : %+v", naomi)
+	}
+}
+
+// ligneDeListe est ce que la liste d'un groupe dit d'une personne au navigateur.
+type ligneDeListe struct {
+	FullName    string `json:"full_name"`
+	Username    string `json:"username"`
+	StudentID   string `json:"student_id"`
+	Assignments []struct {
+		Repo string `json:"repo"`
+	} `json:"assignments"`
+}
+
+// liste rend les lignes de la liste d'un groupe, dans l'ordre où le navigateur
+// les reçoit : par nom.
+func (h *harnais) liste(place string) []ligneDeListe {
+	h.t.Helper()
+	var reponse struct {
+		Students []ligneDeListe `json:"students"`
+	}
+	h.json(http.MethodGet, "/api/classrooms/"+place+"/students", nil, &reponse)
+	return reponse.Students
+}
+
+// ligneDe rend la ligne d'une personne, retrouvée par son nom.
+func (h *harnais) ligneDe(place, nom string) ligneDeListe {
+	h.t.Helper()
+	for _, ligne := range h.liste(place) {
+		if ligne.FullName == nom {
+			return ligne
+		}
+	}
+	h.t.Fatalf("%s n'est pas dans la liste de %s", nom, place)
+	return ligneDeListe{}
+}
+
+// nomsDe rend les noms d'une liste, dans son ordre.
+func nomsDe(lignes []ligneDeListe) string {
+	noms := make([]string, 0, len(lignes))
+	for _, ligne := range lignes {
+		noms = append(noms, ligne.FullName)
+	}
+	return strings.Join(noms, ", ")
 }
 
 // Une erreur d'inscription laisse parfois quelqu'un avec des dépôts dans deux

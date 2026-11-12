@@ -247,3 +247,35 @@ func TestUnDepotDEquipeCompteChezChacunDeSesMembres(t *testing.T) {
 		t.Fatalf("@jlpicard ne devrait rien recevoir d'une équipe : %+v", depots)
 	}
 }
+
+// Les dépôts de qui n'a pas encore de compte sont les siens : c'est son nom qui
+// les nomme, et son matricule qui la désigne. Rangés sous un compte vide, ils
+// n'étaient à personne — la liste disait « aucun dépôt », et le déplacement
+// annonçait n'en renommer aucun avant de les renommer.
+func TestLesDepotsDeQuiNAPasDeCompteSontLesSiens(t *testing.T) {
+	cours := classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{
+			{FullName: "Naomi Chéry", StudentID: "2100456"},
+			{FullName: "Claire Otis", StudentID: "2100789"},
+		},
+		Defaults: classroom.DefaultsFrom(config.Default()),
+	}
+	inventaire := []groups.RepoInfo{
+		{Name: "a26.5n6.01.tp1.naomi-chery", PushedAt: "2026-09-12T08:00:00Z"},
+		{Name: "a26.5n6.01.tp2.claire-otis"},
+	}
+
+	trouve := map[string]users.Row{}
+	for _, ligne := range build(cours, inventaire) {
+		trouve[ligne.FullName] = ligne
+	}
+	naomi, claire := trouve["Naomi Chéry"], trouve["Claire Otis"]
+	if len(naomi.Repos) != 1 || naomi.Repos[0].Name != "a26.5n6.01.tp1.naomi-chery" ||
+		naomi.PushedAt != envoi("2026-09-12T08:00:00Z") {
+		t.Errorf("Naomi : %+v", naomi)
+	}
+	if len(claire.Repos) != 1 || claire.Repos[0].Name != "a26.5n6.01.tp2.claire-otis" {
+		t.Errorf("Claire : %+v", claire)
+	}
+}

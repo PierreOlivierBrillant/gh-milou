@@ -23,6 +23,7 @@ func envoi(iso string) string {
 type annuaireLigne struct {
 	FullName    string                `json:"full_name"`
 	Username    string                `json:"username"`
+	StudentID   string                `json:"student_id"`
 	IsTeacher   bool                  `json:"is_teacher"`
 	Role        string                `json:"role"`
 	Repos       int                   `json:"repos"`
@@ -192,5 +193,32 @@ func TestAnnuaireSansGroupeDeclare(t *testing.T) {
 	}
 	if rendu.Unmatched != 1 {
 		t.Fatalf("dépôts non rattachés : %d", rendu.Unmatched)
+	}
+}
+
+// Qui n'a pas encore de compte figure à l'annuaire avec ses dépôts, et sa ligne
+// porte son matricule : c'est lui qui la désigne au navigateur. Sous un compte
+// vide, partagé par tous les inscrits sans compte, déplier l'une les aurait
+// toutes dépliées.
+func TestLAnnuaireDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
+	state := fakegh.NewState()
+	state.AddRepo("acme", "a26.5n6.01.tp1.naomi-chery", true)
+	state.AddRepo("acme", "a26.5n6.01.tp1.claire-otis", true)
+	h := nouveau(t, state)
+	place := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
+	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
+		inscritParMatricule("Naomi Chéry", "2100456"),
+		inscritParMatricule("Claire Otis", "2100789"))
+
+	trouvees := map[string]annuaireLigne{}
+	for _, ligne := range h.annuaire("").Users {
+		trouvees[ligne.FullName] = ligne
+	}
+	for nom, matricule := range map[string]string{
+		"Naomi Chéry": "2100456", "Claire Otis": "2100789",
+	} {
+		if ligne := trouvees[nom]; ligne.StudentID != matricule || ligne.Repos != 1 {
+			t.Errorf("%s : %+v", nom, ligne)
+		}
 	}
 }

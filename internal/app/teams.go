@@ -359,7 +359,7 @@ func (d *desk) transfer(short, place string) error {
 	}
 	if len(membres) > 0 {
 		store := d.session.groupStore()
-		if _, err := store.Save(d.cours.Without(comptesDesMembres(membres)...)); err != nil {
+		if _, err := store.Save(d.cours.Without(membres...)); err != nil {
 			return err
 		}
 		if _, err := store.Save(arrivee.With(membres...)); err != nil {
@@ -369,17 +369,6 @@ func (d *desk) transfer(short, place string) error {
 	console.Success("« %s » est maintenant « %s », avec %s.",
 		equipe.Name, nom, valid.Plural(len(membres), "étudiant"))
 	return d.reload()
-}
-
-// comptesDesMembres rend tous les comptes des personnes qui partent : n'en
-// nommer qu'un laisserait dans le groupe de départ la moitié de quelqu'un qui
-// travaille sous deux comptes.
-func comptesDesMembres(membres []roster.Person) []string {
-	liste := make([]string, 0, len(membres))
-	for _, personne := range membres {
-		liste = append(liste, personne.Accounts()...)
-	}
-	return liste
 }
 
 // drop supprime une équipe, et ses dépôts si on le demande. Ils ne la suivent

@@ -45,11 +45,57 @@ type Move struct {
 // courante ne sait pas nommer : le déplacement se fait alors sans les dépôts.
 func PlanMove(depart, arrivee Classroom, personnes []roster.Person,
 	repos []groups.RepoInfo) ([]Move, error) {
+	// Une personne est retrouvée par tout ce qui la désigne, comme Without la
+	// retire : son dépôt se rattache à la ligne qui porte son nom, et ce n'est
+	// pas toujours celle de son compte. Ce qui quitte la liste et ce qui suit
+	// sur GitHub doivent être la même chose.
 	fragments := map[string]string{}
 	for _, personne := range personnes {
-		fragments[designation(personne)] = fragmentDe(personne)
+		for _, cle := range designationsDe(personne) {
+			fragments[cle] = fragmentDe(personne)
+		}
 	}
 	return planRenames(depart, arrivee, fragments, repos)
+}
+
+// Movers rassemble les personnes du groupe que ces mots désignent, pour les
+// déplacer. Chaque mot désigne comme Find : un compte ou, à défaut, un
+// matricule — c'est ainsi que se choisit qui n'a encore aucun compte. Une
+// personne n'y figure qu'une fois, quel que soit le nombre de mots qui la
+// désignent, et dans l'ordre où on les a nommées.
+//
+// Un mot que le groupe ne connaît pas refuse le tout : un déplacement ne part
+// pas avec une partie de ce qu'on a choisi. Figurer déjà dans le groupe
+// d'arrivée, en revanche, ne refuse rien : c'est même la situation qu'on vient
+// réparer. Une erreur d'inscription laisse quelqu'un avec des dépôts dans deux
+// groupes, et le déplacement est justement ce qui les rassemble — ses dépôts
+// rejoignent l'arrivée, sa fiche quitte le départ et retrouve celle qui l'y
+// attendait.
+func (c Classroom) Movers(handles []string) ([]roster.Person, error) {
+	identites := c.Identities()
+	choisies := make([]bool, len(identites))
+	personnes := make([]roster.Person, 0, len(handles))
+	for _, handle := range handles {
+		handle = strings.TrimSpace(handle)
+		if handle == "" {
+			continue
+		}
+		position, trouvee := rang(identites, handle)
+		if !trouvee {
+			// Le mot peut être un matricule : lui prêter une arobase en ferait
+			// un compte qu'il n'est pas.
+			return nil, valid.Errorf("« %s » n'est pas dans « %s ».", handle, c.Label())
+		}
+		if choisies[position] {
+			continue
+		}
+		choisies[position] = true
+		personnes = append(personnes, identites[position].Person())
+	}
+	if len(personnes) == 0 {
+		return nil, valid.Errorf("Aucune personne à déplacer.")
+	}
+	return personnes, nil
 }
 
 // PlanRenameStudent compose le renommage des dépôts d'une personne dont le nom
@@ -62,7 +108,7 @@ func PlanMove(depart, arrivee Classroom, personnes []roster.Person,
 func PlanRenameStudent(cours Classroom, avant, apres roster.Person,
 	repos []groups.RepoInfo) ([]Move, error) {
 	return planRenames(cours, cours,
-		map[string]string{designation(avant): fragmentDe(apres)}, repos)
+		map[string]string{Designation(avant): fragmentDe(apres)}, repos)
 }
 
 // Correction est la fiche corrigée d'une personne du groupe : ce qu'elle était,
@@ -178,7 +224,7 @@ func planRenames(depart, arrivee Classroom, fragments map[string]string,
 			if !inscrit {
 				continue
 			}
-			cle := designation(student)
+			cle := Designation(student)
 			fragment, concerne := fragments[cle]
 			if cle == "" || !concerne {
 				continue
@@ -317,6 +363,10 @@ func PlanRelocate(arrivee Classroom, travail string, depots []groups.Repo,
 // ne quitte le départ que s'il ne lui en reste aucun — sinon elle serait
 // inscrite là où elle n'a plus rien, et absente là où elle a encore quelque
 // chose.
+//
+// Un dépôt est à la personne que sa ligne désigne, compte ou matricule. Le
+// compte seul ne suffit pas : vide, il est commun à tous ceux qui n'en ont pas
+// encore, et l'un suivait alors les dépôts de l'autre.
 func Followers(depart Classroom, plan []Move, repos []groups.RepoInfo) (
 	suivent []roster.Person, quittent []roster.Person) {
 	partants := map[string]bool{}
@@ -332,7 +382,7 @@ func Followers(depart Classroom, plan []Move, repos []groups.RepoInfo) (
 			if !inscrit {
 				continue
 			}
-			cle := strings.ToLower(student.Username)
+			cle := Designation(student)
 			total[cle]++
 			if partants[strings.ToLower(depot.Name)] {
 				emportes[cle]++
@@ -341,8 +391,8 @@ func Followers(depart Classroom, plan []Move, repos []groups.RepoInfo) (
 	}
 
 	for _, personne := range depart.Students {
-		cle := strings.ToLower(personne.Username)
-		if emportes[cle] == 0 {
+		cle := Designation(personne)
+		if cle == "" || emportes[cle] == 0 {
 			continue
 		}
 		suivent = append(suivent, personne)
@@ -434,24 +484,37 @@ func (c *cibles) viser(arrivee Classroom, travail string, depot groups.Repo,
 
 // ------------------------------------------------------------------- listes
 
-// Without rend le groupe privé des comptes donnés.
-func (c Classroom) Without(usernames ...string) Classroom {
-	partants := map[string]bool{}
-	for _, username := range usernames {
-		partants[strings.ToLower(strings.TrimSpace(username))] = true
+// Without rend le groupe privé des personnes données. Une ligne part quand ce
+// qui la désigne — son compte, à défaut son matricule — est l'une des
+// désignations de ces personnes. Telle que Find ou Movers la rend, une personne
+// les porte toutes, et part donc avec toutes ses lignes : en laisser une
+// laisserait au départ la moitié de quelqu'un qui travaille sous deux comptes,
+// et retirer par compte seul y laissait tous ceux qui n'en ont pas encore.
+//
+// Les autres comptes qu'une ligne déclare n'y comptent pas : retirer un compte
+// ne retire pas la personne qui le compte parmi les siens.
+func (c Classroom) Without(people ...roster.Person) Classroom {
+	partantes := map[string]bool{}
+	for _, personne := range people {
+		for _, cle := range designationsDe(personne) {
+			partantes[cle] = true
+		}
 	}
 	restants := make([]roster.Person, 0, len(c.Students))
-	for _, personne := range c.Students {
-		if partants[strings.ToLower(personne.Username)] {
+	for _, ligne := range c.Students {
+		if partantes[Designation(ligne)] {
 			continue
 		}
-		restants = append(restants, personne)
+		restants = append(restants, ligne)
 	}
 	c.Students = restants
 	return c
 }
 
-// With rend le groupe augmenté des personnes données, sans doublon de compte.
+// With rend le groupe augmenté des personnes données. Qui y est déjà inscrit
+// sous la même désignation — son compte, à défaut son matricule — ne s'y
+// inscrit pas une seconde fois, et deux personnes sans compte y restent deux
+// personnes (voir dedupe).
 func (c Classroom) With(people ...roster.Person) Classroom {
 	c.Students = dedupe(append(append([]roster.Person(nil), c.Students...), people...))
 	return c
