@@ -389,6 +389,46 @@ func TestUnDepotOuSeulLEnseignantACommisNaPasDeRemise(t *testing.T) {
 	}
 }
 
+// Les commits de départ que l'enseignant a poussés ne sont pas une remise : la
+// colonne qui compte les commits doit dire zéro là où le dernier envoi dit
+// « jamais ». Sans savoir qui enseigne, tous comptent.
+func TestLesCommitsDEnseignantNeSeComptentPas(t *testing.T) {
+	repos := depots("a26.5n6.01.tp1.emilie-cote")
+	seulProf := map[string]groups.Handin{
+		"a26.5n6.01.tp1.emilie-cote": {
+			Commits: 2, Last: instant("2026-09-01", "08:00"),
+			LastBy:  map[string]string{"prof": instant("2026-09-01", "08:00")},
+			Authors: map[string]int{"prof": 2},
+		},
+	}
+	cours := groupe("a26", "5n6", "01", personnes("Émilie Côté", "ecote")).
+		Staffing(equipeEnseignante{"prof": true})
+	if bilan := cours.Reviews("a26.5n6.01.tp1", repos, nil, seulProf)[0]; bilan.Commits != 0 {
+		t.Errorf("Commits = %d, attendu zéro : seul l'enseignant a écrit", bilan.Commits)
+	}
+
+	partage := map[string]groups.Handin{
+		"a26.5n6.01.tp1.emilie-cote": {
+			Commits: 5, Last: instant("2026-09-30", "20:45"),
+			LastBy: map[string]string{
+				"prof": instant("2026-09-01", "08:00"), "ecote": instant("2026-09-30", "20:45"),
+			},
+			Authors: map[string]int{"prof": 2, "ecote": 3},
+		},
+	}
+	if bilan := cours.Reviews("a26.5n6.01.tp1", repos, nil, partage)[0]; bilan.Commits != 3 {
+		t.Errorf("Commits = %d, attendu les 3 commits d'Émilie", bilan.Commits)
+	}
+	sans := groupe("a26", "5n6", "01", personnes("Émilie Côté", "ecote"))
+	if bilan := sans.Reviews("a26.5n6.01.tp1", repos, nil, partage)[0]; bilan.Commits != 5 {
+		t.Errorf("sans savoir qui enseigne, Commits = %d, attendu le total", bilan.Commits)
+	}
+	travaux := cours.WithHandins([]classroom.Assignment{{ID: "a26.5n6.01.tp1"}}, repos, nil, partage)
+	if travaux[0].Commits != 3 {
+		t.Errorf("le travail compte %d commits, attendu ceux de l'étudiante", travaux[0].Commits)
+	}
+}
+
 // ------------------------------------------------- où en est une remise
 
 // Un dépôt qu'on n'a pas relevé ne prétend rien : c'est ce qui le distingue

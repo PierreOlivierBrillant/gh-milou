@@ -198,10 +198,20 @@ func (c Classroom) HandedIn(remise groups.Handin) string {
 	return remise.LastBut(c.enseignants.Teaches)
 }
 
+// StudentCommits compte les commits d'un dépôt qui sont une remise : ceux de
+// qui enseigne n'en sont pas, pour la même raison qu'ils ne datent pas la
+// remise (voir HandedIn). Sans savoir qui enseigne, tous comptent.
+func (c Classroom) StudentCommits(remise groups.Handin) int {
+	if c.enseignants == nil {
+		return remise.Commits
+	}
+	return remise.CommitsBut(c.enseignants.Teaches)
+}
+
 // Review confronte ce qu'un dépôt a reçu à ce qu'on en attendait.
 func (c Classroom) Review(repoName string, remise groups.Handin, due time.Time,
 	equipes []teams.Team) Review {
-	bilan := Review{Repo: repoName, Commits: remise.Commits, Last: c.HandedIn(remise)}
+	bilan := Review{Repo: repoName, Commits: c.StudentCommits(remise), Last: c.HandedIn(remise)}
 	if !due.IsZero() && bilan.Last != "" {
 		if dernier, err := time.Parse(time.RFC3339, bilan.Last); err == nil {
 			bilan.Late = dernier.After(due)

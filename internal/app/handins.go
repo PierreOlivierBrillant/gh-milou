@@ -84,7 +84,8 @@ func (m *manageSession) bilans(group *groups.Group) map[string]classroom.Review 
 		set, _ := m.session.names(m.org)
 		for repo, remise := range remises {
 			trouves[repo] = classroom.Review{
-				Repo: repo, Commits: remise.Commits, Last: remise.LastBut(set.Teaches),
+				Repo: repo, Commits: remise.CommitsBut(set.Teaches),
+				Last: remise.LastBut(set.Teaches),
 			}
 		}
 		return trouves

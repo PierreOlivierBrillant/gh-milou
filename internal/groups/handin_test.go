@@ -27,6 +27,32 @@ func TestLaRemiseSeDateHorsDesCommitsEcartes(t *testing.T) {
 	}
 }
 
+// Les commits de qui enseigne — les fichiers de départ, une correction — ne
+// sont pas le travail de l'étudiant : ils sortent du compte comme ils sortent
+// de la date. Sans auteurs relevés, ou sans personne à écarter, le total reste.
+func TestLesCommitsEcartesSortentDuCompte(t *testing.T) {
+	remise := groups.Handin{
+		Commits: 5,
+		Authors: map[string]int{"ecote": 3, "prof": 2},
+	}
+	if nombre := remise.CommitsBut(prof); nombre != 3 {
+		t.Errorf("CommitsBut = %d, attendu les 3 commits d'Émilie", nombre)
+	}
+	if nombre := remise.CommitsBut(nil); nombre != 5 {
+		t.Errorf("CommitsBut(nil) = %d, attendu le total", nombre)
+	}
+	ancien := groups.Handin{Commits: 2}
+	if nombre := ancien.CommitsBut(prof); nombre != 2 {
+		t.Errorf("sans auteurs relevés, CommitsBut = %d, attendu le total", nombre)
+	}
+	// Les auteurs et le total viennent de deux lectures : un décalage ne doit
+	// jamais rendre un compte négatif.
+	decale := groups.Handin{Commits: 1, Authors: map[string]int{"prof": 2}}
+	if nombre := decale.CommitsBut(prof); nombre != 0 {
+		t.Errorf("CommitsBut = %d, attendu zéro", nombre)
+	}
+}
+
 // Un dépôt où l'on n'a écarté que ce qui s'y trouvait n'a rien reçu : c'est une
 // réponse, pas un manque d'information.
 func TestUnDepotOuToutEstEcarteNaPasDeRemise(t *testing.T) {
