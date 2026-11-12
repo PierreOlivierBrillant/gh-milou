@@ -169,6 +169,34 @@ func (h Handin) LastBut(ignore func(login string) bool) string {
 	return dernier
 }
 
+// CommitsBut compte les commits de la branche que les auteurs écartés n'ont pas
+// signés.
+//
+// C'est la même règle que pour la date : les fichiers de départ et les
+// corrections de qui enseigne ne sont pas le travail de l'étudiant. Les compter
+// ferait voir « 2 commits » à côté d'un dernier envoi « jamais », dans un dépôt
+// où personne n'a rien remis.
+//
+// Sans auteurs relevés, le total est tout ce qu'on sait, et c'est lui qui est
+// rendu.
+func (h Handin) CommitsBut(ignore func(login string) bool) int {
+	if ignore == nil || len(h.Authors) == 0 {
+		return h.Commits
+	}
+	ecartes := 0
+	for login, nombre := range h.Authors {
+		if login != "" && ignore(login) {
+			ecartes += nombre
+		}
+	}
+	// Les auteurs viennent d'une autre lecture que le total : un décalage entre
+	// les deux ne doit pas donner un nombre de commits négatif.
+	if ecartes >= h.Commits {
+		return 0
+	}
+	return h.Commits - ecartes
+}
+
 // By compte les commits d'une personne, tous ses comptes confondus.
 func (h Handin) By(accounts []string) int {
 	total := 0

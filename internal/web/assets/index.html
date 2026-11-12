@@ -186,10 +186,9 @@
             <summary>Où prendre cette liste dans Omnivox ?</summary>
             <pre class="aide-omnivox" id="import-aide-texte"></pre>
           </details>
-          <div class="depot" data-depot data-titre="Choisir la liste des étudiants"
-            tabindex="0" role="button">
+          <div class="depot" data-depot data-titre="Choisir la liste des étudiants">
             <input type="hidden" id="import-liste">
-            <span class="depot-texte"></span>
+            <button type="button" class="depot-choisir"><span class="depot-texte"></span></button>
           </div>
           <!-- La liste n'apprend rien quand l'organisation nomme déjà tout le
                monde : la sauter est alors le geste juste, pas un raccourci. -->
@@ -482,10 +481,9 @@
       <div class="boite-corps">
         <label class="champ-bloc">
           <span class="etiquette">Fichier CSV de la machine</span>
-          <div class="depot" data-depot data-titre="Choisir la liste des étudiants"
-            tabindex="0" role="button">
+          <div class="depot" data-depot data-titre="Choisir la liste des étudiants">
             <input type="hidden" id="nouveau-chemin">
-            <span class="depot-texte"></span>
+            <button type="button" class="depot-choisir"><span class="depot-texte"></span></button>
           </div>
           <span class="ligne-champ">
             <button type="button" id="nouveau-charger" class="bouton">Charger</button>
@@ -731,9 +729,9 @@
         <label class="champ-bloc">
           <span class="etiquette">Dossier de fichiers de départ</span>
           <div class="depot" data-depot data-dossier="1"
-            data-titre="Choisir le dossier de départ" tabindex="0" role="button">
+            data-titre="Choisir le dossier de départ">
             <input type="hidden" id="reglage-starter">
-            <span class="depot-texte"></span>
+            <button type="button" class="depot-choisir"><span class="depot-texte"></span></button>
           </div>
           <span class="ligne-champ">
             <button type="button" id="starter-inspecter" class="bouton">Inspecter</button>
@@ -1339,7 +1337,7 @@
     <div class="boite">
       <div class="boite-entete"><strong>Fichiers</strong></div>
       <table class="tableau" id="chemins">
-        <thead><tr><th>Élément</th><th>Chemin</th><th>État</th></tr></thead>
+        <thead><tr><th class="etroit">Élément</th><th>Chemin</th><th>État</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="boite-pied">
@@ -1371,9 +1369,9 @@
         <label class="champ-bloc">
           <span class="etiquette">Dossier des clones</span>
           <div class="depot" data-depot data-dossier="1"
-            data-titre="Choisir le dossier des clones" tabindex="0" role="button">
+            data-titre="Choisir le dossier des clones">
             <input type="hidden" id="reglage-clone-dir">
-            <span class="depot-texte"></span>
+            <button type="button" class="depot-choisir"><span class="depot-texte"></span></button>
           </div>
           <span class="aide" id="reglage-clone-dir-aide">Là où « Cloner » proposera de déposer les dépôts.</span>
         </label>

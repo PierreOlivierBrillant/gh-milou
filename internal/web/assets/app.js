@@ -348,7 +348,10 @@ const etat = {
   nature: 'individuel',
   destinataires: new Set(),
   reglagesTravail: {},
-  nouveau: { org: '', etudiants: [], rejets: [] },
+  // Le groupe pour lequel l'assistant a été préparé. Rouvert par son adresse
+  // pour un autre — ou après un rechargement —, il doit l'être de nouveau.
+  assistantGroupe: '',
+  nouveau: { org: '', etudiants: [], rejets: [], source: '' },
   etape: 1,
 };
 
@@ -376,6 +379,7 @@ function ouvrirOperation(fiche) {
     miroirOperation.barre.value = 0;
   }
   $('operation').hidden = false;
+  document.body.classList.add('avec-operation');
   operationMilou('trotte');
   $('operation-titre').textContent = fiche.label;
   $('operation-etat').textContent = fiche.status;
@@ -490,7 +494,10 @@ function suivre(fiche, miroir = null) {
   });
 }
 
-$('operation-fermer').addEventListener('click', () => { $('operation').hidden = true; });
+$('operation-fermer').addEventListener('click', () => {
+  $('operation').hidden = true;
+  document.body.classList.remove('avec-operation');
+});
 $('operation-annuler').addEventListener('click', () => {
   if (operationCourante) {
     api('POST', `/api/jobs/${encode(operationCourante.id)}/cancel`).catch(() => {});
@@ -548,6 +555,22 @@ function demander(titre, contenu, libelle = 'Confirmer', preparer = null) {
     if (preparer) preparer(valider);
     dialogue.showModal();
   });
+}
+
+// montrer ouvre le dialogue pour qu'on le lise, sans rien à confirmer : un seul
+// bouton, neutre, le referme. « Annuler » à côté de « Fermer » ferait chercher
+// lequel des deux défait quelque chose, alors qu'aucun ne défait rien.
+async function montrer(titre, contenu) {
+  const annuler = $('dialogue-annuler');
+  const fermer = $('dialogue-ok');
+  annuler.hidden = true;
+  fermer.classList.remove('vert');
+  try {
+    await demander(titre, contenu, 'Fermer');
+  } finally {
+    annuler.hidden = false;
+    fermer.classList.add('vert');
+  }
 }
 
 // --------------------------------------------------------------------- vues
@@ -726,6 +749,21 @@ async function allerA(route) {
       afficherVue('parcours', true);
       return;
     }
+  }
+  if (route.vue === 'assistant' && etat.assistantGroupe !== etat.groupe.scope) {
+    // L'assistant ne vit que de ce que son bouton lui confie : rouvert par son
+    // adresse — un rechargement, un lien collé —, il n'aurait ni les réglages
+    // du groupe ni ses destinataires, et distribuerait au droit « pull » sans
+    // inviter personne. Il repart donc d'un travail neuf. Le retour arrière,
+    // lui, le retrouve tel qu'on l'avait laissé.
+    if (etat.groupe.session) {
+      await ouvrirAssistant('', 'Nouveau travail');
+    } else {
+      // Un groupe à la nomenclature dépassée ne reçoit plus de travail.
+      naviguer(cheminDeLaVue('travaux'), true);
+      afficherVue('travaux', true);
+    }
+    return;
   }
   if (route.vue !== 'travail' && route.vue !== 'plagiat') {
     afficherVue(route.vue, true); return;
@@ -917,6 +955,12 @@ function ficheDeLEntete(nom) {
     ? { texte: groupe.label || '' }
     : { texte: groupe.label || '', action: () => afficherVue('travaux') });
   if (nom === 'travail' && etat.travail) fil.push({ texte: etat.travail.name });
+  // La préparation d'une comparaison appartient au travail : le fil le dit, et
+  // y remonte d'un clic.
+  if (nom === 'plagiat' && etat.travail) {
+    fil.push({ texte: etat.travail.name, action: () => afficherVue('travail') });
+    fil.push({ texte: 'Comparer les copies' });
+  }
   if (nom === 'assistant') fil.push({ texte: etat.assistantTitre || 'Nouveau travail' });
   if (nom === 'etudiants') fil.push({ texte: 'Étudiants' });
   if (nom === 'equipes') fil.push({ texte: 'Équipes' });
@@ -944,9 +988,18 @@ function etapeCours(court, cours) {
   };
 }
 
+// effectifDuGroupe dit combien de personnes compte un groupe, et ses équipes
+// quand il en a. La liste peut venir du poste ou du registre : d'où qu'elle
+// vienne, la liste des cours, le choix d'un groupe d'arrivée et l'en-tête du
+// groupe doivent donner le même nombre.
+function effectifDuGroupe(groupe) {
+  let effectif = `${gens(groupe).length} étudiant(s)`;
+  if (groupe.teams > 0) effectif += ` · ${groupe.teams} équipe(s)`;
+  return effectif;
+}
+
 function sousTitreDuGroupe(groupe) {
-  let compte = `${gens(groupe).length} étudiant(s)`;
-  if (groupe.teams > 0) compte += ` · ${groupe.teams} équipe(s)`;
+  const compte = effectifDuGroupe(groupe);
   if (!groupe.session) return `Organisation ${groupe.org} · ${compte}`;
   return `${groupe.session_name || groupe.session} · ${sigle(groupe.course)}` +
     ` · groupe ${groupe.group} · ${compte}`;
@@ -991,11 +1044,25 @@ function enteteDeComparaison(nom, racine) {
   }
 
   const rapport = etat.plagiat.donnees;
-  const travail = (rapport && rapport.assignment) || 'comparaison';
-  const auRapport = { texte: travail, action: () => afficherVue('plagiat-rapport') };
+  // Un rapport compare les copies d'un travail : quand son groupe est connu, le
+  // fil remonte jusqu'à lui, et le titre dit le travail par son nom court. Un
+  // rapport venu d'ailleurs — un groupe retiré depuis — garde le fil court.
+  const place = placeDuRapport(rapport);
+  const travail = place ? place.travail : ((rapport && rapport.assignment) || 'comparaison');
+  const filDuTravail = place
+    ? [racine, etapeSession(place.groupe.session),
+      etapeCours(place.groupe.session, place.groupe.course),
+      { texte: place.groupe.label, action: () => ouvrirGroupe(place.groupe.scope) },
+      { texte: travail, action: () => rejoindre(
+        `/g/${encode(place.groupe.scope)}/travaux/${encode(travail)}`) }]
+    : [racine];
+  const etapeRapport = place && rapport
+    ? `Comparaison du ${(rapport.created_at || '').slice(0, 10)}`
+    : travail;
+  const auRapport = { texte: etapeRapport, action: () => afficherVue('plagiat-rapport') };
   if (nom === 'plagiat-rapport') {
     return {
-      fil: [racine, { texte: travail }], titre: `Comparaison — ${travail}`,
+      fil: [...filDuTravail, { texte: etapeRapport }], titre: `Comparaison — ${travail}`,
       sousTitre: rapport
         ? `${rapport.works.length} copie(s) · analyse du `
           + `${(rapport.created_at || '').slice(0, 10)}`
@@ -1009,12 +1076,12 @@ function enteteDeComparaison(nom, racine) {
     : 'deux copies';
   if (nom === 'plagiat-paire') {
     return {
-      fil: [racine, auRapport, { texte: cotes }], titre: cotes,
+      fil: [...filDuTravail, auRapport, { texte: cotes }], titre: cotes,
       sousTitre: 'Les deux projets, et ce qui les relie.',
     };
   }
   return {
-    fil: [racine, auRapport,
+    fil: [...filDuTravail, auRapport,
       { texte: cotes, action: () => afficherVue('plagiat-paire') },
       { texte: etat.plagiat.cheminG || 'fichiers' }],
     titre: cotes,
@@ -1022,6 +1089,24 @@ function enteteDeComparaison(nom, racine) {
       ? `${etat.plagiat.fichier.left.path} et ${etat.plagiat.fichier.right.path}`
       : 'Deux fichiers, passage par passage.',
   };
+}
+
+// placeDuRapport retrouve le groupe dont un rapport compare un travail : son
+// identifiant complet commence par la place du groupe. Rien s'il n'en est
+// aucun de connu.
+function placeDuRapport(rapport) {
+  const id = (rapport && rapport.assignment) || '';
+  const groupe = etat.groupes.find((candidat) => candidat.session &&
+    id.toLowerCase().startsWith(candidat.scope.toLowerCase() + '.'));
+  if (!groupe) return null;
+  return { groupe, travail: id.slice(groupe.scope.length + 1) };
+}
+
+// rejoindre mène à une adresse comme si on l'avait suivie : elle s'inscrit
+// dans l'historique, puis l'écran qu'elle désigne se remplit.
+function rejoindre(chemin) {
+  naviguer(chemin);
+  allerA(lireAdresse());
 }
 
 // ------------------------------------------------ parcours de la hiérarchie
@@ -1176,8 +1261,12 @@ function dessinerCours(conteneur, session) {
   for (const cours of triees) {
     const etudiants = cours.groupes.reduce(
       (total, groupe) => total + gens(groupe).length, 0);
+    // Un cours mené en équipe peut n'avoir aucun étudiant inscrit : ses
+    // équipes sont alors tout ce qui dit qu'il n'est pas vide.
+    const equipes = cours.groupes.reduce((total, groupe) => total + (groupe.teams || 0), 0);
     conteneur.append(ligneParcours(sigle(cours.code),
-      `${groupesEnMots(cours.groupes.length)} · ${etudiants} étudiant(s)`, [],
+      `${groupesEnMots(cours.groupes.length)} · ${etudiants} étudiant(s)` +
+        (equipes > 0 ? ` · ${equipes} équipe(s)` : ''), [],
       () => {
         etat.parcours = { session, cours: cours.code };
         afficherVue('parcours');
@@ -1191,11 +1280,8 @@ function dessinerGroupesDuCours(conteneur, session, cours) {
     groupe.course.toLowerCase() === cours.toLowerCase());
   for (const groupe of retenus) {
     const sesTravaux = groupe.assignments || [];
-    const compte = groupe.known
-      ? `${gens(groupe).length} étudiant(s)`
-      : 'aucune liste retenue';
     conteneur.append(ligneParcours(groupe.label,
-      `${compte} · ${travaux(sesTravaux.length)}`,
+      `${effectifDuGroupe(groupe)} · ${travaux(sesTravaux.length)}`,
       [el('span', { classe: 'jeton', texte: groupe.group })],
       () => ouvrirGroupe(groupe.scope)));
   }
@@ -1327,11 +1413,15 @@ function ouvrirNouveauGroupe() {
 }
 
 function preparerNouveauGroupe() {
-  etat.nouveau = { etudiants: [], rejets: [] };
+  etat.nouveau = { etudiants: [], rejets: [], source: '' };
   $('nouveau-session').value = etat.parcours.session || '';
   $('nouveau-cours').value = etat.parcours.cours || '';
   $('nouveau-section').value = '';
-  $('nouveau-chemin').value = etat.reglages.roster_path || '';
+  // Un nouveau groupe a une nouvelle liste : montrer celle de la dernière fois
+  // la ferait passer pour la sienne. La fenêtre s'ouvre seulement là où elle
+  // était rangée.
+  viderDepot('nouveau-chemin');
+  $('nouveau-chemin').closest('.depot').dataset.depart = etat.reglages.roster_path || '';
   $('nouveau-texte').value = '';
   $('nouveau-resume').textContent = '';
   vider($('nouveau-rejets'));
@@ -1361,19 +1451,36 @@ $('nouveau-lire').addEventListener('click', async () => {
   const texte = $('nouveau-texte').value;
   if (!texte.trim()) { message('La zone de texte est vide.', 'alerte'); return; }
   const liste = await tenter(() => api('POST', '/api/roster/parse', { text: texte }), 'Liste');
-  if (liste) appliquerListeNouveau(liste);
+  if (!liste) return;
+  etat.nouveau.source = 'texte';
+  appliquerListeNouveau(liste);
 });
 
 $('nouveau-chemin').addEventListener('change', () => {
-  if ($('nouveau-chemin').value.trim()) $('nouveau-charger').click();
+  if ($('nouveau-chemin').value.trim()) {
+    $('nouveau-charger').click();
+    return;
+  }
+  // Le fichier retiré emporte la liste qu'on y avait lue ; une liste collée,
+  // elle, ne lui doit rien et reste.
+  if (etat.nouveau.source === 'fichier') {
+    appliquerListeNouveau({ people: [], issues: [] });
+    $('nouveau-resume').textContent = '';
+  }
 });
 
 $('nouveau-charger').addEventListener('click', async () => {
-  const chemin = $('nouveau-chemin').value.trim();
-  if (!chemin) { message('Indiquez un chemin de fichier.', 'alerte'); return; }
-  const liste = await tenter(() => api('POST', '/api/roster/load', { path: chemin }), 'Fichier');
+  // Un fichier déposé n'a pas de chemin, seulement un nom : c'est son contenu
+  // qui se lit. Envoyé comme un chemin, ce nom désignerait un fichier introuvable.
+  const contenu = contenuDepot('nouveau-chemin');
+  const chemin = cheminDepot('nouveau-chemin');
+  if (!contenu && !chemin) { message('Indiquez un chemin de fichier.', 'alerte'); return; }
+  const liste = await tenter(() => (contenu
+    ? api('POST', '/api/roster/parse', { content: contenu })
+    : api('POST', '/api/roster/load', { path: chemin })), 'Fichier');
   if (!liste) return;
-  $('nouveau-chemin').value = liste.path;
+  if (!contenu) $('nouveau-chemin').value = liste.path;
+  etat.nouveau.source = 'fichier';
   appliquerListeNouveau(liste);
 });
 
@@ -1419,7 +1526,7 @@ $('nouveau-creer').addEventListener('click', async () => {
     group: $('nouveau-section').value.trim(),
     prefix: '', pattern: '',
     students: etat.nouveau.etudiants,
-    roster_path: $('nouveau-chemin').value.trim(),
+    roster_path: cheminDepot('nouveau-chemin'),
     defaults: {},
   }), 'Groupe');
   if (!cree) return;
@@ -1783,9 +1890,9 @@ const etatsDeRemise = {
   'non relevé': { classe: 'vide', texte: '—', title: "L'historique n'a pas encore été relevé" },
   // Orange, et non jaune : la personne n'a pas pu remettre, son dépôt ne lui
   // est pas encore ouvert. Ce n'est pas le même reproche qu'un dépôt resté vide.
-  'non accepté': { classe: 'jeton orange', texte: 'Non accepté',
+  'non accepté': { classe: 'jeton orange', texte: 'non accepté',
     title: "L'invitation à ce dépôt n'a pas encore été acceptée" },
-  'non remis': { classe: 'jeton alerte', texte: 'Non remis',
+  'non remis': { classe: 'jeton alerte', texte: 'non remis',
     title: 'Aucun commit qui soit une remise dans ce dépôt' },
   'en retard': { classe: 'jeton non', texte: 'en retard' },
   remis: { classe: 'jeton oui', texte: 'remis' },
@@ -2248,8 +2355,12 @@ async function panneauAcces(repo) {
   const droit = el('select', { classe: 'champ' }, etat.contexte.permissions.map(
     (option) => el('option', { value: option.value, texte: option.label })));
   droit.value = (etat.groupe.defaults && etat.groupe.defaults.permission) || 'push';
-  const ajout = el('div', { classe: 'ligne-champ' }, compte, droit,
-    el('button', {
+  // Le compte sur sa ligne, le droit et le bouton sur la suivante : sur une
+  // seule, le droit serait rogné au milieu d'un mot.
+  const ajout = el('div', {},
+    el('label', { classe: 'champ-bloc' },
+      el('span', { classe: 'etiquette', texte: 'Compte GitHub' }), compte),
+    el('div', { classe: 'ligne-champ' }, droit, el('button', {
       type: 'button', classe: 'bouton vert', texte: 'Inviter',
       onclick: async () => {
         const succes = await tenter(() => api('POST',
@@ -2261,10 +2372,10 @@ async function panneauAcces(repo) {
         await rafraichirAcces(repo);
         redessiner();
       },
-    }));
+    })));
 
-  await demander(`Accès de « ${repo.name} »`,
-    el('div', {}, liste, el('h3', { texte: 'Ajouter un accès' }), ajout), 'Fermer');
+  await montrer(`Accès de « ${repo.name} »`,
+    el('div', {}, liste, el('h3', { texte: 'Ajouter un accès' }), ajout));
 }
 
 function ligneAcces(repo, login, role, retirer, redessiner) {
@@ -2467,6 +2578,7 @@ async function ouvrirAssistant(nom, titre, etape = 1, nature) {
   }
   etat.reglagesTravail = Object.assign({}, etat.groupe.defaults);
   etat.assistantTitre = titre;
+  etat.assistantGroupe = etat.groupe.scope;
   $('travail-nom').value = nom;
   // Un travail rouvert pour servir un retardataire montre l'échéance qu'il a
   // déjà : la retaper serait absurde, et la laisser vide l'effacerait à l'œil.
@@ -2593,6 +2705,8 @@ function majApercuDuNom() {
 // un compte GitHub ou un nom court d'équipe —, si bien que la suite ne fait
 // plus de différence entre les deux.
 function destinatairesPossibles() {
+  // Dans l'ordre alphabétique, comme les autres listes du groupe : l'ordre du
+  // fichier du collège ne dit rien à qui cherche un nom à décocher.
   if (enEquipe()) {
     return etat.equipes.map((equipe) => ({
       cle: equipe.short,
@@ -2600,13 +2714,19 @@ function destinatairesPossibles() {
       detail: (equipe.members || []).length === 0
         ? 'équipe vide'
         : (equipe.members || []).map((compte) => '@' + compte).join(', '),
-    }));
+    })).sort((a, b) => parNom(a.titre, b.titre));
   }
   return gens(etat.groupe).map((personne) => ({
     cle: personne.username,
     titre: personne.full_name || '',
     detail: '@' + personne.username,
-  }));
+  })).sort((a, b) => parNom(a.titre || a.cle, b.titre || b.cle));
+}
+
+// parNom range deux noms comme on les lit : accents et casse n'y changent rien,
+// et « eq10 » vient après « eq9 ».
+function parNom(a, b) {
+  return (a || '').localeCompare(b || '', 'fr', { sensitivity: 'base', numeric: true });
 }
 
 function dessinerDestinataires() {
@@ -2758,7 +2878,10 @@ async function rafraichirApercu() {
   try {
     const apercu = await api('POST',
       `/api/classrooms/${encode(etat.groupe.scope)}/assignments/preview`, corpsDuTravail());
-    for (const item of apercu.items) {
+    // Le même ordre que la liste des destinataires juste au-dessus.
+    const items = [...apercu.items].sort((a, b) =>
+      parNom(a.full_name || a.username || a.name, b.full_name || b.username || b.name));
+    for (const item of items) {
       corps.append(el('tr', {},
         el('td', {}, el('code', { texte: item.name })),
         el('td', { texte: item.full_name || '—' }),
@@ -6082,8 +6205,10 @@ function dessinerChemins(chemins) {
   const corps = $('chemins').querySelector('tbody');
   vider(corps);
   for (const item of chemins) {
+    // Le libellé ne se coupe pas : c'est le chemin, long et sans espace, qui
+    // doit céder la place.
     corps.append(el('tr', {},
-      el('td', { texte: item.label }),
+      el('td', { classe: 'etroit', texte: item.label }),
       el('td', {}, el('code', { texte: item.path })),
       el('td', { classe: 'note', texte: item.state })));
   }
@@ -6213,15 +6338,12 @@ async function choixDeGroupe() {
       groupe.course, groupe.group].join(' ')).split(/[^\p{L}\p{N}]+/u).filter(Boolean)]));
 
   function ligneDeGroupe(groupe) {
-    const compte = groupe.known
-      ? `${gens(groupe).length} étudiant(s)`
-      : 'aucune liste retenue';
     return el('button', { classe: 'choix-place', type: 'button',
       'data-scope': groupe.scope, onclick: () => retenir(groupe.scope) },
       el('span', { classe: 'choix-infos' },
         el('span', { classe: 'titre', texte: groupe.label }),
         el('span', { classe: 'detail',
-          texte: `${compte} · ${travaux((groupe.assignments || []).length)}` })),
+          texte: `${effectifDuGroupe(groupe)} · ${travaux((groupe.assignments || []).length)}` })),
       el('span', { classe: 'espace' }),
       el('code', { classe: 'jeton', texte: groupe.scope }));
   }
@@ -6516,7 +6638,9 @@ async function renommerTravail(travail) {
 // l'explorateur de l'interface prend le relais.
 async function choisirChemin(champ, options = {}) {
   const requete = {
-    path: champ.value.trim(),
+    // Un champ vide n'oublie pas où l'on range ses fichiers : la fenêtre
+    // s'ouvre là où la zone le propose, sans que rien soit choisi d'avance.
+    path: champ.value.trim() || options.depart || '',
     dirs: !!options.dossier,
     title: options.titre || 'Choisir',
   };
@@ -6538,9 +6662,11 @@ async function choisirChemin(champ, options = {}) {
 // valeur.
 function zoneDepot(options = {}) {
   const champ = el('input', { type: 'hidden', value: options.valeur || '' });
-  const zone = el('div', { classe: 'depot', tabindex: '0', role: 'button' },
-    champ, el('span', { classe: 'depot-texte' }));
+  const zone = el('div', { classe: 'depot' }, champ,
+    el('button', { type: 'button', classe: 'depot-choisir' },
+      el('span', { classe: 'depot-texte' })));
   if (options.dossier) zone.dataset.dossier = '1';
+  if (options.cheminSeul) zone.dataset.cheminSeul = '1';
   zone.dataset.titre = options.titre || 'Choisir';
   brancherDepot(zone);
   return { zone, champ };
@@ -6556,17 +6682,45 @@ function zoneDepot(options = {}) {
 // Il a un contenu, et c'est le contenu qui part au serveur.
 const valeurBrute = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
 
+// brancherDepot donne vie à une zone. Ce qu'on y clique est un vrai bouton, qui
+// occupe toute la zone : une zone qui se ferait passer pour un bouton ne le
+// serait pas aux yeux du navigateur, et posée dans un <label>, son clic
+// partirait aussi vers le premier bouton du label — « Charger », « Inspecter »
+// — avant même qu'un chemin soit choisi.
 function brancherDepot(zone) {
   const champ = zone.querySelector('input');
+  const choisir = zone.querySelector('.depot-choisir');
   const texte = zone.querySelector('.depot-texte');
   const dossier = zone.dataset.dossier === '1';
+  // Une zone qui ne sait que faire d'un contenu — un dossier, une archive que
+  // le serveur lira lui-même, un fichier à écrire — ne prend que des chemins.
+  // Un fichier déposé n'y laisserait que son nom, qui ne mène nulle part.
+  const cheminSeul = dossier || zone.dataset.cheminSeul === '1';
   const vide = dossier
     ? 'Cliquez pour choisir un dossier.'
-    : 'Déposez le fichier ici, ou cliquez pour le choisir.';
+    : cheminSeul
+      ? 'Cliquez pour choisir le fichier.'
+      : 'Déposez le fichier ici, ou cliquez pour le choisir.';
+
+  // Un chemin retenu doit pouvoir s'oublier : une zone remplie par erreur, ou
+  // par le réglage d'une autre fois, ne se viderait qu'en choisissant autre
+  // chose — et « aucun dossier de départ » ne se choisit pas.
+  const retirer = el('button', {
+    type: 'button', classe: 'depot-retirer', texte: '×',
+    title: 'Retirer', 'aria-label': 'Retirer ce chemin',
+    onclick: () => {
+      delete zone.dataset.contenu;
+      champ.value = '';
+      champ.dispatchEvent(new Event('change', { bubbles: true }));
+      choisir.focus();
+    },
+  });
+  zone.append(retirer);
 
   const montrer = () => {
     const valeur = valeurBrute.get.call(champ).trim();
     zone.classList.toggle('vide', !valeur);
+    retirer.hidden = !valeur;
     vider(texte);
     if (valeur) texte.append(el('code', { texte: valeur }));
     else texte.textContent = vide;
@@ -6579,21 +6733,18 @@ function brancherDepot(zone) {
 
   const ouvrir = async () => {
     const avant = champ.value;
-    await choisirChemin(champ, { dossier, titre: zone.dataset.titre });
+    await choisirChemin(champ, {
+      dossier, titre: zone.dataset.titre, depart: zone.dataset.depart,
+    });
     // Un chemin choisi remplace ce qui avait été déposé : les deux ne peuvent
     // pas désigner le même fichier.
     if (champ.value !== avant) delete zone.dataset.contenu;
   };
-  zone.addEventListener('click', ouvrir);
-  zone.addEventListener('keydown', (evenement) => {
-    if (evenement.key !== 'Enter' && evenement.key !== ' ') return;
-    evenement.preventDefault();
-    ouvrir();
-  });
+  choisir.addEventListener('click', ouvrir);
 
-  // Un dossier déposé ne donne ni chemin ni contenu lisible : il ne reste que
-  // le clic.
-  if (dossier) return;
+  // Un dossier déposé ne donne ni chemin ni contenu lisible, et un fichier
+  // déposé n'a pas de chemin : il ne reste que le clic.
+  if (cheminSeul) return;
   zone.addEventListener('dragover', (evenement) => {
     evenement.preventDefault();
     zone.classList.add('survol');
@@ -6604,15 +6755,17 @@ function brancherDepot(zone) {
     zone.classList.remove('survol');
     const fichier = evenement.dataTransfer.files[0];
     if (!fichier) return;
-    zone.dataset.contenu = await octets(fichier);
+    zone.dataset.contenu = await enBase64(fichier);
     champ.value = fichier.name;
     champ.dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
 
-// octets rend le contenu d'un fichier en base64 : la forme qu'un []byte prend
-// en JSON du côté de Go.
-function octets(fichier) {
+// enBase64 rend le contenu d'un fichier en base64 : la forme qu'un []byte prend
+// en JSON du côté de Go. Son nom ne doit être celui d'aucune autre fonction :
+// le script est global, la dernière déclaration l'emporte, et un fichier déposé
+// partirait alors sous la forme que prend une taille — « 0 o ».
+function enBase64(fichier) {
   return new Promise((resolve, reject) => {
     const lecteur = new FileReader();
     lecteur.onload = () => resolve(lecteur.result.split(',')[1] || '');
@@ -6826,9 +6979,11 @@ function ecrireReglagesGeneraux() {
   // et l'écran doit dire lequel.
   $('reglage-clone-dir-aide').textContent = 'Là où « Cloner » proposera de déposer les dépôts' +
     (contexte.clone_parent ? ` ; laissé vide, ce sera ${contexte.clone_parent}.` : '.');
+  // Aucun bouton n'ouvre la fenêtre : c'est la zone du chemin elle-même qu'on
+  // clique, et la note doit le dire dans ces termes.
   $('reglages-selecteur').textContent = contexte.native_picker
-    ? `« Parcourir… » ouvre la fenêtre du système (${contexte.native_picker}).`
-    : "Cette machine n'a pas de fenêtre de sélection : « Parcourir… » ouvre " +
+    ? `Cliquer un chemin ouvre la fenêtre du système (${contexte.native_picker}).`
+    : "Cette machine n'a pas de fenêtre de sélection : cliquer un chemin ouvre " +
       "l'explorateur de l'interface.";
   if (!contexte.save_config) {
     $('reglages-etat').textContent = 'Mémorisation désactivée (--no-save-config)';
@@ -7140,7 +7295,8 @@ function boiteEchantillon(echantillon) {
   }
   table.append(corps);
   return el('details', { classe: 'boite' },
-    el('summary', {}, entete), el('div', { classe: 'tableau-defile' }, table));
+    el('summary', { classe: 'entete-repliable' }, entete),
+    el('div', { classe: 'tableau-defile' }, table));
 }
 
 $('pl-lancer').addEventListener('click', () => tenter(async () => {
@@ -7606,12 +7762,14 @@ function dessinerPairePlagiat() {
   const projet = vue.project;
   const match = vue.match;
 
+  // Sept caractères désignent un commit sans ambiguïté dans un dépôt d'élève ;
+  // les quarante allongeraient la phrase sans rien apprendre de plus.
   $('pl-paire-resume').textContent =
     `${Math.round(match.similarity * 100)} % de similarité — couverture `
     + `${Math.round(match.left_coverage * 100)} % et `
     + `${Math.round(match.right_coverage * 100)} % — plus long passage commun : `
     + `${match.longest_fragment} jetons. Commits comparés : `
-    + `${projet.left.commit} et ${projet.right.commit}.`;
+    + `${(projet.left.commit || '').slice(0, 7)} et ${(projet.right.commit || '').slice(0, 7)}.`;
   $('pl-paire-avertissement').textContent = vue.disclaimer;
   dessinerChronologie(vue.chronology);
 
@@ -7620,22 +7778,32 @@ function dessinerPairePlagiat() {
   if (!(projet.links || []).length) {
     liens.append(el('div', { classe: 'boite-vide', texte: 'Aucun fichier relié.' }));
   } else {
+    const nomG = nomDeCopie(projet.left);
+    const nomD = nomDeCopie(projet.right);
     const table = el('table', { classe: 'pl-table' },
       el('thead', {}, el('tr', {},
-        el('th', { texte: nomDeCopie(projet.left) }),
-        el('th', { texte: nomDeCopie(projet.right) }),
+        el('th', { texte: 'Fichier' }),
         el('th', { classe: 'chiffre', texte: 'Plus long passage' }),
         el('th', { classe: 'chiffre', texte: 'Part recouverte' }),
         el('th', { classe: 'chiffre', texte: 'Fragments' }))));
     const corps = el('tbody');
     for (const lien of projet.links) {
+      // Le plus souvent, les deux copies rangent le fichier au même endroit :
+      // écrire deux fois son chemin doublerait la largeur du tableau et
+      // chasserait les mesures hors de vue. Un fichier rangé ailleurs montre ses deux
+      // chemins, dans l'ordre du titre.
+      const fichier = el('td', {
+        title: `${nomG} : ${lien.left_path}\n${nomD} : ${lien.right_path}`,
+      }, cheminCoupable(lien.left_path));
+      if (lien.right_path !== lien.left_path) {
+        fichier.append(el('div', { classe: 'note' }, '↔ ', cheminCoupable(lien.right_path),
+          lien.same_name ? null : ' (renommé)'));
+      }
       corps.append(el('tr', {
         classe: 'cliquable',
         onclick: () => ouvrirFichierPlagiat(lien.left_path, lien.right_path),
       },
-        el('td', { classe: 'pl-chemin', texte: lien.left_path }),
-        el('td', { classe: 'pl-chemin', texte: lien.right_path },
-          lien.same_name ? null : el('span', { classe: 'note', texte: ' (renommé)' })),
+        fichier,
         el('td', { classe: 'chiffre', texte: `${lien.longest_fragment} jetons` }),
         el('td', {
           classe: 'chiffre',
@@ -7688,10 +7856,22 @@ function dessinerSeuls(idTitre, idListe, cote, seuls) {
   const liste = el('div', { classe: 'boite-corps' });
   for (const seul of seuls) {
     liste.append(el('div', {},
-      el('span', { classe: 'pl-chemin', texte: seul.path }),
+      cheminCoupable(seul.path),
       el('span', { classe: 'note', texte: ` — ${seul.reason}` })));
   }
   zone.append(liste);
+}
+
+// cheminCoupable écrit un chemin qui peut passer à la ligne après chaque
+// barre. Sans espace, il ne se couperait nulle part : il élargirait son
+// tableau, ou dépasserait de sa boîte, qui le rognerait.
+function cheminCoupable(chemin) {
+  const bout = el('span', { classe: 'pl-chemin' });
+  String(chemin || '').split('/').forEach((morceau, rang) => {
+    if (rang > 0) bout.append('/', el('wbr'));
+    bout.append(morceau);
+  });
+  return bout;
 }
 
 function nomDeCopie(cote) { return cote.label || cote.id; }
@@ -7859,6 +8039,9 @@ $('pl-fichier-retour').addEventListener('click', () => afficherVue('plagiat-pair
 async function allerAuPlagiat(route) {
   if (route.vue === 'plagiat-regles') { await ouvrirReglesPlagiat(true); return; }
   if (!route.rapport) { afficherVue('parcours', true); return; }
+  // Arriver droit sur un rapport par son adresse ne charge pas les groupes :
+  // sans eux, son fil d'Ariane ne saurait pas remonter jusqu'au travail.
+  if (etat.groupes.length === 0) await chargerGroupes();
   if (etat.plagiat.rapport !== route.rapport || !etat.plagiat.donnees) {
     await ouvrirRapportPlagiat(route.rapport, true);
   }
@@ -8049,7 +8232,9 @@ $('pl-regles-ouvrir').addEventListener('click', () => {
 // demanderEnvoi demande où écrire l'archive, puis la produit.
 async function demanderEnvoi() {
   const defaut = `${etat.travail ? etat.travail.name : 'travail'}-anonymise.zip`;
-  const { zone, champ } = zoneDepot({ valeur: defaut, titre: 'Fichier ZIP à écrire' });
+  const { zone, champ } = zoneDepot({
+    valeur: defaut, titre: 'Fichier ZIP à écrire', cheminSeul: true,
+  });
   const fragments = document.createDocumentFragment();
   fragments.append(
     el('p', {
@@ -8159,7 +8344,7 @@ function dessinerEnvoi(bilan) {
 
 // ajouterArchive verse dans l'analyse des copies reçues d'un collègue.
 async function ajouterArchive() {
-  const { zone, champ } = zoneDepot({ titre: 'Archive reçue (.zip)' });
+  const { zone, champ } = zoneDepot({ titre: 'Archive reçue (.zip)', cheminSeul: true });
   const suite = await demander('Ajouter des copies reçues',
     el('div', {},
       el('p', {

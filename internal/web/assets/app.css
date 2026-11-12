@@ -530,16 +530,27 @@ textarea.champ { resize: vertical; font-family: var(--police-mono); }
 }
 
 /* --- un chemin ne se tape plus, il se choisit ------------------------------
-   Le bloc est le bouton : un clic ouvre la fenêtre du système, un fichier
-   déposé donne son contenu. */
+   Le bloc reçoit le fichier déposé, qui donne son contenu ; le bouton qui le
+   remplit ouvre la fenêtre du système, et la croix oublie le chemin. */
 .depot {
-  display: flex; align-items: center; gap: .6rem; margin-top: .35rem;
-  padding: .85rem 1rem; border: var(--contour-pointille); border-radius: var(--rayon);
-  background: var(--fond-doux); cursor: pointer; transition: border-color .12s,
-    background .12s;
+  display: flex; align-items: stretch; margin-top: .35rem;
+  border: var(--contour-pointille); border-radius: var(--rayon);
+  background: var(--fond-doux); transition: border-color .12s, background .12s;
 }
-.depot:hover, .depot:focus-visible { border-color: var(--lien); background: var(--fond); }
+.depot:hover, .depot:has(:focus-visible) { border-color: var(--lien); background: var(--fond); }
 .depot.survol { border-color: var(--lien); border-style: solid; background: var(--fond); }
+/* Le bouton remplit la zone : c'est elle tout entière qu'on clique. */
+.depot-choisir {
+  flex: 1; min-width: 0; display: flex; align-items: center;
+  padding: .85rem 1rem; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.depot-choisir:focus-visible { outline: 0; }
+.depot-retirer {
+  flex: none; padding: 0 .9rem; border: 0; background: none; cursor: pointer;
+  color: var(--texte-doux); font: inherit; font-size: 1.15rem; line-height: 1;
+}
+.depot-retirer:hover, .depot-retirer:focus-visible { color: var(--erreur); outline: 0; }
 .depot-texte { flex: 1; min-width: 0; font-size: .9rem; overflow-wrap: anywhere; }
 .depot.vide .depot-texte { color: var(--texte-doux); }
 .depot code { font-size: .85rem; }
@@ -701,6 +712,14 @@ details { border: var(--contour); border-radius: var(--rayon); }
 summary { cursor: pointer; padding: .5rem .8rem; font-size: .875rem; }
 details .corps { padding: 0 .8rem .8rem; }
 details .corps > * + * { margin-top: .25rem; }
+/* Un résumé fait d'un en-tête de boîte : le triangle du navigateur s'y mettrait
+   seul sur sa ligne, au-dessus de l'en-tête. L'en-tête porte le sien. */
+summary.entete-repliable { list-style: none; padding: 0; }
+summary.entete-repliable::-webkit-details-marker { display: none; }
+summary.entete-repliable > .boite-entete::before {
+  content: '▸'; color: var(--texte-doux); transition: transform .12s;
+}
+details[open] > summary.entete-repliable > .boite-entete::before { transform: rotate(90deg); }
 
 /* ------------------------------------------------------ opération en cours */
 
@@ -716,6 +735,11 @@ details .corps > * + * { margin-top: .25rem; }
   overflow: hidden;
   z-index: 10;
 }
+
+/* Le panneau flotte au-dessus de la page. Tant qu'il est ouvert, elle garde en
+   bas de quoi faire remonter son contenu au-dessus de lui : sans cette marge,
+   la fin d'un tableau resterait dessous, hors d'atteinte. */
+body.avec-operation main { padding-bottom: 20rem; }
 
 .operation-entete {
   display: flex;
@@ -1254,7 +1278,9 @@ dialog .corps-dialogue > * + * { margin-top: .75rem; }
 .pl-table th { color: var(--texte-doux); font-weight: 600; border-top: 0; }
 .pl-table tbody tr.cliquable { cursor: pointer; }
 .pl-table tbody tr.cliquable:hover { background: var(--fond-doux); }
-.pl-table td.chiffre { text-align: right; font-variant-numeric: tabular-nums; }
+.pl-table td.chiffre, .pl-table th.chiffre {
+  text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 .pl-au-dessus { color: var(--erreur); font-weight: 600; }
 .pl-chemin { font-family: var(--police-mono); font-size: .8125rem; }
 
