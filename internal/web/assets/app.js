@@ -98,6 +98,11 @@ const TRACES = {
   fleche: 'M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 ' +
     '0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4' +
     '.03a.75.75 0 0 1 0-1.06Z',
+  recharger: 'M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 ' +
+    '0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 ' +
+    '7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 ' +
+    '1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 ' +
+    '1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.499 5.499 0 0 0 8 2.5Z',
   cle: 'M10.5 0a5.499 5.499 0 1 1-1.288 10.848l-.932.932a.749.749 0 0 1-.53.22H7v.75a.749.74' +
     '9 0 0 1-.22.53l-.5.5a.749.749 0 0 1-.53.22H5v.75a.749.749 0 0 1-.22.53l-.5.5a.749.749 0' +
     ' 0 1-.53.22h-2A1.75 1.75 0 0 1 0 14.25v-2c0-.199.079-.389.22-.53l4.932-4.932A5.5 5.5 0 ' +
@@ -601,14 +606,95 @@ function sigle(code) {
   return (code || '').toUpperCase();
 }
 
-// travaux accorde le mot avec le nombre.
-function travaux(nombre) {
-  return nombre === 1 ? '1 travail' : `${nombre} travaux`;
+// pluriel compte une chose et accorde son nom : « 0 dépôt », « 1 dépôt »,
+// « 3 dépôts ». C'est la seule façon dont la page écrit un nombre de choses :
+// « dépôt(s) » laissait au lecteur le soin d'accorder. Le pluriel se donne
+// quand il n'est pas le singulier suivi d'un s — « travail », « travaux » —,
+// et un nom suivi de son adjectif s'accorde d'un bloc : « dépôt renommé »,
+// « dépôts renommés ».
+function pluriel(nombre, singulier, forme = singulier + 's') {
+  return `${nombre} ${accord(nombre, singulier, forme)}`;
 }
 
-// groupes accorde le mot avec le nombre.
-function groupesEnMots(nombre) {
-  return nombre === 1 ? '1 groupe' : `${nombre} groupes`;
+// accord rend seulement la forme qui convient à un nombre écrit ailleurs dans
+// la phrase — un verbe, un participe. Le français met le singulier jusqu'à
+// un, zéro compris.
+function accord(nombre, singulier, forme = singulier + 's') {
+  return Math.abs(Number(nombre) || 0) >= 2 ? forme : singulier;
+}
+
+// Une date se lit comme on la dit : le jour de la semaine, le jour, le mois.
+// L'année n'apparaît que si ce n'est pas celle-ci. Les formats se composent une
+// fois, au premier besoin.
+const formatsDeDate = new Map();
+function formatDeDate(semaine, annee) {
+  const cle = `${semaine}|${annee}`;
+  if (!formatsDeDate.has(cle)) {
+    formatsDeDate.set(cle, new Intl.DateTimeFormat('fr-CA', {
+      ...(semaine ? { weekday: 'short' } : {}), day: 'numeric', month: 'short',
+      ...(annee ? { year: 'numeric' } : {}),
+    }));
+  }
+  return formatsDeDate.get(cle);
+}
+const ecartEnJours = new Intl.RelativeTimeFormat('fr-CA', { numeric: 'auto' });
+const ecartCourt = new Intl.RelativeTimeFormat('fr-CA', { numeric: 'auto', style: 'short' });
+
+const motifDeDate = new RegExp('^(\\d{4})-(\\d{2})-(\\d{2})'
+  + '(?:[T ](\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.\\d+)?)?)?'
+  + '(Z|[+-]\\d{2}:?\\d{2})?$');
+
+// lireDate comprend ce que le serveur envoie : un jour seul (« 2026-11-13 »),
+// un moment local (« 2026-11-13T23:59 », « 2026-11-13 23:59 »), ou un instant
+// daté de son fuseau (RFC 3339), ramené à l'heure de cette machine — c'est
+// dans ce fuseau que l'échéance a été fixée.
+function lireDate(valeur) {
+  const texte = String(valeur || '').trim();
+  const morceaux = texte.match(motifDeDate);
+  if (!morceaux) return null;
+  const [, an, mois, jour, heure, minute, seconde, fuseau] = morceaux;
+  const moment = fuseau
+    ? new Date(texte)
+    : new Date(Number(an), Number(mois) - 1, Number(jour),
+      Number(heure || 0), Number(minute || 0), Number(seconde || 0));
+  if (Number.isNaN(moment.getTime())) return null;
+  return { moment, avecHeure: heure !== undefined };
+}
+
+// dateLisible écrit une date : « ven. 13 nov., 23:59 », l'heure seulement
+// quand elle est connue et voulue. Avec « relatif », elle dit aussi l'écart
+// quand il aide à lire — la veille d'une remise, « dans 2 jours » se comprend
+// plus vite qu'une date. Sans « semaine », le jour de la semaine se tait :
+// « l'analyse du jeu. 12 nov. » se lirait de travers. Une valeur qu'elle ne
+// comprend pas est rendue telle quelle plutôt que perdue.
+function dateLisible(valeur, { relatif = false, heure = true, semaine = true } = {}) {
+  const lue = lireDate(valeur);
+  if (!lue) return String(valeur || '');
+  const { moment, avecHeure } = lue;
+  const annee = moment.getFullYear() !== new Date().getFullYear();
+  let lisible = formatDeDate(semaine, annee).format(moment);
+  if (avecHeure && heure) {
+    const deuxChiffres = (nombre) => String(nombre).padStart(2, '0');
+    lisible += `, ${deuxChiffres(moment.getHours())}:${deuxChiffres(moment.getMinutes())}`;
+  }
+  const proche = relatif ? ecartLisible(moment, avecHeure) : '';
+  return proche ? `${lisible} (${proche})` : lisible;
+}
+
+// ecartLisible dit l'écart à maintenant, seulement dans la semaine : au-delà,
+// un nombre de jours se lit moins vite que la date elle-même.
+function ecartLisible(moment, avecHeure) {
+  const maintenant = new Date();
+  const ecart = moment.getTime() - maintenant.getTime();
+  const minuit = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const jours = Math.round((minuit(moment) - minuit(maintenant)) / 86400000);
+  if (avecHeure && Math.abs(ecart) < 60000) return 'à l’instant';
+  if (avecHeure && Math.abs(ecart) < 3600000) {
+    return ecartCourt.format(Math.round(ecart / 60000), 'minute');
+  }
+  if (avecHeure && jours === 0) return ecartCourt.format(Math.round(ecart / 3600000), 'hour');
+  if (Math.abs(jours) <= 7) return ecartEnJours.format(jours, 'day');
+  return '';
 }
 
 for (const bouton of $('onglets').querySelectorAll('button')) {
@@ -787,11 +873,16 @@ window.addEventListener('popstate', () => { allerA(lireAdresse()); });
 
 // ------------------------------------------------------------- affichage
 
+// Deux colonnes de code dans la largeur commune couperaient leurs lignes : ces
+// vues-là prennent toute la fenêtre, en-tête compris.
+const vuesPleineLargeur = new Set(['plagiat-fichier']);
+
 function afficherVue(nom, sansHistorique) {
   // Tant qu'aucune organisation n'est choisie, rien d'autre n'est accessible :
   // tout ce que fait l'outil s'y passe.
   if (!etat.organisation && nom !== 'organisation') nom = 'organisation';
   const onglet = ongletDeLaVue[nom];
+  document.body.classList.toggle('pleine-largeur', vuesPleineLargeur.has(nom));
   $('ouvrir-reglages').hidden = !etat.organisation;
   $('accueil').disabled = !etat.organisation;
   for (const bouton of $('onglets').querySelectorAll('button')) {
@@ -818,8 +909,8 @@ function afficherVue(nom, sansHistorique) {
 // ------------------------------------------------------------ en-tête de page
 
 // L'en-tête est le même partout : le fil d'Ariane, le titre, ce qu'il faut
-// signaler. Passer d'une session à un cours puis à un groupe ne doit pas donner
-// l'impression de changer d'application.
+// signaler, les actions. Passer d'une session à un cours puis à un groupe ne
+// doit pas donner l'impression de changer d'application.
 function dessinerEntete(nom, onglet) {
   const entete = $('entete-page');
   entete.hidden = nom === 'organisation';
@@ -837,32 +928,35 @@ function dessinerEntete(nom, onglet) {
       : el('span', { texte: etape.texte }));
   });
 
-  $('page-titre').textContent = fiche.titre;
+  const titre = $('page-titre');
+  titre.textContent = fiche.titre;
+  // L'infobulle garde ce qu'il serait lassant de relire à chaque onglet : la
+  // nomenclature d'un groupe.
+  titre.title = fiche.infobulle || '';
   $('page-sous-titre').textContent = fiche.sousTitre || '';
   $('page-sous-titre').hidden = !fiche.sousTitre;
 
-  const nomenclature = $('page-nomenclature');
-  vider(nomenclature);
-  nomenclature.hidden = !fiche.nomenclature;
-  if (fiche.nomenclature) {
-    nomenclature.append(document.createTextNode('Ses dépôts s’appellent '));
-    nomenclature.append(el('code', { texte: fiche.nomenclature }));
+  const recharger = $('page-recharger');
+  recharger.hidden = !fiche.recharger;
+  recharger.onclick = fiche.recharger || null;
+
+  // Chaque vue a déclaré dans l'en-tête ce qu'elle y montre — son résumé, ses
+  // actions : seul ce qui revient à la vue ouverte reste visible.
+  for (const element of $('entete-page').querySelectorAll('[data-pour]')) {
+    element.hidden = !element.dataset.pour.split(' ').includes(nom);
   }
 
   const avis = $('page-avis');
   vider(avis);
   avis.hidden = !fiche.avis;
   if (fiche.avis) avis.append(el('div', { classe: 'avis alerte', texte: fiche.avis }));
-
-  const actions = $('page-actions');
-  vider(actions);
-  for (const bouton of fiche.actions || []) {
-    actions.append(el('button', {
-      classe: 'bouton ' + (bouton.classe || ''), type: 'button',
-      texte: bouton.texte, onclick: bouton.action,
-    }));
-  }
 }
+
+// Le rechargement se fait au titre, d'un même pictogramme sur toutes les vues
+// qui se relisent.
+$('page-recharger').append(icone('recharger'));
+$('page-recharger').title = 'Recharger';
+$('page-recharger').setAttribute('aria-label', 'Recharger la page');
 
 // ficheDeLEntete dit ce que l'en-tête montre pour la vue courante.
 function ficheDeLEntete(nom) {
@@ -873,31 +967,23 @@ function ficheDeLEntete(nom) {
   const { session, cours } = etat.parcours;
 
   if (nom === 'parcours') {
-    const actions = [
-      { texte: 'Recharger', action: () => chargerGroupes(true) },
-      // La hiérarchie mène aux étudiants d'un groupe ; l'annuaire les prend
-      // dans l'autre sens, et n'appartient donc à aucun niveau du parcours.
-      // Il porte les deux rôles : un enseignant n'est dans aucun groupe.
-      { texte: 'Utilisateurs', action: () => afficherVue('annuaire') },
-      { texte: 'Reprendre des dépôts', action: () => ouvrirImport() },
-      { texte: 'Nouveau groupe', classe: 'vert', action: () => ouvrirNouveauGroupe() },
-    ];
+    const recharger = () => chargerGroupes(true);
     if (!session) {
       return {
-        fil: [{ texte: 'Sessions' }], titre: 'Sessions', actions,
+        fil: [{ texte: 'Sessions' }], titre: 'Sessions', recharger,
         sousTitre: `Organisation ${etat.organisation} · session, cours, groupe, travail`,
       };
     }
     if (!cours) {
       return {
         fil: [racine, { texte: nomDeSession(session) }],
-        titre: nomDeSession(session), actions,
+        titre: nomDeSession(session), recharger,
         sousTitre: `Cours de la session « ${session} »`,
       };
     }
     return {
       fil: [racine, etapeSession(session), { texte: sigle(cours) }],
-      titre: sigle(cours), actions,
+      titre: sigle(cours), recharger,
       sousTitre: `${nomDeSession(session)} · groupes du cours`,
     };
   }
@@ -906,7 +992,7 @@ function ficheDeLEntete(nom) {
     return {
       fil: [racine, { texte: 'Utilisateurs' }], titre: 'Utilisateurs',
       sousTitre: `Organisation ${etat.organisation} · une personne, les cours qu'elle a suivis`,
-      actions: [{ texte: 'Recharger', action: () => chargerAnnuaire(true) }],
+      recharger: () => chargerAnnuaire(true),
     };
   }
   if (nom === 'fiche') {
@@ -920,7 +1006,7 @@ function ficheDeLEntete(nom) {
       sousTitre: personne
         ? `${personne.role} · ${etat.organisation}`
         : `Organisation ${etat.organisation}`,
-      actions: [{ texte: 'Recharger', action: () => chargerFiche() }],
+      recharger: () => chargerFiche(),
     };
   }
   if (nom === 'import') {
@@ -947,31 +1033,80 @@ function ficheDeLEntete(nom) {
 
   // Les vues d'un groupe : le fil remonte toute la hiérarchie.
   const groupe = etat.groupe || {};
-  const fil = [racine];
-  if (groupe.session) {
-    fil.push(etapeSession(groupe.session), etapeCours(groupe.session, groupe.course));
+  const fil = filDuGroupe(groupe, racine, nom !== 'travaux');
+  const avis = avisDuGroupe(groupe);
+
+  // Ce qui vit sous le groupe — un travail, sa comparaison, l'assistant — a
+  // son propre titre, et le fil donne le contexte : le groupe n'a pas à être
+  // redit en sous-titre.
+  if (nom === 'travail' && etat.travail) {
+    const travail = etat.travail;
+    fil.push({ texte: travail.name });
+    return {
+      fil, titre: travail.name, avis,
+      recharger: () => chargerTravail(travail, true, false),
+    };
   }
-  fil.push(nom === 'travaux'
-    ? { texte: groupe.label || '' }
-    : { texte: groupe.label || '', action: () => afficherVue('travaux') });
-  if (nom === 'travail' && etat.travail) fil.push({ texte: etat.travail.name });
   // La préparation d'une comparaison appartient au travail : le fil le dit, et
   // y remonte d'un clic.
   if (nom === 'plagiat' && etat.travail) {
     fil.push({ texte: etat.travail.name, action: () => afficherVue('travail') });
-    fil.push({ texte: 'Comparer les copies' });
+    fil.push({ texte: 'Nouvelle comparaison' });
+    return { fil, titre: `Nouvelle comparaison — ${etat.travail.name}`, avis };
   }
-  if (nom === 'assistant') fil.push({ texte: etat.assistantTitre || 'Nouveau travail' });
-  if (nom === 'etudiants') fil.push({ texte: 'Étudiants' });
-  if (nom === 'equipes') fil.push({ texte: 'Équipes' });
-  if (nom === 'groupe-reglages') fil.push({ texte: 'Réglages du groupe' });
+  if (nom === 'assistant') {
+    const titre = etat.assistantTitre || 'Nouveau travail';
+    fil.push({ texte: titre });
+    return { fil, titre, avis };
+  }
 
-  return {
-    fil, titre: groupe.label || '',
-    sousTitre: sousTitreDuGroupe(groupe),
-    nomenclature: nomenclatureDuGroupe(groupe),
-    avis: avisDuGroupe(groupe),
+  // Les quatre onglets montrent le groupe lui-même : son cours et son numéro
+  // en titre, sa session et son effectif dessous.
+  const fiche = {
+    fil, titre: titreDuGroupe(groupe), sousTitre: sousTitreDuGroupe(groupe), avis,
+    infobulle: nomenclatureDuGroupe(groupe)
+      ? `Ses dépôts s’appellent ${nomenclatureDuGroupe(groupe)}` : '',
   };
+  if (nom === 'travaux') fiche.recharger = () => ouvrirGroupe(groupe.scope, true);
+  if (nom === 'etudiants') {
+    fil.push({ texte: 'Étudiants' });
+    fiche.recharger = () => chargerEtudiants(true);
+  }
+  if (nom === 'equipes') {
+    fil.push({ texte: 'Équipes' });
+    fiche.recharger = () => chargerEquipes(true);
+  }
+  if (nom === 'groupe-reglages') fil.push({ texte: 'Réglages du groupe' });
+  return fiche;
+}
+
+// filDuGroupe remonte la hiérarchie jusqu'au groupe. « cliquable » dit si le
+// groupe y mène à ses travaux : sur l'onglet des travaux, il serait la page
+// même.
+function filDuGroupe(groupe, racine, cliquable = true) {
+  const fil = [racine];
+  if (groupe.session) {
+    fil.push(etapeSession(groupe.session), etapeCours(groupe.session, groupe.course));
+  }
+  fil.push(cliquable
+    ? { texte: groupe.label || '', action: () => ouvrirGroupeAuxTravaux(groupe) }
+    : { texte: groupe.label || '' });
+  return fil;
+}
+
+// ouvrirGroupeAuxTravaux revient aux travaux d'un groupe. Celui qu'on regarde
+// déjà n'a pas à être rechargé ; un autre — celui d'un rapport ouvert par son
+// adresse — doit l'être.
+function ouvrirGroupeAuxTravaux(groupe) {
+  if (etat.groupe && etat.groupe.scope === groupe.scope) afficherVue('travaux');
+  else ouvrirGroupe(groupe.scope);
+}
+
+// titreDuGroupe nomme un groupe par ce qu'un enseignant cherche : son cours,
+// puis son numéro. La session est dans le fil et le sous-titre.
+function titreDuGroupe(groupe) {
+  if (!groupe.session) return groupe.label || '';
+  return `${sigle(groupe.course)} · groupe ${groupe.group}`;
 }
 
 function etapeSession(court) {
@@ -993,16 +1128,15 @@ function etapeCours(court, cours) {
 // vienne, la liste des cours, le choix d'un groupe d'arrivée et l'en-tête du
 // groupe doivent donner le même nombre.
 function effectifDuGroupe(groupe) {
-  let effectif = `${gens(groupe).length} étudiant(s)`;
-  if (groupe.teams > 0) effectif += ` · ${groupe.teams} équipe(s)`;
+  let effectif = pluriel(gens(groupe).length, 'étudiant');
+  if (groupe.teams > 0) effectif += ` · ${pluriel(groupe.teams, 'équipe')}`;
   return effectif;
 }
 
 function sousTitreDuGroupe(groupe) {
   const compte = effectifDuGroupe(groupe);
   if (!groupe.session) return `Organisation ${groupe.org} · ${compte}`;
-  return `${groupe.session_name || groupe.session} · ${sigle(groupe.course)}` +
-    ` · groupe ${groupe.group} · ${compte}`;
+  return `${groupe.session_name || groupe.session} · ${compte}`;
 }
 
 // nomenclatureDuGroupe montre en toutes lettres comment ses dépôts s'appellent.
@@ -1031,13 +1165,29 @@ $('accueil').addEventListener('click', () => {
   etat.parcours = { session: '', cours: '' };
   afficherVue('parcours');
 });
+
+// La hiérarchie mène aux étudiants d'un groupe ; l'annuaire les prend dans
+// l'autre sens, et n'appartient donc à aucun niveau du parcours. Il porte les
+// deux rôles : un enseignant n'est dans aucun groupe.
+$('parcours-annuaire').addEventListener('click', () => afficherVue('annuaire'));
+$('parcours-reprise').addEventListener('click', () => ouvrirImport());
+$('parcours-nouveau').addEventListener('click', () => ouvrirNouveauGroupe());
 $('ouvrir-reglages').addEventListener('click', () => afficherVue('reglages'));
 
 // enteteDeComparaison compose le fil d'Ariane des écrans de comparaison.
 function enteteDeComparaison(nom, racine) {
   if (nom === 'plagiat-regles') {
+    // Les règles appartiennent à l'organisation, pas à un travail. Ouvertes
+    // depuis la préparation d'une comparaison, elles y ramènent pourtant par
+    // le fil : c'est le chemin qu'on vient de prendre, et il n'y a pas d'autre
+    // retour.
+    const depuis = etat.plagiat.reglesDepuisLaPreparation && etat.travail && etat.groupe
+      ? [...filDuGroupe(etat.groupe, racine),
+        { texte: etat.travail.name, action: () => afficherVue('travail') },
+        { texte: 'Nouvelle comparaison', action: () => afficherVue('plagiat') }]
+      : [racine];
     return {
-      fil: [racine, { texte: 'Règles de comparaison' }],
+      fil: [...depuis, { texte: 'Règles de comparaison' }],
       titre: 'Règles de comparaison',
       sousTitre: 'Ce que le département sait et que l’outil ne peut pas deviner.',
     };
@@ -1050,24 +1200,18 @@ function enteteDeComparaison(nom, racine) {
   const place = placeDuRapport(rapport);
   const travail = place ? place.travail : ((rapport && rapport.assignment) || 'comparaison');
   const filDuTravail = place
-    ? [racine, etapeSession(place.groupe.session),
-      etapeCours(place.groupe.session, place.groupe.course),
-      { texte: place.groupe.label, action: () => ouvrirGroupe(place.groupe.scope) },
+    ? [...filDuGroupe(place.groupe, racine),
       { texte: travail, action: () => rejoindre(
         `/g/${encode(place.groupe.scope)}/travaux/${encode(travail)}`) }]
     : [racine];
   const etapeRapport = place && rapport
-    ? `Comparaison du ${(rapport.created_at || '').slice(0, 10)}`
+    ? `Comparaison du ${dateLisible(rapport.created_at, { heure: false, semaine: false })}`
     : travail;
   const auRapport = { texte: etapeRapport, action: () => afficherVue('plagiat-rapport') };
+  // Le résumé que chaque écran écrit sous son titre dit déjà combien de copies,
+  // de paires et de passages : un sous-titre le répéterait.
   if (nom === 'plagiat-rapport') {
-    return {
-      fil: [...filDuTravail, { texte: etapeRapport }], titre: `Comparaison — ${travail}`,
-      sousTitre: rapport
-        ? `${rapport.works.length} copie(s) · analyse du `
-          + `${(rapport.created_at || '').slice(0, 10)}`
-        : '',
-    };
+    return { fil: [...filDuTravail, { texte: etapeRapport }], titre: `Comparaison — ${travail}` };
   }
 
   const paire = etat.plagiat.paire;
@@ -1075,19 +1219,21 @@ function enteteDeComparaison(nom, racine) {
     ? `${nomDeCopie(paire.project.left)} et ${nomDeCopie(paire.project.right)}`
     : 'deux copies';
   if (nom === 'plagiat-paire') {
-    return {
-      fil: [...filDuTravail, auRapport, { texte: cotes }], titre: cotes,
-      sousTitre: 'Les deux projets, et ce qui les relie.',
-    };
+    return { fil: [...filDuTravail, auRapport, { texte: cotes }], titre: cotes };
   }
+  // Deux fichiers comparés : l'objet de la page est le fichier, et la paire
+  // dont il vient est son contexte.
+  const fichier = etat.plagiat.fichier;
+  const chemins = fichier
+    ? (fichier.left.path === fichier.right.path
+      ? fichier.left.path : `${fichier.left.path} ↔ ${fichier.right.path}`)
+    : (etat.plagiat.cheminG || 'Deux fichiers');
   return {
     fil: [...filDuTravail, auRapport,
       { texte: cotes, action: () => afficherVue('plagiat-paire') },
       { texte: etat.plagiat.cheminG || 'fichiers' }],
-    titre: cotes,
-    sousTitre: etat.plagiat.fichier
-      ? `${etat.plagiat.fichier.left.path} et ${etat.plagiat.fichier.right.path}`
-      : 'Deux fichiers, passage par passage.',
+    titre: chemins,
+    sousTitre: cotes,
   };
 }
 
@@ -1237,8 +1383,8 @@ function dessinerSessions(conteneur) {
     const cours = new Set(session.groupes.map((groupe) => groupe.course.toLowerCase()));
     conteneur.append(ligneParcours(
       nomDeSession(session.court),
-      `${cours.size} cours · ${groupesEnMots(session.groupes.length)}`,
-      [el('span', { classe: 'jeton', texte: session.court })],
+      `${cours.size} cours · ${pluriel(session.groupes.length, 'groupe')}`,
+      [],
       () => { etat.parcours = { session: session.court, cours: '' }; afficherVue('parcours'); }));
   }
 
@@ -1265,8 +1411,8 @@ function dessinerCours(conteneur, session) {
     // équipes sont alors tout ce qui dit qu'il n'est pas vide.
     const equipes = cours.groupes.reduce((total, groupe) => total + (groupe.teams || 0), 0);
     conteneur.append(ligneParcours(sigle(cours.code),
-      `${groupesEnMots(cours.groupes.length)} · ${etudiants} étudiant(s)` +
-        (equipes > 0 ? ` · ${equipes} équipe(s)` : ''), [],
+      `${pluriel(cours.groupes.length, 'groupe')} · ${pluriel(etudiants, 'étudiant')}` +
+        (equipes > 0 ? ` · ${pluriel(equipes, 'équipe')}` : ''), [],
       () => {
         etat.parcours = { session, cours: cours.code };
         afficherVue('parcours');
@@ -1281,8 +1427,8 @@ function dessinerGroupesDuCours(conteneur, session, cours) {
   for (const groupe of retenus) {
     const sesTravaux = groupe.assignments || [];
     conteneur.append(ligneParcours(groupe.label,
-      `${effectifDuGroupe(groupe)} · ${travaux(sesTravaux.length)}`,
-      [el('span', { classe: 'jeton', texte: groupe.group })],
+      `${effectifDuGroupe(groupe)} · ${pluriel(sesTravaux.length, 'travail', 'travaux')}`,
+      [],
       () => ouvrirGroupe(groupe.scope)));
   }
 }
@@ -1488,8 +1634,9 @@ function appliquerListeNouveau(liste) {
   etat.nouveau.etudiants = liste.people || [];
   etat.nouveau.rejets = liste.issues || [];
 
-  $('nouveau-resume').textContent = `${etat.nouveau.etudiants.length} étudiant(s)` +
-    (etat.nouveau.rejets.length ? `, ${etat.nouveau.rejets.length} ligne(s) rejetée(s)` : '');
+  $('nouveau-resume').textContent = pluriel(etat.nouveau.etudiants.length, 'étudiant') +
+    (etat.nouveau.rejets.length
+      ? `, ${pluriel(etat.nouveau.rejets.length, 'ligne rejetée', 'lignes rejetées')}` : '');
   dessinerRejets($('nouveau-rejets'), etat.nouveau.rejets);
 
   const table = $('nouveau-table');
@@ -1509,7 +1656,7 @@ function dessinerRejets(conteneur, rejets) {
   vider(conteneur);
   if (!rejets || rejets.length === 0) return;
   const details = el('details', {},
-    el('summary', { texte: `${rejets.length} ligne(s) rejetée(s)` }));
+    el('summary', { texte: pluriel(rejets.length, 'ligne rejetée', 'lignes rejetées') }));
   const corps = el('div', { classe: 'corps' });
   for (const rejet of rejets.slice(0, 30)) {
     corps.append(el('div', { classe: 'note',
@@ -1536,33 +1683,13 @@ $('nouveau-creer').addEventListener('click', async () => {
 
 // ---------------------------------------------------------------- travaux
 
-// Une date cible se lit à l'écran comme on la dit à une classe : le jour, et
-// l'heure seulement quand elle a été précisée.
-function dateLisible(due) {
-  if (!due) return '';
-  const [jour, heure] = String(due).split('T');
-  return heure ? `${jour} à ${heure}` : jour;
-}
-
-// Un instant relevé dans un historique — la date d'une remise — se montre à
-// l'heure de cette machine : c'est dans ce fuseau que l'échéance a été fixée.
-function instantLisible(iso) {
-  if (!iso) return '';
-  const moment = new Date(iso);
-  if (Number.isNaN(moment.getTime())) return iso;
-  const deuxChiffres = (valeur) => String(valeur).padStart(2, '0');
-  return `${moment.getFullYear()}-${deuxChiffres(moment.getMonth() + 1)}-` +
-    `${deuxChiffres(moment.getDate())} à ${deuxChiffres(moment.getHours())}:` +
-    `${deuxChiffres(moment.getMinutes())}`;
-}
-
 // pastillesDeRemise résume un travail en jetons. Rien ne paraît tant qu'aucun
 // historique n'a été relevé : une pastille absente doit vouloir dire « rien à
 // signaler », jamais « on n'a pas regardé ».
 function pastillesDeRemise(travail) {
   if (!travail.seen) return [];
   const jetons = [el('span', { classe: 'jeton',
-    texte: `${travail.commits} commit(s)` })];
+    texte: pluriel(travail.commits, 'commit') })];
   if (travail.late > 0) {
     jetons.push(el('span', {
       classe: 'jeton non', title: 'Un commit suit la date cible',
@@ -1595,10 +1722,6 @@ async function releverLesRemises(force) {
 function dessinerTravaux() {
   const groupe = etat.groupe;
   const sesTravaux = groupe.assignments || [];
-  $('travaux-compte').textContent = travaux(sesTravaux.length);
-  $('travaux-source').textContent = groupe.source
-    ? `Dépôts de ${groupe.org} — source : ${groupe.source}`
-    : '';
 
   // Une sélection ne survit pas à ce qui a disparu de la liste : on déplace ce
   // qu'on voit.
@@ -1620,14 +1743,15 @@ function dessinerTravaux() {
   for (const travail of sesTravaux) {
     const equipe = travail.kind === 'équipe';
     const detail = equipe
-      ? [`${travail.teams} équipe(s) ont un dépôt`]
-      : [`${travail.students} étudiant(s) du groupe sur ${total}`];
-    if (travail.others > 0) detail.push(`${travail.others} dépôt(s) hors liste`);
-    if (travail.due) detail.push(`à remettre le ${dateLisible(travail.due)}`);
+      ? [`${pluriel(travail.teams, 'équipe')} ${accord(travail.teams, 'a', 'ont')} un dépôt`]
+      : [`${pluriel(travail.students, 'étudiant')} du groupe sur ${total}`];
+    if (travail.others > 0) detail.push(`${pluriel(travail.others, 'dépôt')} hors liste`);
+    if (travail.due) detail.push(`à remettre ${dateLisible(travail.due, { relatif: true })}`);
     // Un relevé partiel le dit : la moitié des dépôts lus ne permet pas de
     // conclure sur l'autre moitié.
     if (travail.seen > 0 && travail.seen < travail.repos) {
-      detail.push(`${travail.seen} dépôt(s) relevé(s) sur ${travail.repos}`);
+      detail.push(`${pluriel(travail.seen, 'dépôt relevé', 'dépôts relevés')} sur ` +
+        `${travail.repos}`);
     }
     const case_ = el('input', {
       type: 'checkbox', checked: etat.travauxChoisis.has(travail.id),
@@ -1649,10 +1773,7 @@ function dessinerTravaux() {
         el('span', { classe: 'espace' }),
         equipe ? el('span', { classe: 'jeton', texte: 'équipe' }) : null,
         ...pastillesDeRemise(travail),
-        el('span', {
-          classe: 'jeton ' + (!equipe && total > 0 && travail.students >= total ? 'oui' : ''),
-          texte: `${travail.repos} dépôt(s)`,
-        }),
+        el('span', { classe: 'jeton', texte: pluriel(travail.repos, 'dépôt') }),
         el('span', { classe: 'chevron', texte: '›' }))));
   }
   majSelectionTravaux();
@@ -1662,8 +1783,8 @@ function majSelectionTravaux() {
   const total = (etat.groupe.assignments || []).length;
   const choisis = etat.travauxChoisis.size;
   $('travaux-selection').textContent = choisis === 0
-    ? travaux(total)
-    : `${choisis} sur ${total} sélectionné(s)`;
+    ? pluriel(total, 'travail', 'travaux')
+    : `${pluriel(choisis, 'sélectionné')} sur ${total}`;
   $('travaux-tout').checked = total > 0 && choisis === total;
   $('travaux-deplacer').disabled = choisis === 0;
 }
@@ -1685,8 +1806,6 @@ $('travaux-deplacer').addEventListener('click', () => {
     .filter((travail) => etat.travauxChoisis.has(travail.id));
   if (choisis.length) deplacerTravaux(choisis);
 });
-
-$('travaux-recharger').addEventListener('click', () => ouvrirGroupe(etat.groupe.scope, true));
 
 $('travaux-remises').addEventListener('click', () => releverLesRemises(true));
 
@@ -1758,7 +1877,6 @@ async function chargerTravail(travail, force, toutCocher) {
   etat.selection = toutCocher
     ? visibles
     : new Set([...etat.selection].filter((nom) => visibles.has(nom)));
-  $('detail-titre').textContent = travail.name;
   dessinerTravail();
   return true;
 }
@@ -1799,22 +1917,36 @@ function dessinerTravail() {
   // Sous filtre, le résumé dit sur combien : sans cela, une liste courte ne
   // distinguerait pas un travail peu distribué d'un critère trop étroit.
   const parts = equipe
-    ? [`${depots.length} dépôt(s) d'équipe` +
+    ? [`${pluriel(depots.length, 'dépôt')} d'équipe` +
        (depots.length === etat.travail.total ? '' : ` sur ${etat.travail.total}`)]
     : (depots.length === etat.travail.total
-      ? [`${depots.length} dépôt(s)`,
-         `${servis} étudiant(s) du groupe sur ${total} en ont un`]
-      : [`${depots.length} dépôt(s) sur ${etat.travail.total}`,
-         `${servis} étudiant(s) du groupe`]);
+      ? [pluriel(depots.length, 'dépôt'),
+         `${pluriel(servis, 'étudiant')} du groupe sur ${total} ` +
+           `en ${accord(servis, 'a', 'ont')} un`]
+      : [`${pluriel(depots.length, 'dépôt')} sur ${etat.travail.total}`,
+         `${pluriel(servis, 'étudiant')} du groupe`]);
   if (depots.length - servis > 0) parts.push(`${depots.length - servis} hors liste`);
-  if (etat.travail.due) parts.push(`à remettre le ${dateLisible(etat.travail.due)}`);
+  if (etat.travail.due) {
+    parts.push(`à remettre ${dateLisible(etat.travail.due, { relatif: true })}`);
+  }
   const releves = depots.filter((repo) => repo.seen);
   if (releves.length) {
     const commits = releves.reduce((somme, repo) => somme + repo.commits, 0);
-    parts.push(`${commits} commit(s) dans ${releves.length} dépôt(s) relevé(s)`);
+    parts.push(`${pluriel(commits, 'commit')} dans ` +
+      `${pluriel(releves.length, 'dépôt relevé', 'dépôts relevés')}`);
   }
   $('detail-resume').textContent = parts.join(' · ');
   $('detail-colonne').textContent = equipe ? 'Équipe' : 'Étudiant';
+  // Le geste primaire n'est offert que s'il a quelque chose à faire : vert à
+  // côté d'un travail que tout le monde a reçu, il inviterait à un geste vide.
+  // Le compte vient de la fiche du travail, que le filtre de la liste ne
+  // réduit pas.
+  const fiche = travailOuvert();
+  const manquants = !fiche || !etat.groupe.session ? 0 : (equipe
+    ? (etat.groupe.teams || 0) - (fiche.teams || 0)
+    : total - (fiche.students || 0));
+  $('detail-distribuer').hidden = manquants <= 0;
+  $('detail-distribuer').textContent = `Distribuer à ${pluriel(manquants, 'manquant')}`;
   // Repartager n'a de sens que pour un travail d'équipe : c'est ce qui achève
   // l'adoption d'un travail fait en équipe avant l'outil.
   $('detail-partager').hidden = !equipe;
@@ -1861,7 +1993,8 @@ function dessinerTravail() {
         href: repo.url, target: '_blank', rel: 'noreferrer noopener', texte: repo.name,
       })),
       el('td', {}, el('span', { classe: 'jeton', texte: repo.visibility })),
-      el('td', repo.pushed_at ? { texte: repo.pushed_at } : { classe: 'vide', texte: 'jamais' }),
+      el('td', repo.pushed_at
+        ? { texte: dateLisible(repo.pushed_at) } : { classe: 'vide', texte: 'jamais' }),
       // Une colonne vide dit qu'on n'a pas regardé ; un zéro, qu'il n'y a rien.
       el('td', repo.seen ? { texte: String(repo.commits) } : { classe: 'vide', texte: '—' }),
       el('td', {}, ...pastillesDuDepot(repo)),
@@ -1905,11 +2038,11 @@ function pastillesDuDepot(repo) {
   const jetons = [];
   if (repo.state === 'remis') {
     // Une remise à temps se montre par sa date : c'est ce qu'on vient lire.
-    jetons.push(el('span', { classe: 'jeton oui', texte: instantLisible(repo.last) }));
+    jetons.push(el('span', { classe: 'jeton oui', texte: dateLisible(repo.last) }));
   } else if (repo.state === 'en retard') {
     jetons.push(el('span', {
       classe: aspect.classe, texte: aspect.texte,
-      title: `Remis le ${instantLisible(repo.last)}, après la date cible`,
+      title: `Remis le ${dateLisible(repo.last)}, après la date cible`,
     }));
   } else if (repo.state === 'non remis' && !repo.commits && !(repo.silent || []).length) {
     // Un dépôt vide que personne n'était attendu à remplir n'est pas une
@@ -2025,8 +2158,8 @@ function majSelection() {
   // Même formulation que la liste des étudiants : les deux bandeaux disent la
   // même chose, et celui-ci porte assez de commandes pour ne pas s'allonger.
   $('detail-selection').textContent = choisis === 0
-    ? `${total} dépôt(s) affiché(s)`
-    : `${choisis} sur ${total} sélectionné(s)`;
+    ? pluriel(total, 'dépôt affiché', 'dépôts affichés')
+    : `${pluriel(choisis, 'sélectionné')} sur ${total}`;
   $('detail-tout').checked = total > 0 && choisis === total;
 }
 
@@ -2135,7 +2268,7 @@ async function fixerEcheance(travail) {
     `${encode(travail.name)}/deadline`, { due }), 'Date cible');
   if (!fiche) return;
   message(fiche.due
-    ? `« ${fiche.name} » est à remettre le ${dateLisible(fiche.due)}.`
+    ? `« ${fiche.name} » est à remettre le ${dateLisible(fiche.due, { relatif: true })}.`
     : `« ${fiche.name} » n'a plus de date cible.`, 'succes');
   // Le travail rouvert porte sa nouvelle date, et la liste avec lui : les
   // pastilles de retard en dépendent.
@@ -2179,7 +2312,8 @@ $('detail-inviter').addEventListener('click', async () => {
       "invitation refusée ou annulée — reçoit une première invitation, au droit du groupe. " +
       "GitHub envoie un courriel à chacun." }),
     connues
-      ? el('p', { classe: 'note', texte: `${connues} dépôt(s) concerné(s) à l'écran.` })
+      ? el('p', { classe: 'note',
+        texte: `${pluriel(connues, 'dépôt concerné', 'dépôts concernés')} à l'écran.` })
       : el('p', { classe: 'note', texte:
         "Aucune invitation manquante à l'écran — les accès n'ont peut-être pas été inspectés." }));
   if (!await demander('Envoyer les invitations manquantes', corps, 'Envoyer')) return;
@@ -2193,7 +2327,8 @@ $('detail-inviter').addEventListener('click', async () => {
   const echecs = envois.filter((envoi) => envoi.error).length;
   journaliser(envois.length === 0
     ? 'Aucune invitation ne manquait dans ce travail.'
-    : `${envois.length - echecs} invitation(s) envoyée(s) · ${echecs} en échec`,
+    : `${pluriel(envois.length - echecs, 'invitation envoyée', 'invitations envoyées')} · ` +
+      `${echecs} en échec`,
   echecs ? 'warn' : 'ok');
   rechargerTravail();
 });
@@ -2255,17 +2390,19 @@ async function deposerFichier() {
     if (numero !== tour) return;
     if (reponse.unknown.length) {
       apercu.append(el('p', { classe: 'note alerte', texte:
-        `Champ(s) inconnu(s), laissé(s) tels quels : {${reponse.unknown.join('}, {')}}.` }));
+        `${accord(reponse.unknown.length, 'Champ inconnu, laissé tel quel',
+          'Champs inconnus, laissés tels quels')} : {${reponse.unknown.join('}, {')}}.` }));
     }
     if (reponse.incomplete) {
       const exemple = reponse.empty_example;
       apercu.append(el('p', { classe: 'note alerte', texte:
-        `${reponse.incomplete} dépôt(s) laissent un champ vide — par exemple ` +
+        `${pluriel(reponse.incomplete, 'dépôt')} ` +
+          `${accord(reponse.incomplete, 'laisse', 'laissent')} un champ vide — par exemple ` +
         `${exemple.repo} : {${exemple.fields.join('}, {')}}.` }));
     }
     const exemple = reponse.sample;
     apercu.append(el('p', { classe: 'note', texte:
-      `${reponse.count} dépôt(s). Aperçu pour ${exemple.recipient || exemple.repo} — ` +
+      `${pluriel(reponse.count, 'dépôt')}. Aperçu pour ${exemple.recipient || exemple.repo} — ` +
       `${exemple.path}` + (reponse.templated ? ' :' : ' (contenu déposé tel quel).') }));
     if (reponse.templated && exemple.content !== undefined) {
       apercu.append(el('pre', { classe: 'pl-code apercu-renommage', texte: exemple.content }));
@@ -2290,7 +2427,7 @@ async function deposerFichier() {
       el('span', { texte: "Remplacer un fichier déjà présent et différent — peut-être celui " +
         "que l'étudiant a modifié" })),
     el('label', { classe: 'case' }, simuler,
-      el('span', { texte: 'Simuler : dire ce que chaque dépôt deviendrait, sans rien écrire' })),
+      el('span', { texte: 'Aperçu : dire ce que chaque dépôt deviendrait, sans rien écrire' })),
     apercu);
   if (!await demander(`Déposer un fichier dans « ${etat.travail.name} »`, corps, 'Déposer')) return;
   if (!fichier.value.trim()) { message('Aucun fichier choisi.', 'alerte'); return; }
@@ -2303,8 +2440,8 @@ async function deposerFichier() {
   const echecs = compte('échec');
   const conserves = compte('différent, conservé');
   journaliser((simuler.checked ? 'Simulation : ' : '') +
-    `${compte('ajouté')} ajouté(s) · ${compte('remplacé')} remplacé(s) · ` +
-    `${compte('déjà à jour')} déjà à jour · ${conserves} conservé(s) · ${echecs} en échec`,
+    `${pluriel(compte('ajouté'), 'ajouté')} · ${pluriel(compte('remplacé'), 'remplacé')} · ` +
+    `${compte('déjà à jour')} déjà à jour · ${pluriel(conserves, 'conservé')} · ${echecs} en échec`,
   echecs ? 'err' : (conserves ? 'warn' : 'ok'));
 }
 
@@ -2435,7 +2572,7 @@ $('detail-copier').addEventListener('click', async () => {
   if (!urls) { message('Aucun dépôt sélectionné.', 'alerte'); return; }
   try {
     await navigator.clipboard.writeText(urls);
-    message(`${etat.selection.size} URL copiée(s).`);
+    message(`${pluriel(etat.selection.size, 'URL copiée', 'URL copiées')}.`);
   } catch {
     message("Copie refusée par le navigateur : utilisez l'export CSV.", 'alerte');
   }
@@ -2481,10 +2618,10 @@ $('detail-cloner').addEventListener('click', async () => {
   const { zone, champ: destination } = zoneDepot({
     dossier: true, titre: 'Choisir où cloner', valeur: destinationProposee(),
   });
-  const confirme = await demander(`Cloner ${choisis.length} dépôt(s)`, el('div', {},
+  const confirme = await demander(`Cloner ${pluriel(choisis.length, 'dépôt')}`, el('div', {},
     el('label', { classe: 'champ-bloc' },
       el('span', { classe: 'etiquette', texte: 'Dossier de destination' }), zone),
-    el('p', { classe: 'note', texte: `${etat.contexte.jobs} clonage(s) en parallèle` +
+    el('p', { classe: 'note', texte: `${pluriel(etat.contexte.jobs, 'clonage')} en parallèle` +
       (etat.contexte.depth ? `, profondeur ${etat.contexte.depth}` : '') })), 'Cloner');
   if (!confirme) return;
 
@@ -2496,8 +2633,8 @@ $('detail-cloner').addEventListener('click', async () => {
   if (!fiche) return;
   const bilan = await suivre(fiche);
   if (bilan && bilan.destination) {
-    journaliser(`${bilan.cloned} cloné(s) · ${bilan.updated} mis à jour · ` +
-      `${bilan.skipped} ignoré(s) · ${bilan.failed} en échec`, 'dim');
+    journaliser(`${pluriel(bilan.cloned, 'cloné')} · ${bilan.updated} mis à jour · ` +
+      `${pluriel(bilan.skipped, 'ignoré')} · ${bilan.failed} en échec`, 'dim');
     etat.reglages.clone_dir = bilan.destination.replace(/[\\/][^\\/]+$/, '');
   }
 });
@@ -2522,7 +2659,7 @@ $('detail-pull').addEventListener('click', async () => {
     return el('label', { classe: 'case' }, coche,
       el('span', { texte: item.name + (horsTravail ? '   (hors travail)' : '') }));
   });
-  const confirme = await demander(`${liste.clones.length} clone(s) trouvé(s)`,
+  const confirme = await demander(pluriel(liste.clones.length, 'clone trouvé', 'clones trouvés'),
     plageDeCases(el('div', {}, cases)), 'Mettre à jour');
   if (!confirme) return;
 
@@ -2568,7 +2705,8 @@ $('detail-partager').addEventListener('click', async () => {
   if (!fiche) return;
   const bilan = await suivre(fiche);
   if (!bilan) return;
-  journaliser(`${bilan.shared} dépôt(s) partagé(s) · ${bilan.failed} en échec`,
+  journaliser(`${pluriel(bilan.shared, 'dépôt partagé', 'dépôts partagés')} · ` +
+    `${bilan.failed} en échec`,
     bilan.failed ? 'warn' : 'ok');
 });
 
@@ -2776,8 +2914,8 @@ function dessinerDestinataires() {
 
 function majDestinataires() {
   const total = destinatairesPossibles().length;
-  const mot = enEquipe() ? 'équipe(s)' : 'étudiant(s)';
-  $('dest-compte').textContent = `${etat.destinataires.size} ${mot} sur ${total}`;
+  $('dest-compte').textContent =
+    `${pluriel(etat.destinataires.size, enEquipe() ? 'équipe' : 'étudiant')} sur ${total}`;
   $('dest-tout').checked = total > 0 && etat.destinataires.size === total;
   for (const coche of $('dest-liste').querySelectorAll('input')) {
     coche.checked = etat.destinataires.has(coche.value);
@@ -2826,7 +2964,8 @@ $('starter-inspecter').addEventListener('click', async () => {
     resume.append(el('div', { classe: 'avis alerte',
       texte: "Envoi volumineux : un fichier par appel d'API. Un dépôt modèle serait plus rapide." }));
   }
-  const details = el('details', {}, el('summary', { texte: `${bundle.files.length} fichier(s)` }));
+  const details = el('details', {},
+    el('summary', { texte: pluriel(bundle.files.length, 'fichier') }));
   const corps = el('div', { classe: 'corps' });
   for (const fichier of bundle.files) {
     corps.append(el('div', { classe: 'note', texte: `${fichier.path} — ${fichier.label}` }));
@@ -2892,7 +3031,8 @@ async function rafraichirApercu() {
     }
     table.hidden = apercu.items.length === 0;
     $('plan-resume').textContent =
-      `${apercu.items.length} dépôt(s) à créer dans « ${etat.groupe.org} » — travail « ${apercu.assignment} »`;
+      `${pluriel(apercu.items.length, 'dépôt')} à créer dans « ${etat.groupe.org} » — ` +
+        `travail « ${apercu.assignment} »`;
 
     if (apercu.served && apercu.served.length) {
       // « served » porte des comptes pour un travail individuel, des noms
@@ -2900,9 +3040,9 @@ async function rafraichirApercu() {
       const noms = apercu.served.map((item) =>
         typeof item === 'string' ? item : '@' + item.username);
       $('deja-servis').append(el('div', { classe: 'avis',
-        texte: `${noms.length} ${apercu.teams ? 'équipe(s)' : 'étudiant(s)'} ont déjà ` +
-          `un dépôt pour ce travail : ` + noms.join(', ') +
-          ". Ils sont écartés de la distribution." }));
+        texte: `${pluriel(noms.length, apercu.teams ? 'équipe' : 'étudiant')} ` +
+          `${accord(noms.length, 'a', 'ont')} déjà un dépôt pour ce travail : ` + noms.join(', ') +
+          `. ${accord(noms.length, 'Il est écarté', 'Ils sont écartés')} de la distribution.` }));
     }
   } catch (probleme) {
     erreur.append(el('div', { classe: 'avis erreur', texte: probleme.message }));
@@ -2931,7 +3071,7 @@ async function distribuer(simulation) {
       : (corps.settings.add_collaborator
         ? `Invitations : oui (${corps.settings.permission}).` : 'Invitations : non.');
     const confirme = await demander('Confirmer la distribution', el('div', {},
-      el('p', { texte: `${retenus.length} ${corps.teams ? 'équipe(s)' : 'étudiant(s)'} ` +
+      el('p', { texte: `${pluriel(retenus.length, corps.teams ? 'équipe' : 'étudiant')} ` +
         `du groupe « ${etat.groupe.label} », travail « ${corps.name} ».` }),
       el('p', { classe: 'note', texte:
         `Visibilité : ${corps.settings.visibility === 'public' ? 'public' : 'privé'}. ` +
@@ -2952,11 +3092,12 @@ async function distribuer(simulation) {
   const bilan = await suivre(fiche);
   if (!bilan || !bilan.report) return;
 
-  journaliser(`${bilan.created} ${simulation ? 'à créer' : 'créé(s)'} · ` +
-    `${bilan.existing} déjà présent(s) · ${bilan.failed} en échec`, bilan.failed ? 'warn' : 'ok');
+  journaliser(`${simulation ? `${bilan.created} à créer` : pluriel(bilan.created, 'créé')} · ` +
+    `${pluriel(bilan.existing, 'déjà présent', 'déjà présents')} · ${bilan.failed} en échec`,
+    bilan.failed ? 'warn' : 'ok');
   if (bilan.skipped && bilan.skipped.length) {
-    journaliser(`${bilan.skipped.length} ${bilan.teams ? 'équipe(s)' : 'étudiant(s)'} ` +
-      'avaient déjà un dépôt.', 'dim');
+    journaliser(`${pluriel(bilan.skipped.length, bilan.teams ? 'équipe' : 'étudiant')} ` +
+      `${accord(bilan.skipped.length, 'avait', 'avaient')} déjà un dépôt.`, 'dim');
   }
   if (bilan.json_path) journaliser(`Bilan : ${bilan.json_path}`, 'dim');
   if (simulation) return;
@@ -3046,7 +3187,8 @@ async function chargerEtudiants(force) {
               // lequel évite de croire qu'il porte leur nom.
               texte: travail.team ? `${travail.name} (${travail.team})` : travail.name,
             })))),
-      el('td', ligne.pushed_at ? { texte: ligne.pushed_at } : { classe: 'vide', texte: 'jamais' }),
+      el('td', ligne.pushed_at
+        ? { texte: dateLisible(ligne.pushed_at) } : { classe: 'vide', texte: 'jamais' }),
       el('td', {}, el('span', { classe: 'actions' },
         el('button', {
           classe: 'bouton petit icone', type: 'button',
@@ -3058,15 +3200,12 @@ async function chargerEtudiants(force) {
           () => deplacerEtudiants([ligne]))))));
   }
 
-  const filtre = donnees.shown !== donnees.total;
-  $('etudiants-resume').textContent =
-    (filtre ? `${donnees.shown} étudiant(s) sur ${donnees.total}` : `${donnees.total} étudiant(s)`) +
-    ` · ${travaux((donnees.assignments || []).length)}`;
   barreEtudiants.maj();
-  $('etudiants-noms').disabled = donnees.missing_names === 0;
-  $('etudiants-noms').textContent = donnees.missing_names === 0
-    ? 'Noms complets connus'
-    : `Retrouver ${donnees.missing_names} nom(s) complet(s)`;
+  // Un état ne se déguise pas en commande : quand tous les noms sont connus,
+  // il n'y a rien à retrouver, et la commande disparaît du menu.
+  $('etudiants-noms').hidden = donnees.missing_names === 0;
+  $('etudiants-noms').textContent =
+    `Retrouver ${pluriel(donnees.missing_names, 'nom complet', 'noms complets')}`;
   majSelectionEtudiants();
 }
 
@@ -3088,8 +3227,8 @@ function majSelectionEtudiants() {
   const total = etat.etudiants.length;
   const choisis = etat.deplaces.size;
   $('etudiants-selection').textContent = choisis === 0
-    ? `${total} étudiant(s) affiché(s)`
-    : `${choisis} sur ${total} sélectionné(s)`;
+    ? pluriel(total, 'étudiant affiché', 'étudiants affichés')
+    : `${pluriel(choisis, 'sélectionné')} sur ${total}`;
   $('etudiants-tout').checked = total > 0 && choisis === total;
   $('etudiants-deplacer').disabled = choisis === 0;
 }
@@ -3156,6 +3295,11 @@ function menuDeroulant(ouvrir, menu) {
   }
 
   $(ouvrir).addEventListener('click', () => deplier($(menu).hidden));
+  // Une commande choisie referme son menu : le dialogue qui suit se passerait
+  // mal d'un menu resté ouvert derrière lui.
+  $(menu).addEventListener('click', (evenement) => {
+    if (evenement.target.closest('[role="menuitem"]')) deplier(false);
+  });
 
   // Le menu se referme comme tout menu : ailleurs, à l'échappement, ou dès que
   // la page bouge sous lui — sa place a été calculée pour l'endroit qu'elle
@@ -3212,7 +3356,7 @@ function barreDeFiltre({ table, texte, ouvrir, menu, vider, champs, criteres, ef
     const critere = criteres();
     const poses = champs.filter(([, nom]) => critere[nom]).length;
     $(ouvrir).textContent = poses ? `Filtrer · ${poses}` : 'Filtrer';
-    $(ouvrir).classList.toggle('vert', poses > 0);
+    $(ouvrir).classList.toggle('actif', poses > 0);
   }
 
   const { deplier } = menuDeroulant(ouvrir, menu);
@@ -3274,7 +3418,8 @@ const barreEtudiants = barreDeFiltre({
   recharger: () => rechargerEtudiants(),
 });
 
-$('etudiants-recharger').addEventListener('click', () => chargerEtudiants(true));
+// Ses commandes referment le menu d'elles-mêmes : il n'y a rien à en retenir.
+menuDeroulant('etudiants-menu-ouvrir', 'etudiants-menu');
 
 $('etudiants-noms').addEventListener('click', async () => {
   const fiche = await tenter(() => api('POST',
@@ -3282,7 +3427,7 @@ $('etudiants-noms').addEventListener('click', async () => {
   if (!fiche) return;
   const bilan = await suivre(fiche);
   if (!bilan) return;
-  message(`${bilan.resolved} nom(s) complet(s) retrouvé(s).`);
+  message(`${pluriel(bilan.resolved, 'nom complet retrouvé', 'noms complets retrouvés')}.`);
   await ouvrirGroupe(etat.groupe.scope);
   afficherVue('etudiants');
 });
@@ -3310,7 +3455,7 @@ $('etudiants-ajouter').addEventListener('click', async () => {
             el('span', {},
               el('strong', { texte: travail.name }),
               el('span', { classe: 'aide',
-                texte: `déjà remis à ${travail.students} étudiant(s) du groupe` })))))),
+                texte: `déjà remis à ${pluriel(travail.students, 'étudiant')} du groupe` })))))),
         el('p', { classe: 'aide',
           texte: `Aux réglages du groupe : ${reglages.visibility === 'public' ? 'public' : 'privé'}, ` +
             (reglages.add_collaborator
@@ -3343,7 +3488,7 @@ $('etudiants-ajouter').addEventListener('click', async () => {
   const bilan = fiche.id ? await suivre(fiche) : fiche;
   if (!bilan) return;
   message(`@${bilan.student.username} ajouté à « ${etat.groupe.label} »` +
-    (bilan.created ? ` · ${bilan.created} dépôt(s) créé(s)` : '') +
+    (bilan.created ? ` · ${pluriel(bilan.created, 'dépôt créé', 'dépôts créés')}` : '') +
     (bilan.failed ? ` · ${bilan.failed} en échec` : ''),
     bilan.failed ? 'alerte' : 'succes');
   await ouvrirGroupe(etat.groupe.scope, true, true);
@@ -3382,7 +3527,8 @@ async function renommerEtudiant(ligne) {
             texte: 'Cette personne n’a encore aucun dépôt : il n’y a rien à renommer ' +
               'sur GitHub.' })
         : el('label', { classe: 'case' }, avecDepots,
-            el('span', {}, el('strong', { texte: `Renommer aussi ses ${depots} dépôt(s)` }),
+            el('span', {}, el('strong', { texte: accord(depots,
+              'Renommer aussi son dépôt', `Renommer aussi ses ${depots} dépôts`) }),
               el('span', { classe: 'aide',
                 texte: 'Ils prennent son nouveau nom. GitHub garde une redirection depuis ' +
                   'chaque ancien nom.' })))),
@@ -3415,7 +3561,7 @@ async function renommerEtudiant(ligne) {
   const bilan = fiche.id ? await suivre(fiche) : fiche;
   if (!bilan) return;
   message(`${bilan.student.full_name || '@' + bilan.student.username} mis à jour` +
-    (bilan.renamed ? ` · ${bilan.renamed} dépôt(s) renommé(s)` : '') +
+    (bilan.renamed ? ` · ${pluriel(bilan.renamed, 'dépôt renommé', 'dépôts renommés')}` : '') +
     (bilan.failed ? ` · ${bilan.failed} en échec` : ''),
     bilan.failed ? 'alerte' : 'succes');
   await ouvrirGroupe(etat.groupe.scope, true, true);
@@ -3459,7 +3605,8 @@ $('etudiants-importer').addEventListener('click', async () => {
     `/api/classrooms/${encode(etat.groupe.scope)}/students`, corps), 'Étudiants');
   if (!bilan) return;
   if (bilan.issues && bilan.issues.length) {
-    message(`${bilan.issues.length} ligne(s) rejetée(s).`, 'alerte', 10000);
+    message(`${pluriel(bilan.issues.length, 'ligne rejetée', 'lignes rejetées')}.`,
+      'alerte', 10000);
   }
   await ouvrirGroupe(etat.groupe.scope);
   afficherVue('etudiants');
@@ -3564,7 +3711,8 @@ function ligneAnnuaire(ligne) {
             dessinerAnnuaire();
           },
         })),
-    el('td', ligne.pushed_at ? { texte: ligne.pushed_at } : { classe: 'vide', texte: 'jamais' }),
+    el('td', ligne.pushed_at
+      ? { texte: dateLisible(ligne.pushed_at) } : { classe: 'vide', texte: 'jamais' }),
     // Sans compte, il n'y a rien à réunir : c'est un compte qu'on réunit.
     etat.annuaire.decide
       ? el('td', {}, ligne.username && el('button', {
@@ -3587,7 +3735,7 @@ function comptesDeLaLigne(ligne) {
 
 function jetonDuCours(inscription) {
   if (!inscription.session) return inscription.label;
-  return `${sigle(inscription.session)} · ${sigle(inscription.course)}`;
+  return `${inscription.session} · ${sigle(inscription.course)}`;
 }
 
 function titreDuCours(inscription) {
@@ -3615,16 +3763,16 @@ function depotsAnnuaire(ligne) {
 
 function resumerAnnuaire(donnees) {
   const parts = [donnees.shown !== donnees.total
-    ? `${donnees.shown} utilisateur(s) sur ${donnees.total}`
-    : `${donnees.total} utilisateur(s)`];
+    ? `${pluriel(donnees.shown, 'utilisateur')} sur ${donnees.total}`
+    : pluriel(donnees.total, 'utilisateur')];
   const profs = etat.annuaire.lignes.filter((ligne) => ligne.is_teacher).length;
-  if (profs) parts.push(`${profs} enseignant(s)`);
-  parts.push(`${(donnees.sessions || []).length} session(s)`);
+  if (profs) parts.push(pluriel(profs, 'enseignant'));
+  parts.push(pluriel((donnees.sessions || []).length, 'session'));
   parts.push(`${(donnees.courses || []).length} cours`);
   // Les dépôts que personne ne réclame ne sont pas des étudiants de plus :
   // leur nom slugifié ne désigne aucune liste. Les taire ferait lire une
   // liste trouée comme si elle était entière.
-  if (donnees.unmatched) parts.push(`${donnees.unmatched} dépôt(s) sans étudiant connu`);
+  if (donnees.unmatched) parts.push(`${pluriel(donnees.unmatched, 'dépôt')} sans étudiant connu`);
   $('annuaire-resume').textContent = parts.join(' · ');
   direVide($('annuaire-vide'), donnees.total === 0
     ? "Aucun utilisateur connu dans cette organisation. Déclarez un groupe et importez sa liste."
@@ -3717,7 +3865,10 @@ function lienVersLaFiche(personne, options = {}) {
 async function chargerFiche() {
   const compte = etat.fiche.compte;
   if (!etat.organisation || !compte) return;
-  $('fiche-nom').textContent = '@' + compte;
+  // Les actions de l'en-tête visent la personne affichée : tant que la
+  // suivante n'est pas lue, elles viseraient encore la précédente.
+  $('fiche-nommer').hidden = true;
+  $('fiche-menu-ancre').hidden = true;
   const donnees = await tenter(
     () => api('GET', `/api/users/${encode(compte)}`), 'Fiche');
   if (!donnees) {
@@ -3739,7 +3890,6 @@ function dessinerFiche() {
   // compte. Maintenant qu'on a la personne, il dit qui elle est.
   dessinerEntete('fiche', ongletDeLaVue['fiche']);
 
-  $('fiche-nom').textContent = personne.full_name || '@' + personne.username;
   const role = $('fiche-role');
   role.hidden = false;
   role.textContent = personne.role;
@@ -3750,14 +3900,15 @@ function dessinerFiche() {
   matricule.hidden = !personne.student_id;
   matricule.textContent = personne.student_id ? 'Matricule ' + personne.student_id : '';
 
-  // Un nom manquant est un appel à agir ; un nom donné se corrige seulement,
-  // d'où un geste plus discret. Ni l'un ni l'autre ne touche aux dépôts : les
-  // renommer est une autre opération, offerte dans la liste du groupe.
+  // Un nom manquant est un appel à agir, et c'est le geste primaire de la
+  // fiche ; un nom donné se corrige seulement, d'où un geste ordinaire. Ni
+  // l'un ni l'autre ne touche aux dépôts : les renommer est une autre
+  // opération, offerte dans la liste du groupe.
   const nomme = !!personne.full_name;
-  $('fiche-nommage').hidden = false;
   const nommer = $('fiche-nommer');
+  nommer.hidden = false;
   nommer.textContent = nomme ? 'Corriger le nom complet…' : 'Donner un nom complet…';
-  nommer.classList.toggle('petit', nomme);
+  nommer.classList.toggle('vert', !nomme);
   nommer.onclick = () => nommerUnUtilisateur(personne);
   const aide = $('fiche-nommage-aide');
   aide.hidden = nomme;
@@ -3768,16 +3919,23 @@ function dessinerFiche() {
   $('fiche-resume').textContent = resumerFiche(personne);
   dessinerAvisDeLaFiche(donnees, personne);
   dessinerCooptation(donnees, personne);
+  // Le menu n'apparaît que s'il offre quelque chose : un menu vide se lirait
+  // comme une commande qui ne marche pas.
+  $('fiche-menu-ancre').hidden = ['fiche-reunir', 'fiche-separer', 'fiche-role-bouton']
+    .every((id) => $(id).hidden);
   dessinerFrise(personne);
 }
+
+menuDeroulant('fiche-menu-ouvrir', 'fiche-menu');
 
 // resumerFiche dit en une ligne ce que la chronologie détaille.
 function resumerFiche(personne) {
   const parts = [];
-  if (personne.courses) parts.push(`${personne.courses} cours suivi(s)`);
-  if (personne.taught) parts.push(`${personne.taught} cours donné(s)`);
-  if (personne.repos) parts.push(`${personne.repos} dépôt(s)`);
-  parts.push(personne.pushed_at ? 'dernier envoi ' + personne.pushed_at : 'aucun envoi');
+  if (personne.courses) parts.push(pluriel(personne.courses, 'cours suivi', 'cours suivis'));
+  if (personne.taught) parts.push(pluriel(personne.taught, 'cours donné', 'cours donnés'));
+  if (personne.repos) parts.push(pluriel(personne.repos, 'dépôt'));
+  parts.push(personne.pushed_at
+    ? 'dernier envoi ' + dateLisible(personne.pushed_at) : 'aucun envoi');
   return parts.join(' · ');
 }
 
@@ -3823,25 +3981,27 @@ function dessinerAvisDeLaFiche(donnees, personne) {
 // refuserait bien avant nous : elle évite seulement de proposer un geste qui
 // échouerait.
 function dessinerCooptation(donnees, personne) {
-  const pied = $('fiche-pied');
   const bouton = $('fiche-role-bouton');
-  const aide = $('fiche-role-aide');
   // Tant que l'organisation n'a aucun enseignant, quelqu'un doit pouvoir
-  // commencer : cacher le bouton ne laisserait aucun chemin pour le faire.
+  // commencer : cacher la commande ne laisserait aucun chemin pour le faire.
   const premier = donnees.teachers === 0;
-  pied.hidden = !donnees.viewer_teaches && !premier;
-  if (pied.hidden) return;
+  bouton.hidden = !donnees.viewer_teaches && !premier;
+  if (bouton.hidden) return;
 
   bouton.textContent = personne.is_teacher
-    ? "Retirer le rôle d'enseignant" : 'Reconnaître comme enseignant';
+    ? "Retirer le rôle d'enseignant…" : 'Reconnaître comme enseignant…';
   bouton.classList.toggle('rouge', personne.is_teacher);
+  // Ce que le rôle change se lit sous le pointeur, et en entier dans le
+  // dialogue qui demande confirmation.
+  bouton.title = personne.is_teacher
+    ? "Il pourra être inscrit à l'équipe enseignante d'un groupe."
+    : "Le rôle ne donne aucun accès : il autorise à en donner, groupe par groupe.";
+  // Le tout premier enseignant se déclare lui-même : sans le dire, rien
+  // n'indiquerait que la commande est là pour ça.
   if (premier && !personne.is_teacher) {
-    aide.textContent = "Aucun enseignant n'est encore reconnu dans « " +
-      donnees.org + " » : le premier se déclare, les suivants sont cooptés.";
-  } else {
-    aide.textContent = personne.is_teacher
-      ? "Il pourra être inscrit à l'équipe enseignante d'un groupe."
-      : "Le rôle ne donne aucun accès : il autorise à en donner, groupe par groupe.";
+    $('fiche-avis').append(el('div', { classe: 'avis', texte:
+      `Aucun enseignant n'est encore reconnu dans « ${donnees.org} » : le premier ` +
+      'se déclare, depuis « Actions », et les suivants sont cooptés.' }));
   }
   bouton.onclick = () => coopter(personne, !personne.is_teacher);
 }
@@ -3919,13 +4079,11 @@ async function nommerUnUtilisateur(personne) {
 // dessinerReunion offre de réunir la personne à un autre compte, et de défaire
 // ce que le registre a réuni.
 function dessinerReunion(donnees, personne) {
-  const zone = $('fiche-reunion');
-  zone.hidden = !donnees.may_decide;
-  if (zone.hidden) return;
-  $('fiche-reunir').onclick = () => reunirDeuxComptes(personne, chargerFiche);
+  const reunir = $('fiche-reunir');
   const separer = $('fiche-separer');
-  const reunis = personne.joined || [];
-  separer.hidden = reunis.length < 2;
+  reunir.hidden = !donnees.may_decide;
+  separer.hidden = !donnees.may_decide || (personne.joined || []).length < 2;
+  reunir.onclick = () => reunirDeuxComptes(personne, chargerFiche);
   separer.onclick = () => separerUnCompte(personne, chargerFiche);
 }
 
@@ -4043,7 +4201,7 @@ async function reunirDeuxComptes(personne, ensuite, { suggere = '', garderLeSien
         el('span', { texte: 'l’autre compte — son nom et son matricule l’emportent' })),
       el('label', { classe: 'case' }, garderCeluiCi,
         el('span', { texte: '@' + personne.username + ' — le sien l’emporte' }))));
-  const suite = await demander('Réunir deux comptes', corps, 'Voir ce qui change',
+  const suite = await demander('Réunir deux comptes', corps, 'Aperçu',
     (bouton) => { valider = bouton; maj(); });
   if (!suite || !choisi) return;
 
@@ -4153,12 +4311,12 @@ function puceDeTravail(travail) {
     classe: 'jeton lien travail-puce', href: travail.url,
     target: '_blank', rel: 'noreferrer noopener',
     title: travail.repo + (travail.pushed_at
-      ? ' — dernier envoi ' + travail.pushed_at : ' — aucun envoi'),
+      ? ' — dernier envoi ' + dateLisible(travail.pushed_at) : ' — aucun envoi'),
   },
     el('span', { classe: 'travail-nom',
       texte: travail.name + (travail.team ? ' · ' + travail.team : '') }),
     el('span', { classe: 'travail-date',
-      texte: travail.pushed_at || 'aucun envoi' }));
+      texte: travail.pushed_at ? dateLisible(travail.pushed_at) : 'aucun envoi' }));
 }
 
 // detailDeLEtape dit ce que l'étape a laissé. « Muet » n'est pas « aucun
@@ -4166,9 +4324,9 @@ function puceDeTravail(travail) {
 function detailDeLEtape(etape) {
   if (etape.role === 'enseignant') return 'A donné ce cours.';
   if (etape.assignments.length === 0) return 'Aucun dépôt dans ce groupe.';
-  const combien = travaux(etape.assignments.length);
+  const combien = pluriel(etape.assignments.length, 'travail', 'travaux');
   if (etape.silent) return `${combien}, aucun envoi.`;
-  return `${combien}, dernier envoi le ${etape.pushed_at}.`;
+  return `${combien}, dernier envoi le ${dateLisible(etape.pushed_at)}.`;
 }
 
 // --------------------------------------------- équipe enseignante du groupe
@@ -4195,7 +4353,7 @@ function dessinerCloisonnement() {
   const jeton = $('cloison-etat');
   const cloisonne = etat_.exists && etat_.teachers.length > 0;
   jeton.textContent = cloisonne
-    ? `${etat_.teachers.length} enseignant(s) · ${etat_.repos} dépôt(s)`
+    ? `${pluriel(etat_.teachers.length, 'enseignant')} · ${pluriel(etat_.repos, 'dépôt')}`
     : 'non cloisonné';
   jeton.classList.toggle('oui', cloisonne);
 
@@ -4203,7 +4361,7 @@ function dessinerCloisonnement() {
   vider(choix);
   const aucun = donnees.candidates.length === 0;
   $('cloison-vide').hidden = !aucun;
-  $('cloison-appliquer').disabled = aucun;
+  $('cloison-enregistrer').disabled = aucun;
   for (const candidat of donnees.candidates) {
     choix.append(el('label', { classe: 'case' },
       el('input', {
@@ -4222,7 +4380,7 @@ function dessinerCloisonnement() {
   }
 }
 
-$('cloison-appliquer').addEventListener('click', async () => {
+$('cloison-enregistrer').addEventListener('click', async () => {
   if (!etat.groupe) return;
   const enseignants = comptesCoches($('cloison-choix'));
   const apercu = await tenter(() => api(
@@ -4235,11 +4393,11 @@ $('cloison-appliquer').addEventListener('click', async () => {
     message("L'équipe enseignante de ce groupe est déjà celle-là.", 'note');
     return;
   }
-  const confirme = await demander('Appliquer cette composition ?',
+  const confirme = await demander('Enregistrer l’équipe enseignante',
     el('div', {},
       el('p', { classe: 'note', texte: resumerPlanDeCloisonnement(plan) }),
       el('p', { classe: 'aide', texte: plan.notice })),
-    'Appliquer');
+    'Enregistrer');
   if (!confirme) return;
 
   const fiche = await tenter(() => api(
@@ -4259,9 +4417,12 @@ function resumerPlanDeCloisonnement(plan) {
   }
   const parts = [];
   if (comptes['création']) parts.push("création de l'équipe");
-  if (comptes['inscription']) parts.push(`${comptes['inscription']} inscription(s)`);
-  if (comptes['retrait']) parts.push(`${comptes['retrait']} retrait(s)`);
-  if (comptes['accès']) parts.push(`${comptes['accès']} dépôt(s) accordés en « ${plan.permission} »`);
+  if (comptes['inscription']) parts.push(pluriel(comptes['inscription'], 'inscription'));
+  if (comptes['retrait']) parts.push(pluriel(comptes['retrait'], 'retrait'));
+  if (comptes['accès']) {
+    parts.push(`${pluriel(comptes['accès'], 'dépôt accordé', 'dépôts accordés')} ` +
+      `en « ${plan.permission} »`);
+  }
   return parts.join(', ') + '.';
 }
 
@@ -4297,9 +4458,18 @@ function dessinerEquipes() {
   vider(conteneur);
   const total = gens(etat.groupe).length;
   const places = total - etat.orphelins.length;
-  $('equipes-resume').textContent = etat.equipes.length === 0
-    ? `Aucune équipe · ${total} étudiant(s) dans le groupe`
-    : `${etat.equipes.length} équipe(s) · ${places} étudiant(s) sur ${total} en font partie`;
+  // Un groupe mené en équipe n'a parfois inscrit personne : « 0 étudiant sur
+  // 0 » ne dirait rien, l'absence de liste se dit en clair.
+  const nombreDEquipes = pluriel(etat.equipes.length, 'équipe');
+  if (etat.equipes.length === 0) {
+    $('equipes-resume').textContent =
+      `Aucune équipe · ${pluriel(total, 'étudiant')} dans le groupe`;
+  } else if (total === 0) {
+    $('equipes-resume').textContent = `${nombreDEquipes} · aucun étudiant inscrit au groupe`;
+  } else {
+    $('equipes-resume').textContent = `${nombreDEquipes} · ${pluriel(places, 'étudiant')} ` +
+      `sur ${total} en ${accord(places, 'fait', 'font')} partie`;
+  }
 
   $('equipes-vide').hidden = etat.equipes.length > 0;
   direVide($('equipes-vide'), "Aucune équipe. « Nouvelle équipe » en crée une sur GitHub ; « Adopter une équipe » " +
@@ -4356,7 +4526,6 @@ function dessinerEquipes() {
   }
 }
 
-$('equipes-recharger').addEventListener('click', () => chargerEquipes(true));
 $('equipes-nouvelle').addEventListener('click', () => nouvelleEquipe());
 $('equipes-adopter').addEventListener('click', () => adopterEquipe());
 
@@ -4381,7 +4550,7 @@ function ligneDeMembre(personne, etats = {}) {
       title: "Invitation envoyée : la personne n'a pas encore accepté." }));
   }
   if (etats.horsListe) {
-    ligne.append(el('span', { classe: 'jeton etranger', texte: 'hors liste',
+    ligne.append(el('span', { classe: 'jeton orange', texte: 'hors liste',
       title: "Ce compte n'est dans la liste d'aucun groupe." }));
   }
   ligne.append(el('span', { classe: 'espace' }));
@@ -4542,7 +4711,8 @@ async function composerEquipe(equipe) {
   if (!bilan) return;
   message(bilan.steps.length === 0
     ? `« ${equipe.short} » était déjà ainsi composée.`
-    : `${bilan.steps.length} changement(s) appliqué(s) à « ${equipe.short} ».`);
+    : `${pluriel(bilan.steps.length, 'changement appliqué', 'changements appliqués')} ` +
+      `à « ${equipe.short} ».`);
   etat.equipes = bilan.teams || [];
   etat.orphelins = bilan.unassigned || [];
   dessinerEquipes();
@@ -4676,12 +4846,13 @@ async function deplacerEquipe(equipe) {
   const confirme = await demander(`Déplacer ${equipe.short}`, el('div', {},
     bloc,
     el('p', { classe: 'note', texte:
-      `${membres} membre(s) partent avec elle : une équipe appartient à son groupe, ` +
+      `${pluriel(membres, 'membre')} ${accord(membres, 'part', 'partent')} avec elle : une ` +
+        `équipe appartient à son groupe, ` +
       'et ses membres en font partie.' }),
     el('p', { classe: 'note', texte: depots === 0
       ? "Ses dépôts et ceux de ses membres seront renommés pour porter la place du " +
         "groupe d'arrivée. GitHub garde une redirection depuis chaque ancien nom."
-      : `Ses ${depots} dépôt(s) et ceux de ses membres seront renommés pour porter la ` +
+      : `Ses ${pluriel(depots, 'dépôt')} et ceux de ses membres seront renommés pour porter la ` +
         "place du groupe d'arrivée. GitHub garde une redirection depuis chaque " +
         'ancien nom.' })), 'Déplacer', preparer);
   if (!confirme) return;
@@ -4699,13 +4870,13 @@ async function deplacerEquipe(equipe) {
   // L'équipe ne suit que si tous ses dépôts sont arrivés : un déplacement
   // interrompu n'a rien déplacé, et le journal dit lesquels ont résisté.
   if (bilan.failed) {
-    message(`« ${equipe.short} » n'a pas bougé · ${bilan.failed} dépôt(s) en échec`,
+    message(`« ${equipe.short} » n'a pas bougé · ${pluriel(bilan.failed, 'dépôt')} en échec`,
       'alerte');
   } else {
     message(`« ${equipe.short} » rejoint « ${bilan.target} »` +
       (bilan.created ? ' · groupe créé' : '') +
-      (bilan.count ? ` · ${bilan.count} étudiant(s)` : '') +
-      (bilan.renamed ? ` · ${bilan.renamed} dépôt(s) renommé(s)` : ''));
+      (bilan.count ? ` · ${pluriel(bilan.count, 'étudiant')}` : '') +
+      (bilan.renamed ? ` · ${pluriel(bilan.renamed, 'dépôt renommé', 'dépôts renommés')}` : ''));
   }
   await chargerGroupes(true);
   await rafraichirGroupeEtEquipes();
@@ -4785,7 +4956,7 @@ async function adopterEquipe() {
 
   const source = el('select', { classe: 'champ' },
     libres.teams.map((equipe) => el('option', {
-      value: equipe.slug, texte: `${equipe.name} (${equipe.members.length} membre(s))`,
+      value: equipe.slug, texte: `${equipe.name} (${pluriel(equipe.members.length, 'membre')})`,
     })));
   const nom = el('input', { classe: 'champ', type: 'text', placeholder: 'eq1' });
   const corps = el('div', {},
@@ -4817,6 +4988,11 @@ const champsGroupe = {
 
 function ecrireReglagesGroupe() {
   const groupe = etat.groupe;
+  const nomenclature = $('groupe-nomenclature');
+  vider(nomenclature);
+  nomenclature.hidden = !nomenclatureDuGroupe(groupe);
+  nomenclature.append('Ses dépôts s’appellent ',
+    el('code', { texte: nomenclatureDuGroupe(groupe) }), '.');
   preparerMigration(groupe);
   const defauts = groupe.defaults || {};
   for (const [cle, id] of Object.entries(champsGroupe)) {
@@ -4943,14 +5119,17 @@ function majAvisMigration() {
   }
   if (bloques && !ignorer) {
     $('mig-avis').append(el('div', { classe: 'avis alerte',
-      texte: `${bloques} dépôt(s) ne peuvent pas être renommés. Complétez la liste des ` +
+      texte: `${pluriel(bloques, 'dépôt')} ` +
+        `${accord(bloques, 'ne peut pas être renommé', 'ne peuvent pas être renommés')}. ` +
+        'Complétez la liste des ' +
         "étudiants — comptes manquants, noms complets à retrouver — ou acceptez de les laisser " +
         'en place.' }));
   } else if (apercu.ready === 0) {
     $('mig-avis').append(el('div', { classe: 'avis alerte', texte: 'Aucun dépôt à renommer.' }));
   } else {
     $('mig-avis').append(el('div', { classe: 'avis',
-      texte: (bloques ? `${bloques} dépôt(s) garderont leur nom actuel. ` : '') +
+      texte: (bloques ? `${pluriel(bloques, 'dépôt')} ` +
+        `${accord(bloques, 'gardera son', 'garderont leur')} nom actuel. ` : '') +
         phraseBascule(apercu) }));
   }
   $('mig-lancer').disabled = apercu.ready === 0 || (bloques > 0 && !ignorer);
@@ -4980,8 +5159,8 @@ $('mig-apercu-bouton').addEventListener('click', async () => {
         : el('td', { classe: 'vide', texte: ligne.problem })));
   }
   $('mig-table').hidden = apercu.rows.length === 0;
-  $('mig-resume').textContent = `${apercu.ready} dépôt(s) à renommer` +
-    (apercu.blocked ? `, ${apercu.blocked} bloqué(s)` : '');
+  $('mig-resume').textContent = `${pluriel(apercu.ready, 'dépôt')} à renommer` +
+    (apercu.blocked ? `, ${pluriel(apercu.blocked, 'bloqué')}` : '');
   apercuMigration = apercu;
   majAvisMigration();
 });
@@ -5010,8 +5189,9 @@ $('mig-lancer').addEventListener('click', async () => {
   const bilan = await suivre(fiche);
   if (!bilan) return;
 
-  journaliser(`${bilan.renamed} renommé(s) · ${bilan.skipped} laissé(s) en place · ` +
-    `${bilan.failed} en échec`, bilan.failed ? 'warn' : 'ok');
+  journaliser(`${pluriel(bilan.renamed, 'renommé')} · ` +
+    `${pluriel(bilan.skipped, 'laissé')} en place · ${bilan.failed} en échec`,
+    bilan.failed ? 'warn' : 'ok');
   if (!bilan.switched) {
     journaliser(`Le groupe reste « ${etat.groupe.label} » : des dépôts sont restés en arrière, ` +
       'et il continue de les voir.', 'warn');
@@ -5089,14 +5269,14 @@ $('reglages-enregistrer').addEventListener('click', async () => {
   const bilan = await tenter(() => api('PUT', '/api/settings', etat.reglages), 'Réglages');
   if (!bilan) return;
   $('reglages-etat').textContent = bilan.saved
-    ? `Mémorisés dans ${bilan.path}`
-    : 'Mémorisation désactivée (--no-save-config)';
+    ? `Enregistrés dans ${bilan.path}`
+    : 'Enregistrement désactivé (--no-save-config)';
 });
 
 $('cache-vider').addEventListener('click', async () => {
   const bilan = await tenter(() => api('POST', '/api/cache/clear'), 'Cache');
   if (!bilan) return;
-  message(`Cache vidé (${bilan.removed} entrée(s)).`);
+  message(`Cache vidé (${pluriel(bilan.removed, 'entrée')}).`);
   dessinerChemins(bilan.paths);
 });
 
@@ -5226,8 +5406,10 @@ async function preparerImport() {
   const conteneur = $('import-travaux');
 
   $('import-resume').textContent = travaux.length
-    ? `${vue.repos.length} dépôt(s) ne suivent pas la nomenclature. Choisissez le travail à reprendre.`
-    : `${vue.repos.length} dépôt(s) hors nomenclature, mais aucun préfixe commun : `
+    ? `${pluriel(vue.repos.length, 'dépôt')} ` +
+      `${accord(vue.repos.length, 'ne suit', 'ne suivent')} pas la nomenclature. ` +
+      'Choisissez le travail à reprendre.'
+    : `${pluriel(vue.repos.length, 'dépôt')} hors nomenclature, mais aucun préfixe commun : `
       + "il n'y a rien à reprendre d'un bloc.";
 
   for (const travail of travaux) {
@@ -5237,12 +5419,12 @@ async function preparerImport() {
         onchange: () => {
           importTravail = travail.prefix;
           if (!$('import-nom').value.trim()) $('import-nom').value = travail.prefix;
-          marquerEtape('travail', `${travail.prefix} · ${travail.count} dépôt(s)`);
+          marquerEtape('travail', `${travail.prefix} · ${pluriel(travail.count, 'dépôt')}`);
           chargerDepots(travail.prefix);
         },
       }),
       el('span', {}, el('code', { texte: travail.prefix }),
-        el('span', { classe: 'jeton', texte: `${travail.count} dépôt(s)` }))));
+        el('span', { classe: 'jeton', texte: pluriel(travail.count, 'dépôt') }))));
   }
 }
 
@@ -5287,7 +5469,8 @@ function dessinerDepots() {
         : (depot.student
           ? el('td', { texte: depot.student })
           : el('td', { classe: 'vide', texte: depot.login ? '@' + depot.login : '—' })),
-      el('td', { classe: 'note', texte: depot.pushed_at || 'jamais' })));
+      el('td', { classe: 'note',
+        texte: depot.pushed_at ? dateLisible(depot.pushed_at) : 'jamais' })));
   }
   majDepots();
 }
@@ -5299,8 +5482,8 @@ function majDepots() {
   const gardes = importRetenus.size;
   direDejaNommes();
   $('import-depots-compte').textContent = gardes === total
-    ? `${total} dépôt(s) — tous repris`
-    : `${gardes} dépôt(s) sur ${total}`;
+    ? `${pluriel(total, 'dépôt')} — tous repris`
+    : `${pluriel(gardes, 'dépôt')} sur ${total}`;
   $('import-depots-tout').checked = gardes === total && total > 0;
   $('import-depots-tout').indeterminate = gardes > 0 && gardes < total;
   marquerEtape('depots', $('import-depots-compte').textContent);
@@ -5322,12 +5505,15 @@ function direDejaNommes() {
     return;
   }
   if (nommes === retenus.length) {
-    dire('import-deja-nommes', `Les ${retenus.length} dépôt(s) retenus sont déjà associés à `
+    dire('import-deja-nommes', `${accord(retenus.length, 'Le dépôt retenu est déjà associé',
+      `Les ${retenus.length} dépôts retenus sont déjà associés`)} à `
       + "un étudiant connu de l'organisation : la liste n'a rien à apprendre de plus.");
     return;
   }
-  dire('import-deja-nommes', `${nommes} des ${retenus.length} dépôt(s) retenus sont déjà `
-    + "associés à un étudiant connu de l'organisation ; la liste nommera les autres.");
+  dire('import-deja-nommes', `${nommes} des ` +
+    `${pluriel(retenus.length, 'dépôt retenu', 'dépôts retenus')} `
+    + `${accord(nommes, 'est déjà associé', 'sont déjà associés')} à un étudiant connu `
+    + "de l'organisation ; la liste nommera les autres.");
 }
 
 // majNatureImport accorde l'écran à la nature du travail : l'étape de la liste
@@ -5633,8 +5819,10 @@ function dessinerEquipesReprises(plan) {
   vider(avis);
   const personnes = (plan.students || []).length;
   avis.append(el('div', { classe: 'avis' },
-    el('p', { texte: `${equipes.length} équipe(s) seront composées, et `
-      + `${personnes} personne(s) rejoindront « ${plan.scope} ». L'accès au dépôt `
+    el('p', { texte: `${pluriel(equipes.length, 'équipe')} ` +
+      `${accord(equipes.length, 'sera composée', 'seront composées')}, et `
+      + `${pluriel(personnes, 'personne')} ${accord(personnes, 'rejoindra', 'rejoindront')} `
+      + `« ${plan.scope} ». L'accès au dépôt `
       + "est accordé à l'équipe, pas à ses membres un par un." })));
   // Un dépôt que personne n'a touché ne dit pas qui en est : le taire ferait
   // croire à une équipe vide par choix.
@@ -5647,17 +5835,18 @@ function dessinerEquipesReprises(plan) {
   // Les équipes disent qui a fait le travail ; elles ne disent pas son nom.
   if ((plan.unmatched || []).length) {
     avis.append(el('div', { classe: 'avis alerte',
-      texte: `${plan.unmatched.length} compte(s) qu'aucun nom ne désigne : `
+      texte: `${pluriel(plan.unmatched.length, 'compte')} qu'aucun nom ne désigne : `
         + plan.unmatched.map((compte) => '@' + compte).join(', ')
         + ". Ils rejoindront le groupe sous leur compte ; le tableau ci-dessous "
         + "permet de les nommer." }));
   }
   if ((plan.absent || []).length) {
     avis.append(el('div', { classe: 'avis',
-      texte: `${plan.absent.length} étudiant(s) de la liste ne sont dans aucune `
+      texte: `${pluriel(plan.absent.length, 'étudiant')} de la liste ` +
+        `${accord(plan.absent.length, 'n’est', 'ne sont')} dans aucune `
         + 'équipe : ' + plan.absent.join(', ') + '.' }));
   }
-  marquerEtape('verifier', `${equipes.length} équipe(s)`);
+  marquerEtape('verifier', pluriel(equipes.length, 'équipe'));
 }
 
 // composerEquipeReprise laisse dire qui est dans une équipe, quand ce que
@@ -5727,7 +5916,7 @@ function montrerTravauxCaches(plan) {
   for (const travail of plan.splits) {
     choix.append(el('button', {
       classe: 'bouton', type: 'button',
-      texte: `${travail.prefix} · ${travail.count} dépôt(s)`,
+      texte: `${travail.prefix} · ${pluriel(travail.count, 'dépôt')}`,
       onclick: () => reprendreTravail(travail.prefix),
     }));
   }
@@ -5850,8 +6039,8 @@ function compter() {
   const reste = [...$('import-rapprochements').querySelectorAll('tbody tr')]
     .filter((ligne) => ligne.dataset.verifier === '1').length;
   $('import-compte').textContent = reste
-    ? `${total} dépôt(s) · ${reste} à vérifier`
-    : `${total} dépôt(s) · tout est rapproché`;
+    ? `${pluriel(total, 'dépôt')} · ${reste} à vérifier`
+    : `${pluriel(total, 'dépôt')} · tout est rapproché`;
   marquerEtape('verifier', $('import-compte').textContent);
 }
 
@@ -5861,32 +6050,36 @@ function compter() {
 function quelquesNoms(noms, prefixe = '') {
   const montres = noms.slice(0, 4).map((nom) => prefixe + nom).join(', ');
   const reste = noms.length - 4;
-  return reste > 0 ? `${montres}… et ${reste} autre(s)` : montres;
+  return reste > 0 ? `${montres}… et ${pluriel(reste, 'autre')}` : montres;
 }
 
 function dessinerAvis(plan) {
   const avis = $('import-avis');
   vider(avis);
   avis.append(el('div', { classe: 'avis',
-    texte: `${plan.moves.length} dépôt(s) seront renommés vers « ${plan.scope} ».` }));
+    texte: `${pluriel(plan.moves.length, 'dépôt')} ` +
+      `${accord(plan.moves.length, 'sera renommé', 'seront renommés')} vers « ${plan.scope} ».` }));
   if ((plan.unmatched || []).length) {
     const sort = plan.named_only
       ? 'leurs dépôts resteront où ils sont'
       : "leurs dépôts garderont le nom qu'ils portent";
     avis.append(el('div', { classe: 'avis alerte',
-      texte: `${plan.unmatched.length} compte(s) ne mènent à personne : ${sort} — `
+      texte: `${pluriel(plan.unmatched.length, 'compte')} ` +
+        `${accord(plan.unmatched.length, 'ne mène', 'ne mènent')} à personne : ${sort} — `
         + quelquesNoms(plan.unmatched, '@') + '.' }));
   }
   if ((plan.absent || []).length) {
     avis.append(el('div', { classe: 'avis alerte',
-      texte: `${plan.absent.length} étudiant(s) de la liste n'ont pas de dépôt pour ce `
+      texte: `${pluriel(plan.absent.length, 'étudiant')} de la liste ` +
+        `${accord(plan.absent.length, "n'a", "n'ont")} pas de dépôt pour ce `
         + 'travail — ' + quelquesNoms(plan.absent) + '.' }));
   }
   // Ailleurs, le compte vient des accès ou du registre. Ici, il ne vient que du
   // nom : c'est le seul qui puisse encore être faux, et le seul à signaler.
   if ((plan.unconfirmed || []).length) {
     avis.append(el('div', { classe: 'avis alerte',
-      texte: `${plan.unconfirmed.length} dépôt(s) dont le compte n'a pas pu être confirmé : `
+      texte: `${pluriel(plan.unconfirmed.length, 'dépôt')} dont le compte n'a pas pu être ` +
+        `confirmé : `
         + "leurs accès ne désignent personne, et l'organisation ne connaît pas ce compte. "
         + 'Il est lu dans leur nom — ' + quelquesNoms(plan.unconfirmed) + '.' }));
   }
@@ -5900,7 +6093,7 @@ function dessinerRenommages(plan) {
       el('td', {}, el('code', { texte: ligne.repo })),
       el('td', {}, el('code', { texte: ligne.target }))));
   }
-  marquerEtape('noms', `${(plan.moves || []).length} dépôt(s) renommés`);
+  marquerEtape('noms', pluriel((plan.moves || []).length, 'dépôt renommé', 'dépôts renommés'));
 }
 
 // --- 6. écrire
@@ -5909,10 +6102,12 @@ $('import-appliquer').addEventListener('click', async () => {
   const corps = corpsImport();
   if (!corps || !importPlan) return;
   const accord = await demander('Reprendre ces dépôts', el('div', {},
-    el('p', { texte: `${importPlan.moves.length} dépôt(s) seront renommés vers `
+    el('p', { texte: `${pluriel(importPlan.moves.length, 'dépôt')} ` +
+      `${accord(importPlan.moves.length, 'sera renommé', 'seront renommés')} vers `
       + `« ${importPlan.scope} ». GitHub garde une redirection depuis chaque ancien nom.` }),
     el('p', { classe: 'note', texte: importEquipe
-      ? `${(importPlan.teams || []).length} équipe(s) seront créées sur GitHub et `
+      ? `${pluriel((importPlan.teams || []).length, 'équipe')} ` +
+        `${accord((importPlan.teams || []).length, 'sera créée', 'seront créées')} sur GitHub et `
         + 'recevront leur dépôt. Le groupe sera déclaré, et les noms montés au '
         + "registre de l'organisation."
       : "Le groupe sera déclaré, et les noms montés au registre de l'organisation." })),
@@ -5926,11 +6121,11 @@ $('import-appliquer').addEventListener('click', async () => {
   const bilan = await suivre(fiche,
     { journal: $('import-journal'), barre: $('import-barre') });
   if (!bilan) return;
-  marquerEtape('journal', `${bilan.renamed} dépôt(s) repris`);
+  marquerEtape('journal', `${pluriel(bilan.renamed, 'dépôt')} repris`);
   message(bilan.team_work
-    ? `${bilan.renamed} dépôt(s) repris dans « ${bilan.scope} », `
-      + `${bilan.teams} équipe(s) composée(s).`
-    : `${bilan.renamed} dépôt(s) repris dans « ${bilan.scope} ».`);
+    ? `${pluriel(bilan.renamed, 'dépôt')} repris dans « ${bilan.scope} », `
+      + `${pluriel(bilan.teams, 'équipe composée', 'équipes composées')}.`
+    : `${pluriel(bilan.renamed, 'dépôt')} repris dans « ${bilan.scope} ».`);
   await ouvrirGroupe(bilan.scope, true);
 });
 
@@ -5968,10 +6163,11 @@ function dessinerRegistre(vue) {
   const publie = vue.published || 0;
   if (publie > 0) {
     resume.append(el('div', { classe: 'avis succes',
-      texte: `${publie} fiche(s) publiée(s). Le registre en compte ${vue.registry_size}.` }));
+      texte: `${pluriel(publie, 'fiche publiée', 'fiches publiées')}. Le registre en compte ` +
+        `${vue.registry_size}.` }));
   } else {
     resume.append(el('div', { classe: 'avis',
-      texte: `Le registre connaît ${vue.registry_size} fiche(s) ; ce poste en apporte `
+      texte: `Le registre connaît ${pluriel(vue.registry_size, 'fiche')} ; ce poste en apporte `
         + `${vue.total} à écrire.` }));
   }
   if (vue.exposure) {
@@ -5982,27 +6178,30 @@ function dessinerRegistre(vue) {
   }
 
   if (neuves.length) {
-    detail.append(el('p', { classe: 'note', texte: `${neuves.length} nouvelle(s) fiche(s)` }));
+    detail.append(el('p', { classe: 'note',
+      texte: pluriel(neuves.length, 'nouvelle fiche', 'nouvelles fiches') }));
     detail.append(lignesDeFiches(['Nom complet', 'Compte'],
       neuves.map((fiche) => [fiche.full_name, '@' + fiche.username])));
   }
   if (desaccords.length) {
     detail.append(el('p', { classe: 'note',
-      texte: `${desaccords.length} désaccord(s) de nom — cochez ci-dessous pour que ce `
+      texte: `${pluriel(desaccords.length, 'désaccord')} de nom — cochez ci-dessous pour que ce `
         + 'poste l\'emporte.' }));
     detail.append(lignesDeFiches(['Compte', 'Au registre', 'Sur ce poste'],
       desaccords.map((item) => ['@' + item.username, item.registry, item.local])));
   }
   if (ambigus.length) {
     detail.append(el('p', { classe: 'note',
-      texte: `${ambigus.length} compte(s) que ce poste nomme de plusieurs façons. Le premier `
+      texte: `${pluriel(ambigus.length, 'compte')} que ce poste nomme de plusieurs façons. Le ` +
+        `premier `
         + 'est retenu ; les autres restent rattachés par leur slug.' }));
     detail.append(lignesDeFiches(['Compte', 'Retenu', 'Trouvés'],
       ambigus.map((item) => ['@' + item.username, item.chosen, (item.names || []).join(' · ')])));
   }
   if (sansNom.length) {
     detail.append(el('p', { classe: 'note',
-      texte: `${sansNom.length} compte(s) sans nom complet connu : rien ne peut être publié `
+      texte: `${pluriel(sansNom.length, 'compte')} sans nom complet connu : rien ne peut être ` +
+        `publié `
         + 'pour eux (@' + sansNom.join(', @') + ').' }));
   }
 
@@ -6033,14 +6232,15 @@ $('registre-publier').addEventListener('click', async () => {
   const total = registreApercu.total;
   const local = $('registre-prefer-local').checked;
   const accord = await demander('Publier le registre',
-    el('p', { texte: `${total} fiche(s) seront écrites dans « ${org}/${registreApercu.repo} ». `
+    el('p', { texte: `${pluriel(total, 'fiche')} ` +
+      `${accord(total, 'sera écrite', 'seront écrites')} dans « ${org}/${registreApercu.repo} ». `
       + 'Le fichier de ce poste reste inchangé.' }), 'Publier');
   if (!accord) return;
 
   const vue = await tenter(
     () => api('POST', `/api/orgs/${encode(org)}/registry`, { prefer_local: local }), 'Registre');
   if (!vue) return;
-  message(`${vue.published} fiche(s) publiée(s).`);
+  message(`${pluriel(vue.published, 'fiche publiée', 'fiches publiées')}.`);
   dessinerRegistre(vue);
 });
 
@@ -6086,10 +6286,13 @@ $('registre-oublier').addEventListener('click', async () => {
 // dans le terminal d'où l'outil a été lancé, y compris quand la demande part
 // d'ici : c'est la seule chose que le navigateur ne peut pas mener seul.
 
-// tonDePortee traduit l'état d'une portée en couleur d'étiquette.
-function tonDePortee(etat) {
-  if (etat === 'présente') return 'oui';
-  if (etat === 'absente') return 'non';
+// tonDePortee traduit l'état d'une portée en couleur d'étiquette. Le rouge est
+// réservé à ce qui empêche de travailler : une portée du socle qui manque. Une
+// portée facultative absente — supprimer des dépôts, composer des équipes —
+// n'est qu'une information.
+function tonDePortee(portee) {
+  if (portee.state === 'présente') return 'oui';
+  if (portee.state === 'absente' && portee.minimal) return 'non';
   return '';
 }
 
@@ -6107,7 +6310,7 @@ function casesDePortees(conteneur, jeton, ajoutee) {
     cases.push(entree);
     conteneur.append(el('label', { classe: 'case' }, entree, el('span', {},
       el('code', { texte: portee.name }), ' ',
-      el('span', { classe: 'jeton ' + tonDePortee(portee.state), texte: portee.state }),
+      el('span', { classe: 'jeton ' + tonDePortee(portee), texte: portee.state }),
       el('span', { classe: 'aide', texte: `${portee.label} — ${portee.purpose}` }))));
   }
   return () => cases.filter((entree) => entree.checked).map((entree) => entree.value);
@@ -6132,7 +6335,8 @@ function dessinerPortees(jeton) {
   }
   if ((jeton.missing || []).length) {
     avis.append(el('div', { classe: 'avis alerte',
-      texte: `Toujours absente(s) après le renouvellement : ${jeton.missing.join(', ')}. ` +
+      texte: `${accord(jeton.missing.length, 'Toujours absente', 'Toujours absentes')} ` +
+        `après le renouvellement : ${jeton.missing.join(', ')}. ` +
         "GitHub n'accorde que ce qui lui a été accordé dans le navigateur." }));
   }
   $('jeton-renouveler').disabled = !jeton.refreshable;
@@ -6343,7 +6547,8 @@ async function choixDeGroupe() {
       el('span', { classe: 'choix-infos' },
         el('span', { classe: 'titre', texte: groupe.label }),
         el('span', { classe: 'detail',
-          texte: `${effectifDuGroupe(groupe)} · ${travaux((groupe.assignments || []).length)}` })),
+          texte: `${effectifDuGroupe(groupe)} · ` +
+            `${pluriel((groupe.assignments || []).length, 'travail', 'travaux')}` })),
       el('span', { classe: 'espace' }),
       el('code', { classe: 'jeton', texte: groupe.scope }));
   }
@@ -6432,7 +6637,8 @@ async function deplacerEtudiants(personnes) {
     bloc,
     el('p', { classe: 'note', texte: depots === 0
       ? `Aucun dépôt à renommer : ${leurs} fiches sont tout ce qui change de groupe.`
-      : `${depots} dépôt(s) seront renommés : leur nom porte la place du groupe, et ` +
+      : `${pluriel(depots, 'dépôt')} ${accord(depots, 'sera renommé', 'seront renommés')} : ` +
+        `leur nom porte la place du groupe, et ` +
         'c’est lui qui dit à qui ils appartiennent. GitHub garde une redirection ' +
         'depuis chaque ancien nom.' }),
     depots === 0 || !sansNom ? null : el('p', { classe: 'note',
@@ -6458,7 +6664,7 @@ async function deplacerEtudiants(personnes) {
   // Les listes ne suivent que si tous les dépôts sont arrivés : un déplacement
   // interrompu n'a déplacé personne, et le journal dit lesquels ont résisté.
   if (!bilan.count) {
-    message(`Aucun étudiant déplacé · ${bilan.failed} dépôt(s) en échec`, 'alerte');
+    message(`Aucun étudiant déplacé · ${pluriel(bilan.failed, 'dépôt')} en échec`, 'alerte');
     await ouvrirGroupe(etat.groupe.scope, true, true);
     afficherVue('etudiants');
     return;
@@ -6468,7 +6674,7 @@ async function deplacerEtudiants(personnes) {
     : `${bilan.count} étudiants déplacés`;
   message(`${qui} vers « ${bilan.target} »` +
     (bilan.created ? ' · groupe créé' : '') +
-    (bilan.renamed ? ` · ${bilan.renamed} dépôt(s) renommé(s)` : ''));
+    (bilan.renamed ? ` · ${pluriel(bilan.renamed, 'dépôt renommé', 'dépôts renommés')}` : ''));
   etat.deplaces = new Set();
   await chargerGroupes(true);
   await ouvrirGroupe(etat.groupe.scope, true, true);
@@ -6509,7 +6715,7 @@ async function deplacerTravaux(travauxChoisis) {
         texte: 'Les dépôts dont l’étudiant reste inconnu gardent le dernier niveau de leur ' +
           'nom — souvent son compte GitHub. Les noms complets se corrigent ensuite, depuis ' +
           'la liste des étudiants du groupe d’arrivée.' })),
-    'Voir le renommage', preparer);
+    'Aperçu', preparer);
   if (!confirme) return;
   const cible = destination();
   if (!cible) return;
@@ -6533,7 +6739,7 @@ async function deplacerTravaux(travauxChoisis) {
   const suivies = (apercu.students || []).length;
   const partantes = (apercu.leaving || []).length;
 
-  const parti = await demander(`Renommer ${apercu.ready} dépôt(s)`, el('div', {},
+  const parti = await demander(`Renommer ${pluriel(apercu.ready, 'dépôt')}`, el('div', {},
     el('p', { texte: `Vers « ${apercu.target} » — ${apercu.target_scope}` +
       (apercu.created ? ', déclaré au passage.' : '.') }),
     el('div', { classe: 'apercu-renommage' },
@@ -6544,7 +6750,9 @@ async function deplacerTravaux(travauxChoisis) {
     el('p', { classe: 'note',
       texte: suivies === 0
         ? 'Aucune fiche à faire suivre : ces dépôts ne sont rattachés à personne.'
-        : `${suivies} fiche(s) suivront, dont ${partantes} qui quittent ` +
+        : `${pluriel(suivies, 'fiche')} ${accord(suivies, 'suivra', 'suivront')}, dont ` +
+          `${partantes} qui `
+          + `${accord(partantes, 'quitte', 'quittent')} ` +
           `« ${etat.groupe.label} » faute d’y garder un dépôt.` }),
     el('p', { classe: 'note',
       texte: 'GitHub garde une redirection depuis chaque ancien nom : les clones et les ' +
@@ -6556,9 +6764,9 @@ async function deplacerTravaux(travauxChoisis) {
   if (!fiche) return;
   const bilan = await suivre(fiche);
   if (!bilan) return;
-  message(`${bilan.renamed} dépôt(s) déplacé(s) vers « ${bilan.target} »` +
+  message(`${pluriel(bilan.renamed, 'dépôt déplacé', 'dépôts déplacés')} vers « ${bilan.target} »` +
     (bilan.created ? ' · groupe déclaré' : '') +
-    (bilan.moved ? ` · ${bilan.moved} fiche(s) suivies` : '') +
+    (bilan.moved ? ` · ${pluriel(bilan.moved, 'fiche suivie', 'fiches suivies')}` : '') +
     (bilan.failed ? ` · ${bilan.failed} en échec` : ''),
   bilan.failed ? 'alerte' : 'succes');
   etat.travauxChoisis = new Set();
@@ -6585,10 +6793,10 @@ async function renommerTravail(travail) {
       el('span', { classe: 'etiquette', texte: 'Nouveau nom du travail' }), nom,
       el('span', { classe: 'aide',
         texte: 'Il entre dans le nom de chaque dépôt : le corriger renomme les ' +
-          `${travail.repos} dépôt(s) du travail.` })),
+          `${pluriel(travail.repos, 'dépôt')} du travail.` })),
     el('p', { classe: 'note',
       texte: 'Le groupe et le nom des étudiants ne bougent pas : seul le niveau du ' +
-        'travail change.' })), 'Voir le renommage');
+        'travail change.' })), 'Aperçu');
   if (!confirme) return;
 
   const corps = { id: travail.id, name: nom.value.trim() };
@@ -6601,7 +6809,7 @@ async function renommerTravail(travail) {
     el('td', {}, el('code', { texte: ligne.repo })),
     el('td', {}, el('code', { texte: ligne.target }))));
 
-  const parti = await demander(`Renommer ${apercu.ready} dépôt(s)`, el('div', {},
+  const parti = await demander(`Renommer ${pluriel(apercu.ready, 'dépôt')}`, el('div', {},
     el('div', { classe: 'apercu-renommage' },
       el('table', { classe: 'tableau' },
         el('thead', {}, el('tr', {},
@@ -6617,7 +6825,8 @@ async function renommerTravail(travail) {
   if (!fiche) return;
   const bilan = await suivre(fiche);
   if (!bilan) return;
-  message(`${bilan.renamed} dépôt(s) renommé(s) · « ${bilan.previous} » devient ` +
+  message(`${pluriel(bilan.renamed, 'dépôt renommé', 'dépôts renommés')} · « ${bilan.previous} ` +
+    `» devient ` +
     `« ${bilan.name} »` + (bilan.failed ? ` · ${bilan.failed} en échec` : ''),
   bilan.failed ? 'alerte' : 'succes');
 
@@ -6986,7 +7195,7 @@ function ecrireReglagesGeneraux() {
     : "Cette machine n'a pas de fenêtre de sélection : cliquer un chemin ouvre " +
       "l'explorateur de l'interface.";
   if (!contexte.save_config) {
-    $('reglages-etat').textContent = 'Mémorisation désactivée (--no-save-config)';
+    $('reglages-etat').textContent = 'Enregistrement désactivé (--no-save-config)';
   }
 }
 
@@ -7019,8 +7228,6 @@ async function preparerPlagiat(sansHistorique) {
   const travail = etat.travail;
   if (!travail) return;
 
-  $('pl-titre').textContent = `Comparer les copies de « ${travail.name} »`;
-  $('pl-sous-titre').textContent = etat.groupe.label || etat.groupe.scope;
   $('pl-avertissement').textContent = options.disclaimer;
 
   const profil = $('pl-profil');
@@ -7085,13 +7292,14 @@ async function dessinerAnalysesPassees() {
       el('button', {
         type: 'button', classe: 'lien',
         texte: `${rapport.assignment || rapport.name} — `
-          + `${(rapport.created_at || '').slice(0, 16).replace('T', ' à ')}`,
+          + `${dateLisible(rapport.created_at)}`,
         onclick: () => tenter(() => ouvrirRapportPlagiat(rapport.name), 'Rapport'),
       }),
       el('span', {
         classe: 'note',
-        texte: ` — ${rapport.works} copie(s), ${rapport.matches} paire(s)`
-          + (rapport.problems ? `, ${rapport.problems} dépôt(s) non analysés` : ''),
+        texte: ` — ${pluriel(rapport.works, 'copie')}, ${pluriel(rapport.matches, 'paire')}`
+          + (rapport.problems
+            ? `, ${pluriel(rapport.problems, 'dépôt non analysé', 'dépôts non analysés')}` : ''),
       })));
   }
   zone.append(el('div', { classe: 'boite' },
@@ -7216,7 +7424,7 @@ function boiteEstimation(estimation, depots) {
   const corps = el('div', { classe: 'boite-corps' });
   corps.append(el('p', {
     classe: 'note',
-    texte: `Mesuré sur ${estimation.sampled} dépôt(s), rapporté à ${depots} : `
+    texte: `Mesuré sur ${pluriel(estimation.sampled, 'dépôt')}, rapporté à ${depots} : `
       + `${estimation.pairs} paires, ${estimation.files} fichiers retenus, `
       + `${octets(estimation.download)} à télécharger, ${octets(estimation.bytes)} `
       + `de code analysé, ${octets(estimation.memory)} de mémoire, environ `
@@ -7275,7 +7483,8 @@ function boiteEchantillon(echantillon) {
   entete.append(el('span', { classe: 'espace' }));
   entete.append(el('span', {
     classe: 'note',
-    texte: `${echantillon.kept.length} retenu(s), ${echantillon.skipped.length} écarté(s)`
+    texte: `${pluriel(echantillon.kept.length, 'retenu')}, ` +
+      `${pluriel(echantillon.skipped.length, 'écarté')}`
       + (emballage(echantillon.root) ? ` — projet sous « ${emballage(echantillon.root)} »` : ''),
   }));
 
@@ -7347,9 +7556,10 @@ function dessinerRapportPlagiat() {
   const rapport = etat.plagiat.donnees;
   const resultat = rapport.result;
   $('pl-rapport-resume').textContent =
-    `${rapport.works.length} copie(s) comparée(s), ${resultat.compared} paire(s) mesurée(s), `
-    + `${(resultat.matches || []).length} retenue(s). Profil : ${rapport.profile.label}. `
-    + `Analyse du ${(rapport.created_at || '').slice(0, 16).replace('T', ' à ')}.`;
+    `${pluriel(rapport.works.length, 'copie comparée', 'copies comparées')}, ` +
+      `${pluriel(resultat.compared, 'paire mesurée', 'paires mesurées')}, `
+    + `${pluriel((resultat.matches || []).length, 'retenue')}. Profil : ${rapport.profile.label}. `
+    + `Analyse du ${dateLisible(rapport.created_at, { semaine: false })}.`;
   $('pl-rapport-avertissement').textContent = rapport.disclaimer;
 
   const curseur = $('pl-seuil');
@@ -7389,7 +7599,7 @@ function dessinerSeuil() {
   const origine = etat.plagiat.seuil !== null
     ? 'Seuil déplacé à la main.'
     : resultat.threshold_note;
-  $('pl-seuil-aide').textContent = `${origine} ${retenues.length} paire(s) au-dessus.`;
+  $('pl-seuil-aide').textContent = `${origine} ${pluriel(retenues.length, 'paire')} au-dessus.`;
 }
 
 // dessinerHistogramme dessine la distribution des similarités.
@@ -7426,7 +7636,7 @@ function dessinerHistogramme() {
       classe: tranche.from >= seuil ? 'pl-barre haute' : 'pl-barre',
     });
     barre.append(svgEl('title', {}, `${Math.round(tranche.from * 100)} à `
-      + `${Math.round(tranche.to * 100)} % : ${tranche.count} paire(s)`));
+      + `${Math.round(tranche.to * 100)} % : ${pluriel(tranche.count, 'paire')}`));
     svg.append(barre);
   });
 
@@ -7557,7 +7767,7 @@ function dessinerPaires() {
 
   const zone = $('pl-paires');
   vider(zone);
-  $('pl-paires-titre').textContent = `${paires.length} paire(s)`;
+  $('pl-paires-titre').textContent = pluriel(paires.length, 'paire');
   if (!paires.length) {
     zone.append(el('div', {
       classe: 'boite-vide',
@@ -7661,7 +7871,8 @@ function dessinerSoucisPlagiat() {
   table.append(corps);
   zone.append(el('div', { classe: 'boite' },
     el('div', { classe: 'boite-entete' },
-      el('strong', { texte: `${soucis.length} dépôt(s) n’ont pas pu être analysés` })),
+      el('strong', { texte: `${pluriel(soucis.length, 'dépôt')} ` +
+        `${accord(soucis.length, 'n’a pas pu être analysé', 'n’ont pas pu être analysés')}` })),
     el('div', { classe: 'tableau-defile' }, table)));
 }
 
@@ -7730,7 +7941,7 @@ function dessinerEcarte() {
   if (!total) return;
   zone.append(el('p', {
     classe: 'note',
-    texte: `${total} empreinte(s) écartée(s) avant comparaison : `
+    texte: `${pluriel(total, 'empreinte écartée', 'empreintes écartées')} avant comparaison : `
       + `${resultat.ignored_baseline || 0} venant du gabarit distribué au travail, `
       + `${resultat.ignored_common || 0} présentes chez trop de copies pour vouloir `
       + 'dire quelque chose. Sans ce retrait, toutes les copies se ressembleraient.',
@@ -7836,8 +8047,8 @@ function dessinerChronologie(chrono) {
       el('p', {},
         el('strong', { texte: 'Remises : ' }),
         el('span', {
-          texte: `${chrono.first_name || chrono.first} le ${chrono.first_at}, `
-            + `${chrono.second_name || chrono.second} le ${chrono.second_at}.`,
+          texte: `${chrono.first_name || chrono.first} le ${dateLisible(chrono.first_at)}, `
+            + `${chrono.second_name || chrono.second} le ${dateLisible(chrono.second_at)}.`,
         })),
       el('p', { classe: 'note', texte: chrono.note }))));
 }
@@ -7889,10 +8100,6 @@ function part(couvert, total) {
   return `${Math.round((couvert / total) * 100)} %`;
 }
 
-$('pl-paire-retour').addEventListener('click', () => {
-  afficherVue('plagiat-rapport');
-});
-
 // -------------------------------------------------------- deux fichiers
 
 async function ouvrirFichierPlagiat(cheminG, cheminD, sansHistorique) {
@@ -7928,7 +8135,7 @@ function dessinerFichiersPlagiat() {
   const vue = etat.plagiat.fichier;
   const mode = etat.plagiat.mode;
   $('pl-fichier-resume').textContent =
-    `${vue.spans.length} passage(s) commun(s) — ${vue.left.lines} et `
+    `${pluriel(vue.spans.length, 'passage commun', 'passages communs')} — ${vue.left.lines} et `
     + `${vue.right.lines} lignes.`;
   $('pl-mode-explication').textContent = explicationsMode[mode];
   $('pl-fichier-gauche-titre').textContent =
@@ -8032,12 +8239,15 @@ $('pl-fichier-suivant').addEventListener('click',
   () => viserFragment(etat.plagiat.fragment + 1));
 $('pl-fichier-precedent').addEventListener('click',
   () => viserFragment(etat.plagiat.fragment - 1));
-$('pl-fichier-retour').addEventListener('click', () => afficherVue('plagiat-paire'));
 
 // allerAuPlagiat ouvre un rapport, une paire ou deux fichiers depuis l'adresse.
 // Un lien collé doit mener exactement où il dit.
 async function allerAuPlagiat(route) {
-  if (route.vue === 'plagiat-regles') { await ouvrirReglesPlagiat(true); return; }
+  if (route.vue === 'plagiat-regles') {
+    etat.plagiat.reglesDepuisLaPreparation = false;
+    await ouvrirReglesPlagiat(true);
+    return;
+  }
   if (!route.rapport) { afficherVue('parcours', true); return; }
   // Arriver droit sur un rapport par son adresse ne charge pas les groupes :
   // sans eux, son fil d'Ariane ne saurait pas remonter jusqu'au travail.
@@ -8102,8 +8312,9 @@ function dessinerReglesPlagiat() {
 
   const profils = (declarees.profiles || []).length;
   $('pl-regles-profils').textContent = profils
-    ? `${profils} profil(s) d'inspection déclarés par l'organisation. Ils se `
-      + `modifient dans « regles.json », sur github.com.`
+    ? `${pluriel(profils, 'profil d’inspection déclaré', 'profils d’inspection déclarés')} par `
+      + `l'organisation. ${accord(profils, 'Il se modifie', 'Ils se modifient')} dans `
+      + '« regles.json », sur github.com.'
     : 'Aucun profil d’inspection maison. On en déclare en modifiant '
       + '« regles.json » dans le dépôt « .cohorte », sur github.com.';
 }
@@ -8173,9 +8384,6 @@ function lireRangees(zoneID, cours) {
   return items;
 }
 
-$('pl-regles-ouvrir').addEventListener('click',
-  () => tenter(() => ouvrirReglesPlagiat(), 'Règles de comparaison'));
-$('pl-regles-retour').addEventListener('click', () => afficherVue('plagiat'));
 $('pl-regles-cours-ajouter').addEventListener('click', () => {
   const zone = $('pl-regles-cours');
   if (zone.querySelector('.note')) vider(zone);
@@ -8226,6 +8434,7 @@ $('pl-recevoir').addEventListener('click', () => {
 });
 $('pl-regles-ouvrir').addEventListener('click', () => {
   menuEchange.deplier(false);
+  etat.plagiat.reglesDepuisLaPreparation = true;
   tenter(() => ouvrirReglesPlagiat(), 'Règles de comparaison');
 });
 
@@ -8289,7 +8498,7 @@ function dessinerEnvoi(bilan) {
   const corps = el('div', { classe: 'boite-corps' });
 
   corps.append(el('p', {},
-    el('strong', { texte: `${bilan.copies} copie(s) anonymisées. ` }),
+    el('strong', { texte: `${pluriel(bilan.copies, 'copie anonymisée', 'copies anonymisées')}. ` }),
     el('span', { texte: 'Archive : ' }),
     el('code', { texte: bilan.path })));
   corps.append(el('p', { classe: 'note' },
@@ -8317,8 +8526,9 @@ function dessinerEnvoi(bilan) {
   } else {
     corps.append(el('p', {
       classe: 'avertissement',
-      texte: `${residues.length} chose(s) ressemblent encore à quelqu’un, dans `
-        + `${(bilan.files || []).length} fichier(s). Regardez-les avant d’envoyer `
+      texte: `${pluriel(residues.length, 'chose')} ` +
+        `${accord(residues.length, 'ressemble', 'ressemblent')} encore à quelqu’un, dans `
+        + `${pluriel((bilan.files || []).length, 'fichier')}. Regardez-les avant d’envoyer `
         + `l’archive : une anonymisation n’est jamais complète.`,
     }));
     const table = el('table', { classe: 'pl-table' },
@@ -8388,7 +8598,8 @@ function dessinerArchives() {
   }
   zone.append(el('div', { classe: 'boite' },
     el('div', { classe: 'boite-entete' },
-      el('strong', { texte: `${archives.length} archive(s) reçue(s)` })), corps));
+      el('strong', { texte: pluriel(archives.length, 'archive reçue', 'archives reçues') })),
+    corps));
 }
 
 // ------------------------------------------------ comparer avec un collègue
@@ -8424,7 +8635,7 @@ async function choisirCollegue() {
     });
     liste.append(el('label', { classe: 'case' }, case_,
       el('span', {},
-        el('span', { texte: `${ligne.id} — ${ligne.copies} copie(s)` }),
+        el('span', { texte: `${ligne.id} — ${pluriel(ligne.copies, 'copie')}` }),
         el('span', {
           classe: 'aide',
           texte: ligne.indexed
@@ -8534,7 +8745,8 @@ async function dessinerDemandes() {
     el('div', { classe: 'boite-entete' },
       el('strong', {
         texte: attente.length
-          ? `${attente.length} demande(s) attendent votre décision`
+          ? `${pluriel(attente.length, 'demande')} ` +
+            `${accord(attente.length, 'attend', 'attendent')} votre décision`
           : 'Demandes de copies',
       })), corps));
 }
@@ -8545,7 +8757,8 @@ function ligneDeDemandeRecue(demande) {
     ? `demande à voir la copie ${demande.token} de ${demande.assignment}`
       + (demande.similarity ? `, mesurée à ${Math.round(demande.similarity * 100)} %.` : '.')
     : `a demandé la copie ${demande.token} de ${demande.assignment} : `
-      + `${demande.state}${demande.decided_at ? ', le ' + demande.decided_at.slice(0, 10) : ''}.`;
+      + `${demande.state}${demande.decided_at
+        ? ', le ' + dateLisible(demande.decided_at, { heure: false }) : ''}.`;
   return el('div', { classe: 'pl-demande' },
     el('span', {},
       el('strong', { texte: demande.from_name || '@' + demande.from }),
@@ -8689,7 +8902,7 @@ async function rattraperLesIndex() {
   const liste = el('div', { classe: 'liste-choix' });
   for (const id of manquants) liste.append(el('code', { texte: id }));
   const suite = await demander(
-    `Publier ${manquants.length} index manquant(s)`,
+    `Publier ${pluriel(manquants.length, 'index manquant', 'index manquants')}`,
     el('div', {},
       el('p', {
         texte: 'Chacun de ces travaux est annoncé sans index : vos collègues '
@@ -8718,11 +8931,11 @@ async function rattraperLesIndex() {
     }
   }
   if (echecs.length) {
-    message(`${publies} index publié(s) ; ${echecs.length} en échec : `
+    message(`${pluriel(publies, 'index publié', 'index publiés')} ; ${echecs.length} en échec : `
       + echecs.join(' ; '), 'erreur');
     return;
   }
-  message(`${publies} index publié(s).`, 'succes');
+  message(`${pluriel(publies, 'index publié', 'index publiés')}.`, 'succes');
 }
 
 // publierUnIndexManquant analyse un travail puis publie son index — la suite
@@ -8781,6 +8994,7 @@ $('pl-rapport-publier').addEventListener('click', () => tenter(async () => {
       + `pas publié : un collègue devra vous le demander.`, 'succes');
     return;
   }
-  message(`Index publié : ${bilan.copies} copie(s), ${bilan.prints} empreinte(s). `
+  message(`Index publié : ${pluriel(bilan.copies, 'copie')}, ` +
+    `${pluriel(bilan.prints, 'empreinte')}. `
     + `La table de correspondance est restée ici.`, 'succes');
 }, 'Publication'));

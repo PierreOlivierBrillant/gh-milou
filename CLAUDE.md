@@ -87,6 +87,20 @@ Les dépôts de service de l'organisation — `.cohorte` et `.cohorte-empreintes
 gardent leur nom : les renommer imposerait une migration à chaque organisation
 déjà amorcée.
 
+## Un écran, un gabarit
+
+Toutes les vues du navigateur ont le même en-tête. On y trouve :
+
+- le fil d'Ariane, qui sert de retour : aucun écran n'a de bouton « Retour » ;
+- un titre qui nomme l'objet affiché ;
+- la seule zone d'actions de la page : au plus un geste vert, et seulement s'il
+  a quelque chose à faire, deux secondaires, le reste dans « Actions ».
+
+Une vue n'a pas de barre à elle. Ce qu'elle montre dans l'en-tête s'y déclare
+sous `data-pour`. Dans `app.js`, un nombre de choses s'écrit par `pluriel()`,
+une date par `dateLisible()`. Un même geste porte partout le même verbe :
+« Enregistrer », « Aperçu ». `gabarit_test.go` tient ces règles.
+
 ## Le reste
 
 - Le code, les commentaires, les messages et les tests sont en français, accents

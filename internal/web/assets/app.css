@@ -44,14 +44,23 @@ a:hover { text-decoration: underline; }
 
 /* ---------------------------------------------------------- en-tête de page */
 
-/* Le même bandeau du haut de la hiérarchie jusqu'au groupe : passer d'une
-   session à un cours puis à un groupe ne doit pas donner l'impression de
-   changer d'application. */
+/* Le même bandeau sur toutes les vues : passer d'une session à un groupe,
+   d'un travail à une comparaison, ne doit pas donner l'impression de changer
+   d'application. */
 .entete-page {
-  padding: 1.25rem 1.5rem;
+  padding: 1.25rem 0;
   background: var(--fond-doux);
   border-bottom: var(--contour);
 }
+
+/* Le bandeau couvre la fenêtre, mais ce qu'il porte prend la largeur du
+   contenu : sur un grand écran, les actions de l'en-tête doivent rester
+   au-dessus de ce qu'elles concernent, pas flotter loin à droite. Une vue qui
+   montre du code côte à côte prend toute la fenêtre, en-tête compris : les
+   deux bords doivent continuer de s'aligner. */
+.entete-page-corps, main { max-width: 1100px; margin: 0 auto; }
+.entete-page-corps { padding: 0 1.5rem; }
+body.pleine-largeur .entete-page-corps, body.pleine-largeur main { max-width: none; }
 
 /* Les onglets viennent mourir sur le trait du bandeau : leur soulignement en
    fait partie, et rien ne doit s'intercaler. Là où il n'y en a pas — l'accueil,
@@ -59,8 +68,19 @@ a:hover { text-decoration: underline; }
    dessus. */
 .entete-page.avec-onglets { padding-bottom: 0; }
 
-.entete-page h1 { font-size: 1.5rem; margin: 0; }
+/* Le titre est l'objet de la page, et l'objet peut être un chemin de fichier
+   sans une espace : il passe à la ligne plutôt que d'élargir la page. */
+.entete-page h1 { font-size: 1.5rem; margin: 0; overflow-wrap: anywhere; }
 .titre-bloc { min-width: 0; }
+
+/* Recharger se fait au titre, partout de la même façon : ce n'est pas une
+   commande parmi les autres, c'est la page qu'on relit. */
+.titre-ligne { display: flex; align-items: center; gap: .45rem; }
+.titre-ligne .lien.icone { color: var(--texte-doux); padding: .2rem; }
+.titre-ligne .lien.icone:hover { color: var(--lien); }
+
+/* Une vue qui n'a rien à dire sous son titre n'y laisse pas de blanc. */
+.entete-page .note:empty { display: none; }
 
 /* La nomenclature des dépôts, en toutes lettres : une pastille tronquée ne
    disait pas ce qu'elle montrait. */
@@ -106,21 +126,23 @@ a:hover { text-decoration: underline; }
 
 /* ------------------------------------------------------------------ contenu */
 
-main { padding: 1.5rem; max-width: 1100px; }
+main { padding: 1.5rem; }
 
 .fil { margin-bottom: .75rem; font-size: .875rem; color: var(--texte-doux); }
 .fil .separateur { margin: 0 .4rem; }
 
-.barre-outils {
+/* Ce qui règle l'affichage d'une vue sans en être une action — les lectures de
+   deux fichiers comparés, le saut d'un passage à l'autre. Pas de titre : celui
+   de la page suffit. */
+.bandeau-vue {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1rem;
+  gap: .5rem;
+  align-items: center;
+  margin-bottom: .75rem;
 }
 
-.barre-outils .note { margin: .2rem 0 0; }
+.bandeau-vue .onglets { margin-top: 0; }
 .actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .actions .champ { width: auto; min-width: 14rem; }
 .actions .etiquette { display: inline; }
@@ -162,6 +184,13 @@ main { padding: 1.5rem; max-width: 1100px; }
 }
 
 .boite-vide { padding: 1.5rem .9rem; text-align: center; color: var(--texte-doux); font-size: .875rem; }
+
+/* Les gestes lourds d'une page — renommer tous les dépôts d'un groupe,
+   l'oublier — viennent à la fin, sous leur propre intitulé, dans des boîtes
+   cernées de la couleur du danger : on ne doit pas y arriver en passant. */
+h2.zone-sensible { margin: 2rem 0 .75rem; font-size: 1rem; color: var(--erreur); }
+.boite.sensible { border-color: var(--erreur); }
+.boite-corps .nomenclature { margin: 0; }
 
 /* --------------------------------------------------------- liste de travaux */
 
@@ -280,9 +309,6 @@ main { padding: 1.5rem; max-width: 1100px; }
   font-size: .6875rem;
   color: var(--texte-doux);
 }
-/* Un membre que la liste du groupe ne connaît pas : il a l'accès sans être
-   inscrit nulle part, et cela doit se voir. */
-.jeton.etranger { color: var(--erreur); border-style: dashed; }
 /* Un membre qu'on a mis là soi-même, par opposition à ceux que GitHub a
    désignés : la différence compte quand on relit une composition. */
 .jeton.choisi { color: var(--lien); border-color: var(--lien); }
@@ -378,6 +404,9 @@ main { padding: 1.5rem; max-width: 1100px; }
 .bouton.inverse:hover:not(:disabled) { background: var(--sombre-survol); }
 .bouton.rouge { color: var(--erreur); }
 .bouton.rouge:hover:not(:disabled) { background: var(--erreur); color: var(--erreur-texte); }
+/* Un filtre posé se dit par son nombre et par la couleur des liens, pas par le
+   vert : le vert dit le geste à faire, un filtre n'en est pas un. */
+.bouton.actif { color: var(--lien); border-color: var(--lien); }
 
 .lien {
   border: 0;
@@ -489,6 +518,24 @@ textarea.champ { resize: vertical; font-family: var(--police-mono); }
 
 .menu-liste button:hover:not(:disabled) { background: var(--fond-creux); }
 .menu-liste button:disabled { opacity: .55; cursor: default; }
+.menu-liste button.rouge { color: var(--erreur); }
+
+/* Un menu d'actions se lit par sections : ce qu'on fait à tous les dépôts d'un
+   côté, ce qu'on fait au travail de l'autre. La section est un intitulé, pas
+   une commande. */
+.menu-section {
+  margin: 0;
+  padding: .45rem .6rem .2rem;
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--texte-doux);
+}
+
+.menu-section:not(:first-child) { margin-top: .3rem; border-top: 1px solid var(--bord); padding-top: .55rem; }
+
+/* Un bouton qui déplie un menu le dit par sa flèche : sans elle, « Actions »
+   se lirait comme une commande. */
+.bouton.deroulant::after { content: '▾'; margin-left: .4rem; font-size: .8em; }
 
 /* Le tri est là où il se lit : dans l'en-tête de la colonne qu'il ordonne. */
 .tableau.triable th[data-tri] { padding: 0; }

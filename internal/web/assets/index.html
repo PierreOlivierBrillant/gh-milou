@@ -28,25 +28,137 @@
   <button type="button" id="quitter" class="bouton discret inverse">Quitter</button>
 </header>
 
-<!-- En-tête de page. Le même du haut de la hiérarchie jusqu'au groupe : c'est
-     là que vivent le fil d'Ariane, le titre et ce qui doit être signalé. -->
+<!-- En-tête de page. Le même sur toutes les vues : le fil d'Ariane, qui sert
+     aussi de retour ; le titre, qui est l'objet affiché ; ce qui doit être
+     signalé ; et la seule zone d'actions de la page. Une vue n'a pas de barre à
+     elle : ce qu'elle dit d'elle-même et ce qu'on y fait sont déclarés ici,
+     sous « data-pour », et l'en-tête ne montre que ce qui revient à la vue
+     ouverte. Une action posée ailleurs ne se retrouverait pas d'une page à
+     l'autre. -->
 <div class="entete-page" id="entete-page" hidden>
-  <nav class="fil" id="fil"></nav>
-  <div class="ligne-cours">
-    <div class="titre-bloc">
-      <h1 id="page-titre">…</h1>
-      <p class="note" id="page-sous-titre"></p>
+  <div class="entete-page-corps">
+    <nav class="fil" id="fil"></nav>
+    <div class="ligne-cours">
+      <div class="titre-bloc">
+        <div class="titre-ligne">
+          <h1 id="page-titre">…</h1>
+          <button type="button" id="page-recharger" class="lien icone" hidden></button>
+        </div>
+        <p class="note" id="page-sous-titre"></p>
+        <p class="note" id="detail-resume" data-pour="travail"></p>
+        <p class="note" id="pl-regles-sous-titre" data-pour="plagiat-regles"></p>
+        <p class="note" id="pl-rapport-resume" data-pour="plagiat-rapport"></p>
+        <p class="note" id="pl-paire-resume" data-pour="plagiat-paire"></p>
+        <p class="note" id="pl-fichier-resume" data-pour="plagiat-fichier"></p>
+      </div>
+
+      <!-- Au plus un geste primaire, vert, et seulement s'il a quelque chose à
+           faire ; deux secondaires ; le reste dans « Actions », en sections. -->
+      <div class="actions" id="page-actions">
+        <div class="actions" data-pour="parcours">
+          <button type="button" id="parcours-annuaire" class="bouton">Utilisateurs</button>
+          <button type="button" id="parcours-reprise" class="bouton">Reprendre des dépôts</button>
+          <button type="button" id="parcours-nouveau" class="bouton vert">Nouveau groupe</button>
+        </div>
+
+        <div class="actions" data-pour="fiche">
+          <div class="menu-ancre" id="fiche-menu-ancre" hidden>
+            <button type="button" id="fiche-menu-ouvrir" class="bouton deroulant"
+              aria-expanded="false" aria-haspopup="true" aria-controls="fiche-menu">Actions</button>
+            <div class="menu-flottant menu-liste" id="fiche-menu" hidden role="menu">
+              <button type="button" id="fiche-reunir" role="menuitem" hidden>Réunir à un autre compte…</button>
+              <button type="button" id="fiche-separer" role="menuitem" hidden>Séparer un compte…</button>
+              <button type="button" id="fiche-role-bouton" role="menuitem" hidden></button>
+            </div>
+          </div>
+          <button type="button" id="fiche-nommer" class="bouton" hidden></button>
+        </div>
+
+        <div class="actions" data-pour="travaux">
+          <button type="button" id="travaux-remises" class="bouton">Relever les remises</button>
+          <button type="button" id="travaux-nouveau" class="bouton vert">Nouveau travail</button>
+        </div>
+
+        <div class="actions" data-pour="travail">
+          <div class="menu-ancre">
+            <button type="button" id="detail-menu-ouvrir" class="bouton deroulant"
+              aria-expanded="false" aria-haspopup="true"
+              aria-controls="detail-menu">Actions</button>
+            <!-- Les écritures en masse d'un côté, les propriétés du travail de
+                 l'autre : renommer le travail n'est pas une action sur ses
+                 dépôts, même s'il les renomme. -->
+            <div class="menu-flottant menu-liste" id="detail-menu" hidden role="menu">
+              <p class="menu-section">Tous les dépôts</p>
+              <button type="button" id="detail-acces" role="menuitem">Inspecter les accès</button>
+              <button type="button" id="detail-inviter" role="menuitem">Envoyer les invitations manquantes…</button>
+              <button type="button" id="detail-fichier" role="menuitem">Déposer un fichier dans tous les dépôts…</button>
+              <button type="button" id="detail-partager" role="menuitem" hidden>Partager avec les équipes…</button>
+              <button type="button" id="detail-remises" role="menuitem">Relever les remises</button>
+              <p class="menu-section">Ce travail</p>
+              <button type="button" id="detail-plagiat" role="menuitem">Comparer les copies…</button>
+              <button type="button" id="detail-echeance" role="menuitem">Date cible…</button>
+              <button type="button" id="detail-renommer" role="menuitem">Renommer…</button>
+              <button type="button" id="detail-deplacer" role="menuitem">Déplacer…</button>
+            </div>
+          </div>
+          <button type="button" id="detail-distribuer" class="bouton vert" hidden>Distribuer aux manquants</button>
+        </div>
+
+        <div class="actions" data-pour="etudiants">
+          <div class="menu-ancre">
+            <button type="button" id="etudiants-menu-ouvrir" class="bouton deroulant"
+              aria-expanded="false" aria-haspopup="true"
+              aria-controls="etudiants-menu">Actions</button>
+            <div class="menu-flottant menu-liste" id="etudiants-menu" hidden role="menu">
+              <button type="button" id="etudiants-noms" role="menuitem" hidden>Retrouver les noms complets</button>
+              <button type="button" id="etudiants-importer" role="menuitem">Remplacer la liste…</button>
+            </div>
+          </div>
+          <button type="button" id="etudiants-ajouter" class="bouton vert">Ajouter un étudiant…</button>
+        </div>
+
+        <div class="actions" data-pour="equipes">
+          <button type="button" id="equipes-adopter" class="bouton">Adopter une équipe…</button>
+          <button type="button" id="equipes-nouvelle" class="bouton vert">Nouvelle équipe</button>
+        </div>
+
+        <div class="actions" data-pour="plagiat">
+          <button type="button" id="pl-apercu" class="bouton">Aperçu</button>
+          <div class="menu-ancre">
+            <button type="button" id="pl-menu-ouvrir" class="bouton deroulant"
+              aria-expanded="false" aria-haspopup="true"
+              aria-controls="pl-menu">Actions</button>
+            <div class="menu-flottant menu-liste" id="pl-menu" hidden role="menu">
+              <p class="menu-section">Avec un collègue</p>
+              <button type="button" id="pl-contre" role="menuitem">Comparer avec un collègue…</button>
+              <button type="button" id="pl-envoyer" role="menuitem">Envoyer ces copies à un collègue…</button>
+              <button type="button" id="pl-recevoir" role="menuitem">Ajouter des copies reçues…</button>
+              <p class="menu-section">L’organisation</p>
+              <button type="button" id="pl-rattraper" role="menuitem">Publier les index manquants…</button>
+              <button type="button" id="pl-regles-ouvrir" role="menuitem">Règles de comparaison…</button>
+            </div>
+          </div>
+          <button type="button" id="pl-lancer" class="bouton vert">Analyser</button>
+        </div>
+
+        <div class="actions" data-pour="plagiat-regles">
+          <button type="button" id="pl-regles-ecrire" class="bouton vert">Enregistrer</button>
+        </div>
+
+        <div class="actions" data-pour="plagiat-rapport">
+          <button type="button" id="pl-rapport-publier" class="bouton">Publier l’index…</button>
+          <button type="button" id="pl-rapport-rejouer" class="bouton">Nouvelle analyse</button>
+        </div>
+      </div>
     </div>
-    <div class="actions" id="page-actions"></div>
+    <div id="page-avis" class="avis-pile" hidden></div>
+    <nav class="onglets" id="onglets" hidden>
+      <button type="button" data-vue="travaux" class="actif">Travaux</button>
+      <button type="button" data-vue="etudiants">Étudiants</button>
+      <button type="button" data-vue="equipes">Équipes</button>
+      <button type="button" data-vue="groupe-reglages">Réglages du groupe</button>
+    </nav>
   </div>
-  <p class="nomenclature" id="page-nomenclature" hidden></p>
-  <div id="page-avis" class="avis-pile" hidden></div>
-  <nav class="onglets" id="onglets" hidden>
-    <button type="button" data-vue="travaux" class="actif">Travaux</button>
-    <button type="button" data-vue="etudiants">Étudiants</button>
-    <button type="button" data-vue="equipes">Équipes</button>
-    <button type="button" data-vue="groupe-reglages">Réglages du groupe</button>
-  </nav>
 </div>
 
 <main>
@@ -409,9 +521,11 @@
   <!-- La seule vue centrée sur une personne : son rôle, ses comptes, et la
        chronologie de son passage — cours suivis et cours donnés mêlés. -->
   <section id="vue-fiche" class="vue" hidden>
+    <!-- Le nom est le titre de la page, et ce qu'on fait de la personne est
+         dans son en-tête : la boîte ne dit que qui elle est. -->
     <div class="boite">
       <div class="boite-entete">
-        <strong id="fiche-nom"></strong>
+        <strong>Identité</strong>
         <span class="jeton" id="fiche-role" hidden></span>
         <span class="espace"></span>
         <span class="note" id="fiche-resume"></span>
@@ -419,20 +533,8 @@
       <div class="boite-corps">
         <div class="fiche-comptes" id="fiche-comptes"></div>
         <p class="aide" id="fiche-matricule" hidden></p>
-        <div class="actions" id="fiche-nommage" hidden>
-          <button type="button" id="fiche-nommer" class="bouton"></button>
-          <span class="aide" id="fiche-nommage-aide"></span>
-        </div>
-        <div class="actions" id="fiche-reunion" hidden>
-          <button type="button" id="fiche-reunir" class="bouton petit">Réunir à un autre compte…</button>
-          <button type="button" id="fiche-separer" class="bouton petit" hidden>Séparer un compte…</button>
-        </div>
+        <p class="aide" id="fiche-nommage-aide" hidden></p>
         <div id="fiche-avis" class="avis-pile"></div>
-      </div>
-      <div class="boite-pied" id="fiche-pied" hidden>
-        <span class="aide" id="fiche-role-aide"></span>
-        <span class="espace"></span>
-        <button type="button" id="fiche-role-bouton" class="bouton"></button>
       </div>
     </div>
 
@@ -513,17 +615,6 @@
 
   <!-- ---------------------------------------------------- travaux du groupe -->
   <section id="vue-travaux" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <h2 id="travaux-compte">Travaux</h2>
-        <p class="note" id="travaux-source"></p>
-      </div>
-      <div class="actions">
-        <button type="button" id="travaux-remises" class="bouton">Relever les remises</button>
-        <button type="button" id="travaux-recharger" class="bouton">Recharger</button>
-        <button type="button" id="travaux-nouveau" class="bouton vert">Nouveau travail</button>
-      </div>
-    </div>
     <div class="boite">
       <div class="boite-entete" id="travaux-bandeau" hidden>
         <label class="case"><input type="checkbox" id="travaux-tout">
@@ -537,35 +628,6 @@
 
   <!-- ------------------------------------------------------ détail d'un travail -->
   <section id="vue-travail" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <h2 id="detail-titre"></h2>
-        <p class="note" id="detail-resume"></p>
-      </div>
-      <!-- Ce qu'on fait au travail entier tient dans un menu : distribuer aux
-           manquants est ce qu'on vient y faire presque toujours, le reste ne
-           mérite pas d'occuper la barre à demeure. -->
-      <div class="actions">
-        <div class="menu-ancre">
-          <button type="button" id="detail-menu-ouvrir" class="bouton"
-            aria-expanded="false" aria-haspopup="true"
-            aria-controls="detail-menu">Ce travail</button>
-          <div class="menu-flottant menu-liste" id="detail-menu" hidden role="menu">
-            <button type="button" id="detail-acces" role="menuitem">Inspecter les accès</button>
-            <button type="button" id="detail-inviter" role="menuitem">Envoyer les invitations manquantes…</button>
-            <button type="button" id="detail-fichier" role="menuitem">Déposer un fichier dans tous les dépôts…</button>
-            <button type="button" id="detail-remises" role="menuitem">Relever les remises</button>
-            <button type="button" id="detail-plagiat" role="menuitem">Comparer les copies entre elles…</button>
-            <button type="button" id="detail-echeance" role="menuitem">Date cible…</button>
-            <button type="button" id="detail-partager" role="menuitem" hidden>Partager avec les équipes…</button>
-            <button type="button" id="detail-renommer" role="menuitem">Renommer ce travail…</button>
-            <button type="button" id="detail-deplacer" role="menuitem">Déplacer ce travail…</button>
-          </div>
-        </div>
-        <button type="button" id="detail-distribuer" class="bouton vert">Distribuer aux manquants</button>
-      </div>
-    </div>
-
     <div class="boite">
       <div class="boite-entete">
         <label class="case"><input type="checkbox" id="detail-tout"> <span id="detail-selection"></span></label>
@@ -783,7 +845,7 @@
         <div class="pied-etape">
           <button type="button" class="bouton" data-continuer="2">Revenir</button>
           <span class="espace"></span>
-          <button type="button" id="lancer-simulation" class="bouton">Simuler</button>
+          <button type="button" id="lancer-simulation" class="bouton">Aperçu</button>
           <button type="button" id="lancer-creation" class="bouton vert">Distribuer</button>
         </div>
       </div>
@@ -792,19 +854,6 @@
 
   <!-- ------------------------------------------------- étudiants du groupe -->
   <section id="vue-etudiants" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <h2>Étudiants</h2>
-        <p class="note" id="etudiants-resume"></p>
-      </div>
-      <div class="actions">
-        <button type="button" id="etudiants-noms" class="bouton">Retrouver les noms complets</button>
-        <button type="button" id="etudiants-importer" class="bouton">Remplacer la liste…</button>
-        <button type="button" id="etudiants-recharger" class="bouton">Recharger</button>
-        <button type="button" id="etudiants-ajouter" class="bouton vert">Ajouter un étudiant…</button>
-      </div>
-    </div>
-
     <div class="boite">
       <div class="boite-entete">
         <label class="case"><input type="checkbox" id="etudiants-tout">
@@ -852,7 +901,7 @@
       <table class="tableau triable" id="etudiants-table">
         <thead><tr>
           <th class="etroit"></th>
-          <th data-tri="nom"><button type="button">Utilisateur<span class="fleche"></span></button></th>
+          <th data-tri="nom"><button type="button">Étudiant<span class="fleche"></span></button></th>
           <th data-tri="compte"><button type="button">Compte GitHub<span class="fleche"></span></button></th>
           <th>Équipe</th>
           <th>Travaux</th>
@@ -872,20 +921,8 @@
        qu'un nom d'équipe donné : sans cela, deux groupes ne pourraient pas avoir
        chacun leur « eq1 ». -->
   <section id="vue-equipes" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <h2>Équipes</h2>
-        <p class="note" id="equipes-resume"></p>
-      </div>
-      <div class="actions">
-        <button type="button" id="equipes-adopter" class="bouton">Adopter une équipe…</button>
-        <button type="button" id="equipes-recharger" class="bouton">Recharger</button>
-        <button type="button" id="equipes-nouvelle" class="bouton vert">Nouvelle équipe</button>
-      </div>
-    </div>
-
     <div class="boite">
-      <div class="boite-entete"><strong>Équipes du groupe</strong></div>
+      <div class="boite-entete"><strong id="equipes-resume"></strong></div>
       <div id="equipes-liste"></div>
       <div class="boite-vide" id="equipes-vide" hidden></div>
     </div>
@@ -902,67 +939,9 @@
 
   <!-- ------------------------------------------------- réglages du groupe -->
   <section id="vue-groupe-reglages" class="vue" hidden>
-    <div class="boite" id="migration-boite">
-      <div class="boite-entete"><strong id="migration-titre">Déplacer le groupe</strong></div>
-      <div class="boite-corps">
-        <p class="note" id="migration-note"></p>
-        <div class="rangee">
-          <label class="champ-bloc">
-            <span class="etiquette">Session</span>
-            <input type="text" id="mig-session" class="champ" placeholder="a26">
-          </label>
-          <label class="champ-bloc">
-            <span class="etiquette">Cours</span>
-            <input type="text" id="mig-cours" class="champ" placeholder="5N6">
-          </label>
-          <label class="champ-bloc">
-            <span class="etiquette">Groupe</span>
-            <input type="text" id="mig-section" class="champ" placeholder="01">
-          </label>
-        </div>
-        <p class="aide">Les dépôts deviendront <code id="mig-apercu"></code>.</p>
-        <div class="actions">
-          <button type="button" id="mig-apercu-bouton" class="bouton">Prévisualiser le renommage</button>
-          <span class="note" id="mig-resume"></span>
-        </div>
-        <div id="mig-avis" class="avis-pile"></div>
-        <label class="case" id="mig-ignorer-case" hidden><input type="checkbox" id="mig-ignorer">
-          <span>Laisser en place les dépôts qui ne peuvent pas être renommés
-            <span class="aide">Le groupe ne bascule alors pas : il continue de les voir.</span></span></label>
-        <table class="tableau" id="mig-table" hidden>
-          <thead><tr><th>Dépôt actuel</th><th>Nouveau nom</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="boite-pied">
-        <span class="espace"></span>
-        <button type="button" id="mig-lancer" class="bouton vert" disabled>Renommer les dépôts</button>
-      </div>
-    </div>
-
-    <div class="boite">
-      <div class="boite-entete">
-        <strong>Équipe enseignante</strong>
-        <span class="jeton" id="cloison-etat"></span>
-      </div>
-      <div class="boite-corps">
-        <p class="note">Elle reçoit les dépôts du groupe. Ceux qui n’en sont pas
-          ne les voient pas : c’est ce qui sépare deux enseignants d’un même cours.</p>
-        <p class="aide">Équipe GitHub <code id="cloison-nom"></code>.
-          Seul un utilisateur reconnu comme enseignant peut y être inscrit.</p>
-        <div id="cloison-choix" class="pile-cases"></div>
-        <div class="boite-vide" id="cloison-vide" hidden>
-          Aucun enseignant n’est reconnu dans cette organisation. Ouvrez la fiche
-          de quelqu’un depuis l’annuaire pour l’y reconnaître.
-        </div>
-        <div id="cloison-avis" class="avis-pile"></div>
-      </div>
-      <div class="boite-pied">
-        <span class="espace"></span>
-        <button type="button" id="cloison-appliquer" class="bouton vert">Appliquer</button>
-      </div>
-    </div>
-
+    <!-- Le réglage de tous les jours d'abord, les gestes lourds à la fin : on
+         ne renomme pas tous les dépôts d'un groupe en allant changer le droit
+         accordé. -->
     <div class="boite">
       <div class="boite-entete"><strong>Réglages par défaut des travaux</strong></div>
       <div class="boite-corps">
@@ -992,8 +971,83 @@
           <span>Inviter chaque étudiant sur son dépôt</span></label>
       </div>
       <div class="boite-pied">
-        <button type="button" id="gr-enregistrer" class="bouton vert">Enregistrer</button>
         <span class="espace"></span>
+        <button type="button" id="gr-enregistrer" class="bouton vert">Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="boite">
+      <div class="boite-entete">
+        <strong>Équipe enseignante</strong>
+        <span class="jeton" id="cloison-etat"></span>
+      </div>
+      <div class="boite-corps">
+        <p class="note">Elle reçoit les dépôts du groupe. Ceux qui n’en sont pas
+          ne les voient pas : c’est ce qui sépare deux enseignants d’un même cours.</p>
+        <p class="aide">Équipe GitHub <code id="cloison-nom"></code>.
+          Seul un utilisateur reconnu comme enseignant peut y être inscrit.</p>
+        <div id="cloison-choix" class="pile-cases"></div>
+        <div class="boite-vide" id="cloison-vide" hidden>
+          Aucun enseignant n’est reconnu dans cette organisation. Ouvrez la fiche
+          de quelqu’un depuis l’annuaire pour l’y reconnaître.
+        </div>
+        <div id="cloison-avis" class="avis-pile"></div>
+      </div>
+      <div class="boite-pied">
+        <span class="espace"></span>
+        <button type="button" id="cloison-enregistrer" class="bouton vert">Enregistrer</button>
+      </div>
+    </div>
+
+    <h2 class="zone-sensible">Zone sensible</h2>
+
+    <div class="boite sensible" id="migration-boite">
+      <div class="boite-entete"><strong id="migration-titre">Déplacer le groupe</strong></div>
+      <div class="boite-corps">
+        <!-- La nomenclature n'est pas à relire à chaque onglet : elle se lit
+             ici, où l'on peut la changer, et dans l'infobulle du titre. -->
+        <p class="nomenclature" id="groupe-nomenclature"></p>
+        <p class="note" id="migration-note"></p>
+        <div class="rangee">
+          <label class="champ-bloc">
+            <span class="etiquette">Session</span>
+            <input type="text" id="mig-session" class="champ" placeholder="a26">
+          </label>
+          <label class="champ-bloc">
+            <span class="etiquette">Cours</span>
+            <input type="text" id="mig-cours" class="champ" placeholder="5N6">
+          </label>
+          <label class="champ-bloc">
+            <span class="etiquette">Groupe</span>
+            <input type="text" id="mig-section" class="champ" placeholder="01">
+          </label>
+        </div>
+        <p class="aide">Les dépôts deviendront <code id="mig-apercu"></code>.</p>
+        <div id="mig-avis" class="avis-pile"></div>
+        <label class="case" id="mig-ignorer-case" hidden><input type="checkbox" id="mig-ignorer">
+          <span>Laisser en place les dépôts qui ne peuvent pas être renommés
+            <span class="aide">Le groupe ne bascule alors pas : il continue de les voir.</span></span></label>
+        <table class="tableau" id="mig-table" hidden>
+          <thead><tr><th>Dépôt actuel</th><th>Nouveau nom</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <!-- L'aperçu vient avant le bouton qui écrit, et c'est lui qui l'ouvre. -->
+      <div class="boite-pied">
+        <span class="note" id="mig-resume"></span>
+        <span class="espace"></span>
+        <button type="button" id="mig-apercu-bouton" class="bouton">Aperçu</button>
+        <button type="button" id="mig-lancer" class="bouton rouge" disabled>Renommer les dépôts</button>
+      </div>
+    </div>
+
+    <div class="boite sensible">
+      <div class="boite-entete"><strong>Oublier ce groupe</strong></div>
+      <div class="boite-corps">
+        <p class="note">La liste des étudiants et les réglages retenus pour ce groupe
+          sont oubliés. Aucun dépôt n’est supprimé sur GitHub.</p>
+      </div>
+      <div class="boite-pied">
         <button type="button" id="gr-supprimer" class="bouton rouge">Oublier la liste et les réglages</button>
       </div>
     </div>
@@ -1005,29 +1059,6 @@
        coûtera, on lance, on lit. Une analyse lancée à l'aveugle sur cinq ans de
        dépôts se termine mal, et personne ne saurait dire pourquoi. -->
   <section id="vue-plagiat" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <h2 id="pl-titre">Comparer les copies</h2>
-        <p class="note" id="pl-sous-titre"></p>
-      </div>
-      <div class="actions">
-        <div class="menu-ancre">
-          <button type="button" id="pl-menu-ouvrir" class="bouton"
-            aria-expanded="false" aria-haspopup="true"
-            aria-controls="pl-menu">Échanger</button>
-          <div class="menu-flottant menu-liste" id="pl-menu" hidden role="menu">
-            <button type="button" id="pl-contre" role="menuitem">Comparer avec un collègue…</button>
-            <button type="button" id="pl-envoyer" role="menuitem">Envoyer ces copies à un collègue…</button>
-            <button type="button" id="pl-recevoir" role="menuitem">Ajouter des copies reçues…</button>
-            <button type="button" id="pl-rattraper" role="menuitem">Publier les index manquants…</button>
-            <button type="button" id="pl-regles-ouvrir" role="menuitem">Règles de comparaison…</button>
-          </div>
-        </div>
-        <button type="button" id="pl-apercu" class="bouton">Voir ce qui sera comparé</button>
-        <button type="button" id="pl-lancer" class="bouton vert">Analyser</button>
-      </div>
-    </div>
-
     <p class="avertissement" id="pl-avertissement"></p>
 
     <div class="boite">
@@ -1110,15 +1141,6 @@
        une personne le déclare, et les analyses de chacun retrouvent dès lors
        les copies d'il y a trois ans. -->
   <section id="vue-plagiat-regles" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <p class="note" id="pl-regles-sous-titre"></p>
-      </div>
-      <div class="actions">
-        <button type="button" id="pl-regles-retour" class="bouton">Retour</button>
-        <button type="button" id="pl-regles-ecrire" class="bouton vert">Écrire au registre</button>
-      </div>
-    </div>
     <p class="avertissement" id="pl-regles-surcharge" hidden></p>
 
     <div class="boite">
@@ -1152,16 +1174,6 @@
 
   <!-- ------------------------------------------------- plagiat : rapport -->
   <section id="vue-plagiat-rapport" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <p class="note" id="pl-rapport-resume"></p>
-      </div>
-      <div class="actions">
-        <button type="button" id="pl-rapport-publier" class="bouton">Publier l’index…</button>
-        <button type="button" id="pl-rapport-rejouer" class="bouton">Nouvelle analyse</button>
-      </div>
-    </div>
-
     <p class="avertissement" id="pl-rapport-avertissement"></p>
     <div id="pl-rapport-soucis"></div>
 
@@ -1207,14 +1219,6 @@
 
   <!-- ------------------------------------------- plagiat : deux projets -->
   <section id="vue-plagiat-paire" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <p class="note" id="pl-paire-resume"></p>
-      </div>
-      <div class="actions">
-        <button type="button" id="pl-paire-retour" class="bouton">Retour au rapport</button>
-      </div>
-    </div>
     <p class="avertissement" id="pl-paire-avertissement"></p>
     <div id="pl-paire-chronologie"></div>
     <div class="boite">
@@ -1238,20 +1242,18 @@
 
   <!-- ------------------------------------------ plagiat : deux fichiers -->
   <section id="vue-plagiat-fichier" class="vue" hidden>
-    <div class="barre-outils">
-      <div>
-        <p class="note" id="pl-fichier-resume"></p>
+    <!-- Les lectures et le saut d'un passage à l'autre règlent ce qu'on voit
+         des deux fichiers : ils vivent avec eux, pas dans l'en-tête, qui ne
+         porte que les gestes de la page. -->
+    <div class="bandeau-vue">
+      <div class="onglets pl-modes" role="tablist">
+        <button type="button" data-mode="commun" class="actif">Ce qui est commun</button>
+        <button type="button" data-mode="different">Ce qui diffère</button>
+        <button type="button" data-mode="jetons">Ce que le moteur compare</button>
       </div>
-      <div class="actions">
-        <div class="onglets pl-modes" role="tablist">
-          <button type="button" data-mode="commun" class="actif">Ce qui est commun</button>
-          <button type="button" data-mode="different">Ce qui diffère</button>
-          <button type="button" data-mode="jetons">Ce que le moteur compare</button>
-        </div>
-        <button type="button" id="pl-fichier-precedent" class="bouton petit">← Fragment</button>
-        <button type="button" id="pl-fichier-suivant" class="bouton petit">Fragment →</button>
-        <button type="button" id="pl-fichier-retour" class="bouton">Retour</button>
-      </div>
+      <span class="espace"></span>
+      <button type="button" id="pl-fichier-precedent" class="bouton petit">← Fragment</button>
+      <button type="button" id="pl-fichier-suivant" class="bouton petit">Fragment →</button>
     </div>
     <p class="note" id="pl-mode-explication"></p>
     <div class="pl-cote-a-cote">
@@ -1294,8 +1296,9 @@
         <div id="jeton-avis" class="avis-pile"></div>
       </div>
       <div class="boite-pied">
-        <button type="button" id="jeton-renouveler" class="bouton">Générer un nouveau jeton</button>
         <span class="note" id="jeton-etat"></span>
+        <span class="espace"></span>
+        <button type="button" id="jeton-renouveler" class="bouton">Générer un nouveau jeton</button>
       </div>
     </div>
 
@@ -1326,11 +1329,14 @@
           </label>
         </div>
       </div>
+      <!-- Le geste qui détruit à gauche, loin de celui qui publie ; l'aperçu
+           avant le bouton qui écrit. -->
       <div class="boite-pied">
-        <button type="button" id="registre-apercu" class="bouton">Voir ce qui monterait</button>
-        <button type="button" id="registre-publier" class="bouton vert" hidden>Publier</button>
         <button type="button" id="registre-oublier" class="bouton rouge">Effacer l'historique</button>
+        <span class="espace"></span>
         <span class="note" id="registre-etat"></span>
+        <button type="button" id="registre-apercu" class="bouton">Aperçu</button>
+        <button type="button" id="registre-publier" class="bouton vert" hidden>Publier</button>
       </div>
     </div>
 
@@ -1342,7 +1348,6 @@
       </table>
       <div class="boite-pied">
         <button type="button" id="cache-vider" class="bouton">Vider le cache local</button>
-        <span class="note" id="reglages-etat"></span>
       </div>
     </div>
 
@@ -1378,7 +1383,9 @@
         <p class="note" id="reglages-selecteur"></p>
       </div>
       <div class="boite-pied">
-        <button type="button" id="reglages-enregistrer" class="bouton">Mémoriser</button>
+        <span class="note" id="reglages-etat"></span>
+        <span class="espace"></span>
+        <button type="button" id="reglages-enregistrer" class="bouton vert">Enregistrer</button>
       </div>
     </div>
   </section>
