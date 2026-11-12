@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -156,8 +155,8 @@ func (s *Server) releve(cours classroom.Classroom, titre string, noms []string,
 		// Un dépôt illisible — un jeton sans droit dessus — n'est pas relevé.
 		// Le taire ferait croire qu'il est vide.
 		if manquants := len(noms) - len(remises); manquants > 0 {
-			job.Warn(fmt.Sprintf("%d dépôt(s) n'ont pas pu être lus : leur historique "+
-				"reste inconnu.", manquants))
+			job.Warn(valid.Plural(manquants, "dépôt n'a pas pu être lu : son historique reste inconnu.",
+				"dépôts n'ont pas pu être lus : leur historique reste inconnu."))
 		}
 		s.pourquoiRien(cours, remises, job)
 		return resultat(remises), nil

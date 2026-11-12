@@ -194,7 +194,7 @@ func TestFichiersDeDepart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rapport.Results[0].Starter != "2 fichier(s)" {
+	if rapport.Results[0].Starter != "2 fichiers" {
 		t.Fatalf("fichiers de départ = %q", rapport.Results[0].Starter)
 	}
 	contenu := serveur.State.Files("acme/tp1-emilie-cote", "main")
@@ -247,7 +247,7 @@ func TestForcerLesFichiersDeDepart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rapport.Results[0].Starter != "2 fichier(s)" {
+	if rapport.Results[0].Starter != "2 fichiers" {
 		t.Fatalf("fichiers de départ = %q", rapport.Results[0].Starter)
 	}
 	contenu := serveur.State.Files("acme/tp1-emilie-cote", "main")
@@ -271,7 +271,7 @@ func TestRepriseApresEnvoiInterrompu(t *testing.T) {
 	if rapport.Results[0].Status != runner.Existing {
 		t.Fatalf("statut = %q", rapport.Results[0].Status)
 	}
-	if rapport.Results[0].Starter != "2 fichier(s)" {
+	if rapport.Results[0].Starter != "2 fichiers" {
 		t.Fatalf("un dépôt vide doit être complété : %q", rapport.Results[0].Starter)
 	}
 	if len(serveur.State.Files("acme/tp1-emilie-cote", "main")) != 2 {
@@ -350,7 +350,7 @@ func TestSimulationNEcritRien(t *testing.T) {
 	if rapport.Results[0].Collaborator != runner.CollaboratorYes {
 		t.Errorf("invitation annoncée = %q", rapport.Results[0].Collaborator)
 	}
-	if rapport.Results[0].Starter != "2 fichier(s) prévus" {
+	if rapport.Results[0].Starter != "2 fichiers prévus" {
 		t.Errorf("fichiers annoncés = %q", rapport.Results[0].Starter)
 	}
 }

@@ -146,8 +146,8 @@ func (i *importSession) run() (int, error) {
 		return ExitOK, nil
 	}
 	if !i.session.Options.Yes {
-		suite, err := i.session.Prompt.Confirm(plural(
-			"Renommer %d dépôt(s) et déclarer le groupe ?", len(plan.Moves)), false)
+		suite, err := i.session.Prompt.Confirm(
+			"Renommer "+valid.Plural(len(plan.Moves), "dépôt")+" et déclarer le groupe ?", false)
 		if err != nil {
 			return ExitOK, err
 		}
@@ -204,14 +204,15 @@ func (i *importSession) choisirTravail(dehors classroom.Foreign) (string, error)
 		return demande, nil
 	}
 
-	console.Printf("  %s dépôt(s) hors nomenclature.", console.Info(itoa(len(dehors.Repos))))
+	console.Printf("  %s %s hors nomenclature.", console.Info(itoa(len(dehors.Repos))),
+		valid.Agree(len(dehors.Repos), "dépôt"))
 	if len(dehors.Assignments) == 0 {
 		return "", valid.Errorf(
 			"Aucun préfixe commun dans ces dépôts : nommez-le avec --import.")
 	}
 	rows := make([][]string, 0, len(dehors.Assignments))
 	for _, travail := range dehors.Assignments {
-		rows = append(rows, []string{travail.Prefix, itoa(travail.Count) + " dépôt(s)"})
+		rows = append(rows, []string{travail.Prefix, valid.Plural(travail.Count, "dépôt")})
 	}
 	console.Table([]string{"Travail", "Dépôts"}, rows, 15)
 
@@ -222,7 +223,7 @@ func (i *importSession) choisirTravail(dehors classroom.Foreign) (string, error)
 	for _, travail := range dehors.Assignments {
 		options = append(options, ui.Option{
 			Value: travail.Prefix,
-			Label: travail.Prefix + " — " + itoa(travail.Count) + " dépôt(s)",
+			Label: travail.Prefix + " — " + valid.Plural(travail.Count, "dépôt"),
 		})
 	}
 	options = append(options, ui.Option{Value: "", Label: "Revenir"})
@@ -306,7 +307,7 @@ func (i *importSession) choisirParmiLesCaches(plan classroom.Import) (string, er
 		plan.Prefix, len(plan.Splits))
 	rows := make([][]string, 0, len(plan.Splits))
 	for _, travail := range plan.Splits {
-		rows = append(rows, []string{travail.Prefix, itoa(travail.Count) + " dépôt(s)"})
+		rows = append(rows, []string{travail.Prefix, valid.Plural(travail.Count, "dépôt")})
 	}
 	console.Table([]string{"Travail", "Dépôts"}, rows, 15)
 
@@ -319,7 +320,7 @@ func (i *importSession) choisirParmiLesCaches(plan classroom.Import) (string, er
 	for _, travail := range plan.Splits {
 		options = append(options, ui.Option{
 			Value: travail.Prefix,
-			Label: travail.Prefix + " — " + itoa(travail.Count) + " dépôt(s)",
+			Label: travail.Prefix + " — " + valid.Plural(travail.Count, "dépôt"),
 		})
 	}
 	options = append(options, ui.Option{Value: "", Label: "Revenir"})
@@ -454,7 +455,8 @@ func (i *importSession) charger(prefixe string, repos []groups.RepoInfo) (
 	if len(liste.Entries) == 0 {
 		return nil, "", valid.Errorf("Aucun étudiant dans « %s ».", chemin)
 	}
-	console.Printf("  %s étudiant(s) lus.", console.OK(itoa(len(liste.Entries))))
+	console.Printf("  %s %s.", console.OK(itoa(len(liste.Entries))),
+		valid.Agree(len(liste.Entries), "étudiant lu", "étudiants lus"))
 	return liste.Entries, chemin, nil
 }
 
@@ -475,12 +477,14 @@ func (i *importSession) direDejaNommes(prefixe string, repos []groups.RepoInfo) 
 		return
 	}
 	if nommes == total {
-		console.Printf("  %s",
-			console.OK(plural("Les %d dépôt(s) retenus sont déjà nommés par l'organisation.", total)))
+		console.Printf("  %s", console.OK(valid.Agree(total,
+			"Le dépôt retenu est déjà nommé par l'organisation.",
+			"Les "+itoa(total)+" dépôts retenus sont déjà nommés par l'organisation.")))
 		return
 	}
-	console.Printf("  %s des %s dépôt(s) retenus sont déjà nommés par l'organisation.",
-		console.Info(itoa(nommes)), itoa(total))
+	console.Printf("  %s sur %s %s par l'organisation.", console.Info(itoa(nommes)),
+		valid.Plural(total, "dépôt retenu", "dépôts retenus"),
+		valid.Agree(nommes, "est déjà nommé", "sont déjà nommés"))
 }
 
 // comptesRetenus rend, pour chaque dépôt que la reprise garde, le compte que
@@ -593,19 +597,22 @@ func (i *importSession) montrer(plan classroom.Import) {
 	console.Table([]string{"Dépôt", "Deviendra"}, moves, 20)
 
 	if len(plan.Unmatched) > 0 {
-		sort := "repris sous le compte qu'ils portent, faute d'un nom"
+		sort := valid.Agree(len(plan.Unmatched), "repris sous le compte qu'il porte, faute d'un nom",
+			"repris sous le compte qu'ils portent, faute d'un nom")
 		if plan.NamedOnly {
-			sort = "laissés où ils sont"
+			sort = valid.Agree(len(plan.Unmatched), "laissé où il est", "laissés où ils sont")
 		}
 		console.Blank()
 		console.Printf("  %s : %s",
-			console.Warn(plural("%d dépôt(s) sans étudiant connu", len(plan.Unmatched))),
+			console.Warn(valid.Plural(len(plan.Unmatched), "dépôt sans étudiant connu",
+				"dépôts sans étudiant connu")),
 			console.Dim(sort))
 	}
 	if len(plan.Absent) > 0 {
 		console.Blank()
 		console.Printf("  %s : %s",
-			console.Warn(plural("%d étudiant(s) sans dépôt pour ce travail", len(plan.Absent))),
+			console.Warn(valid.Plural(len(plan.Absent), "étudiant sans dépôt pour ce travail",
+				"étudiants sans dépôt pour ce travail")),
 			console.Dim(strings.Join(plan.Absent, ", ")))
 	}
 	// Ailleurs, le compte vient des accès ou du registre. Ici, il ne vient que
@@ -613,7 +620,8 @@ func (i *importSession) montrer(plan classroom.Import) {
 	if len(plan.Unconfirmed) > 0 {
 		console.Blank()
 		console.Printf("  %s : %s",
-			console.Warn(plural("%d compte(s) non confirmé(s)", len(plan.Unconfirmed))),
+			console.Warn(valid.Plural(len(plan.Unconfirmed), "compte non confirmé",
+				"comptes non confirmés")),
 			console.Dim("ni accès ni registre ne les nomment ; ils sont lus dans le nom du dépôt"))
 	}
 }
@@ -660,10 +668,12 @@ func (i *importSession) appliquer(arrivee classroom.Classroom,
 	}
 
 	if echecs > 0 {
-		console.Warning("%d dépôt(s) repris, %d en échec.", renommes, echecs)
+		console.Warning("%s, %d en échec.", valid.Plural(renommes, "dépôt repris", "dépôts repris"),
+			echecs)
 		return ExitFailure, nil
 	}
-	console.Success("%d dépôt(s) repris dans « %s ».", renommes, arrivee.Scope())
+	console.Success("%s dans « %s ».", valid.Plural(renommes, "dépôt repris", "dépôts repris"),
+		arrivee.Scope())
 	return ExitOK, nil
 }
 
@@ -754,9 +764,10 @@ func (i *importSession) laisserLesInconnus(arrivee classroom.Classroom,
 	if len(plan.Unmatched) == 0 || plan.NamedOnly {
 		return plan, nil
 	}
-	laisser, err := i.session.Prompt.Confirm(plural(
-		"Laisser où ils sont les %d dépôt(s) dont l'étudiant est inconnu ?",
-		len(plan.Unmatched)), false)
+	laisser, err := i.session.Prompt.Confirm(valid.Agree(len(plan.Unmatched),
+		"Laisser où il est le dépôt dont l'étudiant est inconnu ?",
+		"Laisser où ils sont les "+itoa(len(plan.Unmatched))+
+			" dépôts dont l'étudiant est inconnu ?"), false)
 	if err != nil || !laisser {
 		return plan, err
 	}

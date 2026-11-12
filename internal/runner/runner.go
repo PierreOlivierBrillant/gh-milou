@@ -309,7 +309,7 @@ func (e *Executor) process(item plan.PlannedRepo, templateOwner, templateRepo st
 			}
 		}
 		if e.starter != nil {
-			result.Starter = fmt.Sprintf("%d fichier(s) prévus", len(e.starter.Files))
+			result.Starter = valid.Plural(len(e.starter.Files), "fichier prévu", "fichiers prévus")
 		}
 		return result
 	default:
@@ -424,7 +424,7 @@ func comptesDe(item plan.PlannedRepo) []string {
 
 // previewStarter annonce en simulation ce qui arriverait aux fichiers de départ.
 func (e *Executor) previewStarter(item plan.PlannedRepo, branch string, force bool) string {
-	planned := fmt.Sprintf("%d fichier(s) prévus", len(e.starter.Files))
+	planned := valid.Plural(len(e.starter.Files), "fichier prévu", "fichiers prévus")
 	if force {
 		return planned
 	}
@@ -465,7 +465,7 @@ func (e *Executor) applyStarter(item plan.PlannedRepo, result *Result, branch st
 		result.Error = "fichiers de départ non déposés : " + err.Error()
 		return false
 	}
-	result.Starter = fmt.Sprintf("%d fichier(s)", count)
+	result.Starter = valid.Plural(count, "fichier")
 	return true
 }
 

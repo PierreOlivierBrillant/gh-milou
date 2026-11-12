@@ -37,7 +37,7 @@ func TestOptionsAvanceesViderLeCache(t *testing.T) {
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("1 entrée(s) supprimée(s)")
+	h.contient("1 entrée supprimée")
 	if _, err := os.Stat(filepath.Join(h.CacheDir, "cache.json")); !os.IsNotExist(err) {
 		t.Error("le fichier de cache aurait dû disparaître")
 	}

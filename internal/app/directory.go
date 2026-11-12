@@ -9,6 +9,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ui"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/users"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // L'annuaire prend la hiérarchie à l'envers. Gérer un groupe répond à « qui est
@@ -26,7 +27,8 @@ func (s *Session) orgRepos(org string, force bool) ([]groups.RepoInfo, error) {
 	if !force {
 		var cached []groups.RepoInfo
 		if s.Cache.Get(key, cache.ReposTTL, &cached) && len(cached) > 0 {
-			s.Console.Printf("  %s dépôt(s) %s", s.Console.OK(itoa(len(cached))),
+			s.Console.Printf("  %s %s %s", s.Console.OK(itoa(len(cached))),
+				valid.Agree(len(cached), "dépôt"),
 				s.Console.Dim("(cache : "+s.Cache.Describe()+")"))
 			return cached, nil
 		}
@@ -44,7 +46,8 @@ func (s *Session) orgRepos(org string, force bool) ([]groups.RepoInfo, error) {
 	// Les dépôts de service sont écartés ici, une fois : rien de ce qui suit
 	// n'a alors à se demander si « .github » est un groupe.
 	repos = groups.Ordinary(repos)
-	s.Console.Printf("  %s dépôt(s) dans l'organisation.", s.Console.OK(itoa(len(repos))))
+	s.Console.Printf("  %s %s dans l'organisation.", s.Console.OK(itoa(len(repos))),
+		valid.Agree(len(repos), "dépôt"))
 	s.Cache.Set(key, repos)
 	return repos, nil
 }
@@ -128,9 +131,9 @@ func (d *directorySession) show() {
 	console := d.session.Console
 	visibles := users.Apply(d.rows, d.filter, d.sortKey, d.sortDesc)
 
-	titre := "Utilisateurs de « " + d.org + " » — " + itoa(len(d.rows)) + " personne(s)"
+	titre := "Utilisateurs de « " + d.org + " » — " + valid.Plural(len(d.rows), "personne")
 	if len(visibles) != len(d.rows) {
-		titre += ", " + itoa(len(visibles)) + " affichée(s)"
+		titre += ", " + itoa(len(visibles)) + " " + valid.Agree(len(visibles), "affichée")
 	}
 	console.Heading(titre)
 	if d.avis != "" {
@@ -180,7 +183,8 @@ func (d *directorySession) show() {
 	// Un dépôt dont le dernier niveau ne désigne personne n'est pas quelqu'un de
 	// plus : le taire ferait lire une liste trouée comme si elle était entière.
 	if d.orphelins > 0 {
-		console.Note("%d dépôt(s) ne se rattachent à aucun étudiant connu.", d.orphelins)
+		console.Note("%s à aucun étudiant connu.", valid.Plural(d.orphelins,
+			"dépôt ne se rattache", "dépôts ne se rattachent"))
 	}
 	console.Note("%s", d.criteria())
 }

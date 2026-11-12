@@ -44,8 +44,8 @@ func TestParcoursInteractifDeCreation(t *testing.T) {
 	if noms := h.depots(); strings.Join(noms, ",") != strings.Join(attendu, ",") {
 		t.Fatalf("dépôts = %v", noms)
 	}
-	h.contient("Connecté en tant que", "@prof", "3 personne(s) valide(s)",
-		"Récapitulatif", "3 créé(s)", "Bilan")
+	h.contient("Connecté en tant que", "@prof", "3 personnes valides",
+		"Récapitulatif", "3 créés", "Bilan")
 	if len(h.bilans()) != 1 {
 		t.Errorf("bilans écrits : %v", h.bilans())
 	}
@@ -182,7 +182,7 @@ func TestIdempotenceDeuxExecutions(t *testing.T) {
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("seconde exécution : %d\n%s", code, h.texte())
 	}
-	h.contient("3 déjà présent(s)")
+	h.contient("3 déjà présents")
 	if noms := h.depots(); len(noms) != 3 {
 		t.Errorf("dépôts = %v", noms)
 	}
@@ -231,7 +231,7 @@ func TestComptesInexistantsRetires(t *testing.T) {
 	if noms := h.depots(); len(noms) != 1 || noms[0] != "tp1-emilie-cote" {
 		t.Fatalf("dépôts = %v", noms)
 	}
-	h.contient("1 compte(s) inexistant(s)", "@fantome")
+	h.contient("1 compte inexistant", "@fantome")
 }
 
 func TestComptesInexistantsBloquentEnModeScript(t *testing.T) {
@@ -283,7 +283,7 @@ func TestLignesRejeteesSignaleesEtIgnorables(t *testing.T) {
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("1 ligne(s) rejetée(s)", "ligne 3")
+	h.contient("1 ligne rejetée", "ligne 3")
 	if noms := h.depots(); len(noms) != 1 {
 		t.Errorf("dépôts = %v", noms)
 	}
@@ -803,7 +803,7 @@ func TestParcoursEnModeLigneSortieRedirigee(t *testing.T) {
 		t.Errorf("un journal doit rester lisible :\n%q", sortie)
 	}
 	// Les listes numérotées prennent le relais des flèches.
-	h.contient("1  Créer des dépôts pour une liste de personnes", "2 créé(s)")
+	h.contient("1  Nouveau travail : un dépôt par personne d'une liste", "2 créés")
 }
 
 func TestSelectionParExpressionEnModeLigne(t *testing.T) {
@@ -819,7 +819,8 @@ func TestSelectionParExpressionEnModeLigne(t *testing.T) {
 	// une liste numérotée change dès qu'on lui ajoute une action, et une
 	// épreuve qui compte les lignes casse à chaque fois sans rien apprendre.
 	entree := strings.Join([]string{
-		"urls",    // Que faire ? → afficher les URL
+		"depots",  // Que faire ? → les dépôts
+		"urls",    // → afficher les URL
 		"1,3",     // sélection par expression
 		"n",       // ne pas enregistrer
 		"quitter", // Quitter
@@ -928,7 +929,7 @@ func TestQuestionsDeCheminEnGestion(t *testing.T) {
 	h.Options.Manage = "tp1"
 	cible := filepath.Join(t.TempDir(), "urls.csv")
 
-	code, scripte := h.script("urls", "tous", "oui", cible, "quitter")
+	code, scripte := h.script("depots", "urls", "tous", "oui", cible, "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}

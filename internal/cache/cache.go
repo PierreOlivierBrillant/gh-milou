@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/brand"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // Durées de validité : la liste des dépôts bouge plus souvent qu'un nom de profil.
@@ -262,8 +263,8 @@ func (c *Cache) Describe() string {
 		}
 	}
 	c.mutex.Unlock()
-	return fmt.Sprintf("%d entrée(s), %.1f Kio, plus récente il y a %s",
-		count, float64(size)/1024, Age(recent))
+	return fmt.Sprintf("%s, %.1f Kio, plus récente il y a %s",
+		valid.Plural(count, "entrée"), float64(size)/1024, Age(recent))
 }
 
 // Clear vide le cache et renvoie le nombre d'entrées supprimées.

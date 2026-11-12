@@ -10,7 +10,6 @@ package corpus
 
 import (
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/signature"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/similarity"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/tokens"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // Motifs d'un dépôt non analysé, tels que les trois interfaces les affichent.
@@ -311,7 +311,7 @@ func Fingerprint(loose Loose, options Options) (similarity.Work, Inspected, *Pro
 	if inspected.Prints == 0 {
 		return similarity.Work{}, inspected, &Problem{
 			ID: loose.ID, Repo: nom, Reason: TooShort,
-			Detail: plural(len(selection.Kept), "fichier retenu", "fichiers retenus") +
+			Detail: valid.Plural(len(selection.Kept), "fichier retenu", "fichiers retenus") +
 				", tous trop courts pour former un k-gramme",
 		}
 	}
@@ -339,7 +339,7 @@ func FetchProblem(target Target, err error) *Problem {
 // detailOf dit pourquoi une inspection n'a rien retenu, par le motif qui a le
 // plus écarté. « Aucun fichier retenu » sans autre mot n'aide personne.
 func detailOf(selection inspect.Selection) string {
-	detail := plural(len(selection.Skipped), "fichier vu", "fichiers vus")
+	detail := valid.Plural(len(selection.Skipped), "fichier vu", "fichiers vus")
 	if motifs := selection.Summary(); len(motifs) > 0 {
 		detail += ", surtout : " + motifs[0]
 	}
@@ -402,12 +402,4 @@ func longComments(analysis tokens.Result) []string {
 	}
 	sort.Strings(kept)
 	return kept
-}
-
-func plural(count int, one, many string) string {
-	word := many
-	if count == 1 {
-		word = one
-	}
-	return strconv.Itoa(count) + " " + word
 }

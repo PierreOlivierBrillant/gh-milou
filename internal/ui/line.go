@@ -9,6 +9,7 @@ import (
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/complete"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // LinePrompter pose les questions en texte simple : listes numérotées et
@@ -135,7 +136,7 @@ func (p *LinePrompter) completePath(raw, fallback string, mode complete.Mode) st
 	}
 	for index, suggestion := range suggestions {
 		if index == 20 {
-			p.console.Note("… et %d autre(s).", len(suggestions)-20)
+			p.console.Note("… et %s.", valid.Plural(len(suggestions)-20, "autre"))
 			break
 		}
 		p.console.Print("    " + suggestion)

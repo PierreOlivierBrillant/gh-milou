@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/complete"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -217,7 +218,7 @@ func (m *pathModel) columns() string {
 		view.WriteString(m.console.Dim(label) + strings.Repeat(" ", maxInt(1, padding)))
 	}
 	if hidden > 0 {
-		view.WriteString("  " + m.console.Dim("… et "+itoa(hidden)+" autre(s)") + "\n")
+		view.WriteString("  " + m.console.Dim("… et "+valid.Plural(hidden, "autre")) + "\n")
 	}
 	return view.String()
 }

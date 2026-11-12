@@ -250,7 +250,7 @@ func (s *Session) run() (int, error) {
 	if s.Options.ClearCache {
 		// Purge demandée en ligne de commande : ni jeton ni réseau nécessaires.
 		removed := s.Cache.Clear()
-		s.Console.Success("Cache vidé (%d entrée(s)).", removed)
+		s.Console.Success("Cache vidé (%s).", valid.Plural(removed, "entrée"))
 		return ExitOK, nil
 	}
 
@@ -396,7 +396,7 @@ func (s *Session) chooseMode() (string, error) {
 
 	for {
 		choice, err := s.Prompt.Choose("Que voulez-vous faire ?", ui.Options(
-			"creer", "Créer des dépôts pour une liste de personnes",
+			"creer", "Nouveau travail : un dépôt par personne d'une liste",
 			"gerer", "Lister et gérer un groupe de dépôts existant",
 			"equipes", "Gérer les équipes d'un groupe",
 			"etudiants", "Lister les étudiants de l'organisation",

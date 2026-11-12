@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -985,22 +984,15 @@ func (s *Server) handleAssignment(writer http.ResponseWriter, request *http.Requ
 	}
 
 	// Le nom complet ne se lit pas dans le dépôt : il vient de la liste du
-	// groupe, dépôt par dépôt, comme le résolveur le fournit au terminal.
+	// groupe, ou de l'équipe pour un dépôt d'équipe — c'est lui qui sert à
+	// chercher et à ordonner. Le terminal le prend au même endroit.
 	noms := make(map[string]string, len(trouves))
 	parNom := make(map[string]groups.Repo, len(trouves))
 	tous := make([]string, 0, len(trouves))
 	for _, repo := range trouves {
 		parNom[repo.Name] = repo
 		tous = append(tous, repo.Name)
-		if equipe, appartient := cours.TeamOf(repo.Name, equipes); appartient {
-			// Un dépôt d'équipe ne porte le nom de personne : c'est celui de
-			// l'équipe qui sert à le chercher et à l'ordonner.
-			noms[repo.Name] = equipe.Label()
-			continue
-		}
-		if student, inscrit := cours.StudentOf(repo.Name); inscrit {
-			noms[repo.Name] = student.FullName
-		}
+		noms[repo.Name] = cours.NameOf(repo.Name, equipes)
 	}
 	retenues := users.Apply(
 		users.FromGroup(groups.Group{Prefix: cours.ShortName(id), Repos: trouves}, noms),
@@ -1134,8 +1126,8 @@ func (s *Server) handleAssignmentInvitations(writer http.ResponseWriter, request
 					job.Progress(done, total, repo)
 				})
 			if manquants := len(noms) - len(lus); manquants > 0 {
-				job.Warn(fmt.Sprintf("%d dépôt(s) n'ont pas pu être lus : leurs "+
-					"invitations restent inconnues.", manquants))
+				job.Warn(valid.Plural(manquants, "dépôt n'a pas pu être lu : ses",
+					"dépôts n'ont pas pu être lus : leurs") + " invitations restent inconnues.")
 			}
 			envois := cours.ToInvite(noms, equipes, lus, droit)
 			if len(envois) == 0 || job.Canceled() {
@@ -1239,8 +1231,8 @@ func (s *Server) handleAssignmentAccess(writer http.ResponseWriter, request *htt
 			// Un dépôt illisible — un jeton sans droit dessus — n'est pas
 			// inspecté. Le taire ferait croire que personne n'y a accès.
 			if manquants := len(noms) - len(trouves); manquants > 0 {
-				job.Warn(fmt.Sprintf("%d dépôt(s) n'ont pas pu être lus : leurs accès "+
-					"restent inconnus.", manquants))
+				job.Warn(valid.Plural(manquants, "dépôt n'a pas pu être lu : ses",
+					"dépôts n'ont pas pu être lus : leurs") + " accès restent inconnus.")
 			}
 			return trouves, nil
 		})
@@ -1529,12 +1521,11 @@ func (s *Server) handleCreateAssignment(writer http.ResponseWriter, request *htt
 		}
 	}
 
-	quoi := " étudiant(s)"
+	quoi := valid.Plural(len(items), "étudiant")
 	if partage.ForTeams {
-		quoi = " équipe(s)"
+		quoi = valid.Plural(len(items), "équipe")
 	}
-	label := "Distribution de « " + cours.ShortName(settings.Assignment) + " » à " +
-		itoa(len(items)) + quoi
+	label := "Distribution de « " + cours.ShortName(settings.Assignment) + " » à " + quoi
 	if body.DryRun {
 		label = "Simulation de « " + cours.ShortName(settings.Assignment) + " »"
 	}

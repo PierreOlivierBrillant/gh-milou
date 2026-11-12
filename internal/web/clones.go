@@ -92,7 +92,7 @@ func (s *Server) handleClone(writer http.ResponseWriter, request *http.Request) 
 	s.rememberCloneDir(destination)
 
 	jobs, depth := s.deps.Jobs, s.deps.Depth
-	job := s.jobs.Start("clonage", itoa(len(targets))+" dépôt(s) vers "+destination,
+	job := s.jobs.Start("clonage", valid.Plural(len(targets), "dépôt")+" vers "+destination,
 		func(job *Job) (any, error) {
 			results, err := clone.New(jobs, depth).Run(targets, destination,
 				func(done, total int, result clone.Result) {
@@ -145,7 +145,7 @@ func (s *Server) handlePull(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	jobs := s.deps.Jobs
-	job := s.jobs.Start("pull", "Mise à jour de "+itoa(len(chosen))+" clone(s)",
+	job := s.jobs.Start("pull", "Mise à jour de "+valid.Plural(len(chosen), "clone"),
 		func(job *Job) (any, error) {
 			results, err := clone.New(jobs, 0).Update(chosen,
 				func(done, total int, result clone.Result) {

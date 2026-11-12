@@ -105,6 +105,9 @@ une date par `dateLisible()`. Un même geste porte partout le même verbe :
 
 - Le code, les commentaires, les messages et les tests sont en français, accents
   compris. Les identifiants Go publics suivent l'usage du langage.
+- En Go aussi, un nombre s'accorde avec ce qu'il compte : `valid.Plural` et
+  `valid.Agree`, les jumeaux de `pluriel()` et `accord()`. Aucun texte n'écrit
+  « (s) » ; `internal/valid/plural_test.go` y veille.
 - Les commentaires disent *pourquoi*, pas *quoi* : le code dit déjà ce qu'il
   fait.
 - `gofmt`, `go vet` et `go test ./...` doivent passer avant tout commit.

@@ -32,7 +32,7 @@ func TestCorrigerUnEtudiantEnLigneDeCommande(t *testing.T) {
 	}
 	h.contient("Fiche de @emilie-cote dans", "Émilie Côté → Émilie Côté-Roy",
 		"a26.5n6.01.tp1.emilie-cote-roy", "Fiche de @emilie-cote corrigée",
-		"1 dépôt(s) renommé(s).")
+		"1 dépôt renommé.")
 
 	noms := h.depots()
 	sort.Strings(noms)
@@ -127,7 +127,7 @@ func TestCorrigerUnEtudiantDepuisLaGestion(t *testing.T) {
 
 	// Quel étudiant ; son nom ; son compte (inchangé) ; ses dépôts aussi ;
 	// confirmation ; et on s'en va.
-	code, scripte := h.script("etudiant", "emilie-cote", "Émilie Côté-Roy", "", "oui", "oui",
+	code, scripte := h.script("groupe", "etudiant", "emilie-cote", "Émilie Côté-Roy", "", "oui", "oui",
 		"quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
@@ -136,7 +136,7 @@ func TestCorrigerUnEtudiantDepuisLaGestion(t *testing.T) {
 		question.Default != "Émilie Côté" {
 		t.Errorf("le nom courant doit être proposé : %+v", question)
 	}
-	h.contient("Fiche de @emilie-cote corrigée", "1 dépôt(s) renommé(s).")
+	h.contient("Fiche de @emilie-cote corrigée", "1 dépôt renommé.")
 	noms := h.depots()
 	sort.Strings(noms)
 	attendu := "a26.5n6.01.tp1.emilie-cote-roy,a26.5n6.01.tp1.jlpicard,a26.5n6.01.tp2.jlpicard"

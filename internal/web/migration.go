@@ -185,8 +185,11 @@ func (s *Server) handleMigrationApply(writer http.ResponseWriter, request *http.
 	}
 	if len(bloques) > 0 && !body.SkipBlocked {
 		fail(writer, valid.Errorf(
-			"%d dépôt(s) ne peuvent pas être renommés : corrigez la liste des étudiants, "+
-				"ou acceptez de les laisser en place.", len(bloques)))
+			"%s", valid.Plural(len(bloques),
+				"dépôt ne peut pas être renommé : corrigez la liste des étudiants, "+
+					"ou acceptez de le laisser en place.",
+				"dépôts ne peuvent pas être renommés : corrigez la liste des étudiants, "+
+					"ou acceptez de les laisser en place.")))
 		return
 	}
 	if len(prets) == 0 {

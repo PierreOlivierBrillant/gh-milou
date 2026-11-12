@@ -10,6 +10,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/teams"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ui"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // Reprendre un travail d'équipe au terminal. Le parcours est celui de la
@@ -131,9 +132,10 @@ func (i *importSession) enEquipe(arrivee classroom.Classroom, prefixe, nom strin
 		return ExitOK, nil
 	}
 	if !i.session.Options.Yes {
-		suite, err := i.session.Prompt.Confirm(plural(
-			"Renommer %d dépôt(s), composer leurs équipes et leur en donner l'accès ?",
-			len(plan.Moves)), false)
+		suite, err := i.session.Prompt.Confirm(valid.Agree(len(plan.Moves),
+			"Renommer le dépôt, composer son équipe et lui en donner l'accès ?",
+			"Renommer "+itoa(len(plan.Moves))+" dépôts, composer leurs équipes et leur "+
+				"en donner l'accès ?"), false)
 		if err != nil {
 			return ExitOK, err
 		}
@@ -235,16 +237,18 @@ func (i *importSession) montrerEquipes(plan classroom.TeamImport) {
 	console.Table([]string{"Compte", "Étudiant", "Reconnu par"}, comptes, 0)
 
 	console.Blank()
-	console.Printf("  %s personne(s) rejoindront « %s ».",
-		console.OK(itoa(len(plan.Students))), plan.Scope)
+	console.Printf("  %s %s « %s ».", console.OK(itoa(len(plan.Students))),
+		valid.Agree(len(plan.Students), "personne rejoindra", "personnes rejoindront"), plan.Scope)
 	if len(plan.Unmatched) > 0 {
 		console.Printf("  %s : %s",
-			console.Warn(plural("%d compte(s) sans nom connu", len(plan.Unmatched))),
+			console.Warn(valid.Plural(len(plan.Unmatched), "compte sans nom connu",
+				"comptes sans nom connu")),
 			console.Dim("inscrits sous leur compte ; leur nom se corrige ensuite"))
 	}
 	if len(plan.Absent) > 0 {
 		console.Printf("  %s : %s",
-			console.Warn(plural("%d étudiant(s) dans aucune équipe", len(plan.Absent))),
+			console.Warn(valid.Plural(len(plan.Absent), "étudiant dans aucune équipe",
+				"étudiants dans aucune équipe")),
 			console.Dim(strings.Join(plan.Absent, ", ")))
 	}
 	if len(plan.Silent) > 0 {
@@ -289,8 +293,8 @@ func (i *importSession) appliquerEquipes(arrivee classroom.Classroom,
 		i.session.Cache.Set(cache.ReposKey(i.org), groups.WithRenamed(connu, suivis))
 	}
 	if echecs > 0 {
-		console.Warning("%d dépôt(s) repris, %d en échec. "+
-			"Les équipes n'ont pas été composées.", renommes, echecs)
+		console.Warning("%s, %d en échec. Les équipes n'ont pas été composées.",
+			valid.Plural(renommes, "dépôt repris", "dépôts repris"), echecs)
 		return ExitFailure, nil
 	}
 
@@ -301,12 +305,14 @@ func (i *importSession) appliquerEquipes(arrivee classroom.Classroom,
 		return ExitFailure, err
 	}
 	if ratees > 0 {
-		console.Warning("%d équipe(s) composée(s), %d en échec. "+
-			"Relancez avec « --team-share » pour achever le partage.", faites, ratees)
+		console.Warning("%s, %d en échec. Relancez avec « --team-share » pour achever le partage.",
+			valid.Plural(faites, "équipe composée", "équipes composées"), ratees)
 		return ExitFailure, nil
 	}
-	console.Success("%d dépôt(s) repris dans « %s », %d équipe(s) composée(s), "+
-		"%d partage(s).", renommes, arrivee.Scope(), faites, partages)
+	console.Success("%s dans « %s », %s, %s.",
+		valid.Plural(renommes, "dépôt repris", "dépôts repris"), arrivee.Scope(),
+		valid.Plural(faites, "équipe composée", "équipes composées"),
+		valid.Plural(partages, "partage"))
 	return ExitOK, nil
 }
 

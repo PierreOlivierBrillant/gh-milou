@@ -66,7 +66,7 @@ func TestAnnuaireDuTerminal(t *testing.T) {
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Utilisateurs de « acme » — 3 personne(s)",
+	h.contient("Utilisateurs de « acme » — 3 personnes",
 		"Émilie Côté", "Jean-Luc Picard", "Aminata Diallo",
 		// Une même personne porte ses trois places sur une seule ligne, de la
 		// session la plus récente à la plus ancienne.
@@ -82,7 +82,7 @@ func TestAnnuaireFiltreParSessionEtParCours(t *testing.T) {
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("2 affichée(s)", "session Hiver 2027", "Aminata Diallo", "Émilie Côté")
+	h.contient("2 affichées", "session Hiver 2027", "Aminata Diallo", "Émilie Côté")
 	h.absent("Jean-Luc Picard")
 
 	// Les deux critères portent sur la même inscription : Picard a bien fait
@@ -92,7 +92,7 @@ func TestAnnuaireFiltreParSessionEtParCours(t *testing.T) {
 	if code := croise.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, croise.texte())
 	}
-	croise.contient("1 affichée(s)", "Émilie Côté", "cours 4w6")
+	croise.contient("1 affichée", "Émilie Côté", "cours 4w6")
 	croise.absent("Jean-Luc Picard", "Aminata Diallo")
 }
 

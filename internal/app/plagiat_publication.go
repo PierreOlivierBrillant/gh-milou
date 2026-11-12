@@ -77,8 +77,8 @@ func (m *manageSession) publierIndex(group *groups.Group) error {
 	if err != nil {
 		return err
 	}
-	console.Printf("  %d copie(s), %d empreinte(s), sous l'étiquette « %s ».",
-		publie.Copies(), publie.Prints(), publie.Origin)
+	console.Printf("  %s, %s, sous l'étiquette « %s ».", valid.Plural(publie.Copies(), "copie"),
+		valid.Plural(publie.Prints(), "empreinte"), publie.Origin)
 	if !m.session.Options.Yes {
 		suite, err := m.session.Prompt.Confirm(
 			"Publier cet index dans l'organisation ?", true)
@@ -130,7 +130,7 @@ func montrerCatalogue(console *ui.Console, catalogue exchange.Catalog, compte st
 			empreintes = "index publié"
 		}
 		lignes = append(lignes, []string{
-			ligne.ID(), plural("%d copie(s)", ligne.Copies),
+			ligne.ID(), valid.Plural(ligne.Copies, "copie"),
 			orDim(console, ligne.LastHandin, "—"), empreintes,
 		})
 	}
@@ -206,9 +206,10 @@ func (s *Session) publierLesIndexManquants() (int, error) {
 		publies++
 	}
 	if echecs > 0 {
-		s.Console.Warning("%d index publié(s), %d en échec.", publies, echecs)
+		s.Console.Warning("%s, %d en échec.", valid.Plural(publies, "index publié", "index publiés"),
+			echecs)
 		return ExitFailure, nil
 	}
-	s.Console.Success("%d index publié(s).", publies)
+	s.Console.Success("%s.", valid.Plural(publies, "index publié", "index publiés"))
 	return ExitOK, nil
 }

@@ -646,7 +646,7 @@ func countReports(directory string) string {
 	if err != nil || len(matches) == 0 {
 		return "aucun bilan"
 	}
-	return strconv.Itoa(len(matches)) + " bilan(s)"
+	return valid.Plural(len(matches), "bilan")
 }
 
 // itoa met un nombre sous forme de texte.

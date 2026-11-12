@@ -12,6 +12,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/naming"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/teams"
 )
 
 // depots construit un inventaire à partir de noms.
@@ -711,5 +712,49 @@ func TestLatestSessionIgnoreUnNomHorsConvention(t *testing.T) {
 	})
 	if len(gardes) != 1 || gardes[0].Session != "a26" {
 		t.Fatalf("gardes = %+v", gardes)
+	}
+}
+
+// Un préfixe de cours ou de session réunit les dépôts de plusieurs groupes :
+// chacun se retrouve dans le sien, par la place que son nom porte, et un nom
+// hors nomenclature n'appartient à aucun.
+func TestUnDepotSeRetrouveDansSonGroupe(t *testing.T) {
+	groupes := []classroom.Classroom{
+		groupe("a26", "5n6", "01", nil),
+		groupe("a26", "5n6", "02", nil),
+	}
+	cours, trouve := classroom.Of(groupes, "a26.5n6.02.tp1.emilie-cote")
+	if !trouve || cours.Group != "02" {
+		t.Errorf("Of = « %s », %v ; attendu le groupe 02", cours.Scope(), trouve)
+	}
+	// La casse ne change pas une place : GitHub ne la distingue pas.
+	if cours, trouve := classroom.Of(groupes, "A26.5N6.01.tp1.emilie-cote"); !trouve || cours.Group != "01" {
+		t.Errorf("Of = « %s », %v ; attendu le groupe 01", cours.Scope(), trouve)
+	}
+	for _, nom := range []string{"a26.5n6.03.tp1.emilie-cote", "tp1-emilie-cote", "a26.5n6.01.tp1"} {
+		if cours, trouve := classroom.Of(groupes, nom); trouve {
+			t.Errorf("« %s » est rangé dans « %s »", nom, cours.Scope())
+		}
+	}
+}
+
+// Le nom qu'un dépôt affiche vient de la liste du groupe, ou de son équipe :
+// jamais du dernier niveau de son nom, qui n'est qu'un slug. Un slug peut être
+// le compte GitHub de quelqu'un d'autre, et son profil nommerait un inconnu.
+func TestUnDepotPorteLeNomDeSonEtudiantOuDeSonEquipe(t *testing.T) {
+	cours := groupe("a26", "5n6", "01", personnes("Jean-Luc Picard", "jlpicard"))
+	equipes := []teams.Team{{
+		Short: "alpha", Session: "a26", Course: "5n6", Group: "01",
+		Members: []string{"jlpicard"},
+	}}
+
+	if nom := cours.NameOf("a26.5n6.01.tp1.jean-luc-picard", equipes); nom != "Jean-Luc Picard" {
+		t.Errorf("dépôt de Jean-Luc : %q", nom)
+	}
+	if nom := cours.NameOf("a26.5n6.01.tp2.alpha", equipes); nom != "Équipe alpha" {
+		t.Errorf("dépôt d'équipe : %q", nom)
+	}
+	if nom := cours.NameOf("a26.5n6.01.tp1.inconnu", equipes); nom != "" {
+		t.Errorf("un dépôt hors liste prend le nom %q", nom)
 	}
 }

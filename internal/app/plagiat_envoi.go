@@ -86,7 +86,7 @@ func (m *manageSession) exporter(group *groups.Group, destination string) error 
 	}
 	if !m.session.Options.Yes {
 		suite, err := m.session.Prompt.Confirm(
-			fmt.Sprintf("Écrire l'archive de %d copie(s) ?", envoi.Copies), true)
+			"Écrire l'archive de "+valid.Plural(envoi.Copies, "copie")+" ?", true)
 		if err != nil || !suite {
 			return err
 		}
@@ -112,7 +112,7 @@ func cheminDArchive(destination, travail string) (string, error) {
 // montrerEnvoi dit ce qui a été remplacé, et surtout ce qui a résisté.
 func montrerEnvoi(console *ui.Console, envoi *plagiarism.Exported) {
 	bundle := envoi.Bundle
-	console.Printf("  %d copie(s) préparée(s).", envoi.Copies)
+	console.Printf("  %s.", valid.Plural(envoi.Copies, "copie préparée", "copies préparées"))
 	for _, souci := range envoi.Problems {
 		console.Warning("%s : %s", souci.Repo, souci.Reason)
 	}
@@ -124,8 +124,8 @@ func montrerEnvoi(console *ui.Console, envoi *plagiarism.Exported) {
 			total += hit.Count
 			natures[hit.What] += hit.Count
 		}
-		console.Printf("  %d occurrence(s) remplacée(s) : %s.",
-			total, enMots(natures))
+		console.Printf("  %s : %s.",
+			valid.Plural(total, "occurrence remplacée", "occurrences remplacées"), enMots(natures))
 	}
 
 	if len(bundle.Residues) == 0 {
@@ -134,9 +134,10 @@ func montrerEnvoi(console *ui.Console, envoi *plagiarism.Exported) {
 			"échappent.")
 		return
 	}
-	console.Warning("%d chose(s) ressemblent encore à quelqu'un, dans %d fichier(s). "+
-		"Regardez-les avant d'envoyer.",
-		len(bundle.Residues), len(anonymize.Files(bundle.Residues)))
+	console.Warning("%s encore à quelqu'un, dans %s. %s avant d'envoyer.",
+		valid.Plural(len(bundle.Residues), "chose ressemble", "choses ressemblent"),
+		valid.Plural(len(anonymize.Files(bundle.Residues)), "fichier"),
+		valid.Agree(len(bundle.Residues), "Regardez-la", "Regardez-les"))
 	lignes := make([][]string, 0, len(bundle.Residues))
 	for _, residue := range bundle.Residues {
 		lignes = append(lignes, []string{

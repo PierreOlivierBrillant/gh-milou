@@ -259,14 +259,15 @@ Ce que GitHub Classroom fait et que l'outil ne fait pas : pas de lien
 d'invitation à distribuer — les dépôts sont créés directement —, pas de
 correction automatique.
 
-L'assistant du terminal ignore la notion de groupe et travaille par préfixe
-(`--manage tp1`). Déclarer un groupe, tenir sa liste d'étudiants ou déplacer une
-personne n'existent donc que dans l'interface web. Les équipes, elles,
-appartiennent à un groupe : au terminal, c'est la place du groupe qui en tient
-lieu (`--manage a26.5n6.01 --teams`). La comparaison des copies se lance des
-trois façons, mais ses deux vues côte à côte — deux projets, deux fichiers —
-n'existent que dans l'interface web : surligner un passage commun et sauter au
-suivant n'a pas d'équivalent scriptable. Tout le reste est disponible partout.
+L'assistant du terminal travaille par préfixe (`--manage tp1`) : il lit les
+groupes — leurs listes, leurs dates cibles — sans les tenir. Déclarer un groupe,
+tenir sa liste d'étudiants ou déplacer une personne n'existent donc que dans
+l'interface web. Les équipes, elles, appartiennent à un groupe : au terminal,
+c'est la place du groupe qui en tient lieu (`--manage a26.5n6.01 --teams`). La
+comparaison des copies se lance des trois façons, mais ses deux vues côte à
+côte — deux projets, deux fichiers — n'existent que dans l'interface web :
+surligner un passage commun et sauter au suivant n'a pas d'équivalent
+scriptable. Tout le reste est disponible partout.
 
 ## Fiabilité
 

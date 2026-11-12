@@ -46,7 +46,8 @@ func (s *Session) create() (int, error) {
 
 	if !s.Options.Yes && !s.Options.DryRun {
 		confirmed, err := s.Prompt.Confirm(
-			plural("Confirmer et créer %d dépôt(s) dans « "+s.Settings.Org+" » ?", len(items)), false)
+			"Confirmer et créer "+valid.Plural(len(items), "dépôt")+" dans « "+s.Settings.Org+" » ?",
+			false)
 		if err != nil {
 			return ExitOK, err
 		}
@@ -177,14 +178,15 @@ func (s *Session) reviewRoster(list roster.Roster, source string) ([]roster.Pers
 	// Tout le monde, compte GitHub ou non : une liste du collège n'en porte
 	// aucun, et la compter sur les seuls comptes la disait vide.
 	lues := list.Everyone()
-	s.Console.Printf("  %s personne(s) valide(s) lue(s) depuis %s.",
-		s.Console.OK(itoa(len(lues))), s.Console.Dim(source))
+	s.Console.Printf("  %s %s depuis %s.", s.Console.OK(itoa(len(lues))),
+		valid.Agree(len(lues), "personne valide lue", "personnes valides lues"),
+		s.Console.Dim(source))
 
 	if len(list.Issues) > 0 {
-		s.Console.Warning("%d ligne(s) rejetée(s) :", len(list.Issues))
+		s.Console.Warning("%s :", valid.Plural(len(list.Issues), "ligne rejetée", "lignes rejetées"))
 		for index, issue := range list.Issues {
 			if index == 10 {
-				s.Console.Note("… et %d autre(s).", len(list.Issues)-10)
+				s.Console.Note("… et %s.", valid.Plural(len(list.Issues)-10, "autre"))
 				break
 			}
 			position := "fichier"
@@ -216,17 +218,22 @@ func (s *Session) reviewRoster(list roster.Roster, source string) ([]roster.Pers
 	}
 	s.Console.Table([]string{"Nom complet", "Compte GitHub"}, rows, 15)
 	if sansCompte > 0 {
-		s.Console.Note("%d personne(s) sans compte GitHub : leur dépôt sera créé, "+
-			"mais personne n'y sera invité tant que le compte n'est pas rattaché.",
-			sansCompte)
+		s.Console.Note("%s", valid.Plural(sansCompte,
+			"personne sans compte GitHub : son dépôt sera créé, mais personne n'y sera "+
+				"invité tant que son compte n'est pas rattaché.",
+			"personnes sans compte GitHub : leurs dépôts seront créés, mais personne n'y "+
+				"sera invité tant que leurs comptes ne sont pas rattachés."))
 	}
 
 	if len(list.Issues) > 0 {
 		if !s.Interactive() {
 			if !s.Options.Yes {
 				return nil, valid.Errorf(
-					"%d ligne(s) invalide(s) dans la liste : corrigez le fichier "+
-						"ou ajoutez --yes pour les ignorer.", len(list.Issues))
+					"%s", valid.Plural(len(list.Issues),
+						"ligne invalide dans la liste : corrigez le fichier ou ajoutez "+
+							"--yes pour l'ignorer.",
+						"lignes invalides dans la liste : corrigez le fichier ou ajoutez "+
+							"--yes pour les ignorer."))
 			}
 			return lues, nil
 		}
@@ -324,7 +331,8 @@ func (s *Session) verifyAccounts(people []roster.Person) ([]roster.Person, error
 	}
 	if s.Interactive() {
 		wanted, err := s.Prompt.Confirm(
-			plural("Vérifier l'existence des %d comptes GitHub ?", len(aVerifier)),
+			valid.Agree(len(aVerifier), "Vérifier l'existence du compte GitHub ?",
+				"Vérifier l'existence des "+itoa(len(aVerifier))+" comptes GitHub ?"),
 			s.Settings.VerifyAccounts)
 		if err != nil {
 			return nil, err
@@ -351,12 +359,12 @@ func (s *Session) verifyAccounts(people []roster.Person) ([]roster.Person, error
 		}
 	}
 	progress.Finish("")
-	s.Console.Success("%d compte(s) vérifié(s).", len(aVerifier))
+	s.Console.Success("%s.", valid.Plural(len(aVerifier), "compte vérifié", "comptes vérifiés"))
 
 	if len(missing) == 0 {
 		return people, nil
 	}
-	s.Console.Failure("%d compte(s) inexistant(s) :", len(missing))
+	s.Console.Failure("%s :", valid.Plural(len(missing), "compte inexistant", "comptes inexistants"))
 	for _, person := range missing {
 		s.Console.Printf("    • %s → @%s", person.FullName, person.Username)
 	}
@@ -772,13 +780,14 @@ func (s *Session) execute(items []plan.PlannedRepo) (int, error) {
 	s.verserLesMarques(report)
 
 	s.Console.Heading("Bilan")
-	createdLabel := "créé(s)"
+	crees, presents := report.Count(runner.Created), report.Count(runner.Existing)
+	createdLabel := valid.Agree(crees, "créé")
 	if s.Options.DryRun {
 		createdLabel = "à créer"
 	}
-	s.Console.Printf("  %s %s · %s déjà présent(s) · %s en échec",
-		s.Console.OK(itoa(report.Count(runner.Created))), createdLabel,
-		s.Console.Info(itoa(report.Count(runner.Existing))),
+	s.Console.Printf("  %s %s · %s %s · %s en échec",
+		s.Console.OK(itoa(crees)), createdLabel,
+		s.Console.Info(itoa(presents)), valid.Agree(presents, "déjà présent", "déjà présents"),
 		s.Console.Err(itoa(len(report.Failures()))))
 
 	reportDir, err := roster.ExpandPath(s.Options.ReportDir)
@@ -849,11 +858,6 @@ func pad(text string, width int) string {
 
 func itoa(value int) string { return strconv.Itoa(value) }
 
-// plural insère un nombre dans un libellé contenant %d.
-func plural(format string, count int) string {
-	return strings.Replace(format, "%d", itoa(count), 1)
-}
-
 // verserLesMarques monte au registre les marques invisibles délivrées.
 //
 // Un échec ne fait pas échouer la distribution : les dépôts sont créés, les
@@ -874,5 +878,6 @@ func (s *Session) verserLesMarques(report *runner.Report) {
 			"sont signés, mais rien ne dira à qui appartient une marque.", err)
 		return
 	}
-	s.Console.Printf("  %d dépôt(s) signés d'une marque invisible.", report.Signed())
+	s.Console.Printf("  %s d'une marque invisible.",
+		valid.Plural(report.Signed(), "dépôt signé", "dépôts signés"))
 }

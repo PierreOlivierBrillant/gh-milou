@@ -6,6 +6,7 @@ import (
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/identity"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/naming"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/teams"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
@@ -236,6 +237,21 @@ func (c Classroom) Review(repoName string, remise groups.Handin, due time.Time,
 		bilan.Strangers = remise.Strangers(attendus, c.enseignants.Teaches)
 	}
 	return bilan
+}
+
+// ReviewOf confronte un dépôt à l'échéance de son propre travail, celle que son
+// nom désigne. C'est ce qu'il faut à une liste qui mêle plusieurs travaux — un
+// groupe entier, un cours — : chaque dépôt n'y est en retard que sur la date
+// qui le concerne, comme sur la page de son travail. Un dépôt d'un autre
+// groupe n'a pas d'échéance ici, même si son travail porte le même nom court.
+func (c Classroom) ReviewOf(repoName string, remise groups.Handin,
+	equipes []teams.Team) Review {
+	var due time.Time
+	if parts, reconnu := naming.Parse(repoName); reconnu &&
+		naming.Belongs(parts, c.Session, c.Course, c.Group) {
+		due, _ = valid.ParseDue(c.DueOf(parts.Assignment))
+	}
+	return c.Review(repoName, remise, due, equipes)
 }
 
 // Reviews confronte tous les dépôts d'un travail. Les dépôts dont l'historique

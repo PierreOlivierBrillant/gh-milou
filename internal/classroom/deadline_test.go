@@ -605,3 +605,25 @@ func TestLesInvitationsAEnvoyerDUnTravail(t *testing.T) {
 		t.Errorf("envoi = %+v", envoi)
 	}
 }
+
+// Un groupe entier mêle plusieurs travaux, et chacun a son échéance : un dépôt
+// n'est en retard que sur celle du sien, que son nom désigne. Le juger sur la
+// date d'un travail voisin — ou sur aucune — dirait le contraire de ce que la
+// page du travail affiche.
+func TestUnDepotSeJugeSurLaDateDeSonPropreTravail(t *testing.T) {
+	cours := groupe("a26", "5n6", "01", personnes("Émilie Côté", "ecote")).
+		Scheduling(calendrier{"a26.5n6.01.tp1": "2026-10-01", "a26.5n6.01.tp2": "2026-11-01"})
+	envoi := remise(3, instant("2026-10-20", "14:00"), map[string]int{"ecote": 3})
+
+	if !cours.ReviewOf("a26.5n6.01.tp1.emilie-cote", envoi, nil).Late {
+		t.Error("tp1, remis le 20 octobre, échappe à son échéance du 1er")
+	}
+	if cours.ReviewOf("a26.5n6.01.tp2.emilie-cote", envoi, nil).Late {
+		t.Error("tp2, remis avant son échéance, est jugé sur celle d'un autre travail")
+	}
+	// Un dépôt d'un autre groupe n'a pas d'échéance ici, même si son travail
+	// porte le même nom court.
+	if cours.ReviewOf("a26.5n6.02.tp1.emilie-cote", envoi, nil).Late {
+		t.Error("un dépôt d'un autre groupe prend l'échéance de celui-ci")
+	}
+}

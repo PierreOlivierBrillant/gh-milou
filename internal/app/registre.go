@@ -50,8 +50,8 @@ func (s *Session) publishRegistry() (int, error) {
 	}
 
 	if !s.Options.Yes {
-		suite, err := s.Prompt.Confirm(plural(
-			"Publier %d fiche(s) dans « "+org+" » ?", plan.Count()), false)
+		suite, err := s.Prompt.Confirm(
+			"Publier "+valid.Plural(plan.Count(), "fiche")+" dans « "+org+" » ?", false)
 		if err != nil {
 			return ExitOK, err
 		}
@@ -65,8 +65,8 @@ func (s *Session) publishRegistry() (int, error) {
 	if err != nil {
 		return ExitFailure, err
 	}
-	s.Console.Success("%d fiche(s) publiée(s) ; le registre en compte %d.",
-		plan.Count(), publie.Len())
+	s.Console.Success("%s ; le registre en compte %d.",
+		valid.Plural(plan.Count(), "fiche publiée", "fiches publiées"), publie.Len())
 
 	// Ce qui vient de monter n'a plus à être redit ici. La sauvegarde précède
 	// l'allègement : rien n'oblige à croire un outil sur parole.
@@ -79,8 +79,8 @@ func (s *Session) publishRegistry() (int, error) {
 		return ExitFailure, err
 	}
 	if allegees > 0 {
-		s.Console.Note("%d nom(s) retiré(s) du fichier des groupes : le registre "+
-			"en est désormais la source.", allegees)
+		s.Console.Note("%s du fichier des groupes : le registre en est désormais la source.",
+			valid.Plural(allegees, "nom retiré", "noms retirés"))
 		if copie != "" {
 			s.Console.Note("Le fichier d'avant est recopié dans %s.", copie)
 		}
@@ -91,12 +91,13 @@ func (s *Session) publishRegistry() (int, error) {
 // showPublication écrit ce que la publication ferait.
 func (s *Session) showPublication(plan registry.Publication, connues int) {
 	console := s.Console
-	console.Printf("  Le registre connaît %s fiche(s) ; ce poste en apporte %s à écrire.",
-		console.Info(itoa(connues)), console.OK(itoa(plan.Count())))
+	console.Printf("  Le registre connaît %s %s ; ce poste en apporte %s à écrire.",
+		console.Info(itoa(connues)), valid.Agree(connues, "fiche"), console.OK(itoa(plan.Count())))
 
 	if len(plan.New) > 0 {
 		console.Blank()
-		console.Printf("  %s", console.OK(plural("%d nouvelle(s) fiche(s)", len(plan.New))))
+		console.Printf("  %s", console.OK(valid.Plural(len(plan.New), "nouvelle fiche",
+			"nouvelles fiches")))
 		rows := make([][]string, 0, len(plan.New))
 		for _, fiche := range plan.New {
 			rows = append(rows, []string{fiche.FullName, "@" + fiche.Username})
@@ -111,7 +112,8 @@ func (s *Session) showPublication(plan registry.Publication, connues int) {
 			garde = "celui de ce poste l'emporte"
 		}
 		console.Printf("  %s — %s",
-			console.Warn(plural("%d désaccord(s) de nom", len(plan.Renamed))), garde)
+			console.Warn(valid.Plural(len(plan.Renamed), "désaccord de nom", "désaccords de nom")),
+			garde)
 		rows := make([][]string, 0, len(plan.Renamed))
 		for _, desaccord := range plan.Renamed {
 			rows = append(rows, []string{
@@ -122,9 +124,10 @@ func (s *Session) showPublication(plan registry.Publication, connues int) {
 
 	if len(plan.Ambiguous) > 0 {
 		console.Blank()
-		console.Printf("  %s : ce poste les nomme de plusieurs façons. Le premier "+
+		console.Printf("  %s : ce poste %s nomme de plusieurs façons. Le premier nom "+
 			"est retenu ; les autres restent rattachés par leur slug.",
-			console.Warn(plural("%d compte(s) ambigu(s)", len(plan.Ambiguous))))
+			console.Warn(valid.Plural(len(plan.Ambiguous), "compte ambigu", "comptes ambigus")),
+			valid.Agree(len(plan.Ambiguous), "le", "les"))
 		rows := make([][]string, 0, len(plan.Ambiguous))
 		for _, ambigu := range plan.Ambiguous {
 			rows = append(rows, []string{
@@ -135,9 +138,11 @@ func (s *Session) showPublication(plan registry.Publication, connues int) {
 
 	if len(plan.Nameless) > 0 {
 		console.Blank()
-		console.Printf("  %s : leur nom complet est inconnu, rien ne peut être publié "+
-			"pour eux. %s",
-			console.Warn(plural("%d compte(s) sans nom", len(plan.Nameless))),
+		console.Printf("  %s : %s, rien ne peut être publié pour %s. %s",
+			console.Warn(valid.Plural(len(plan.Nameless), "compte sans nom", "comptes sans nom")),
+			valid.Agree(len(plan.Nameless), "son nom complet est inconnu",
+				"leur nom complet est inconnu"),
+			valid.Agree(len(plan.Nameless), "lui", "eux"),
 			console.Dim("@"+strings.Join(plan.Nameless, ", @")))
 	}
 }

@@ -598,7 +598,7 @@ func (s *Server) handleShareAssignment(writer http.ResponseWriter, request *http
 	}
 
 	label := "Partage de « " + cours.ShortName(id) + " » avec " +
-		itoa(len(partages)) + " équipe(s)"
+		valid.Plural(len(partages), "équipe")
 	job := s.jobs.Start("partage", label, func(job *Job) (any, error) {
 		faits, echecs := 0, 0
 		for index, item := range partages {

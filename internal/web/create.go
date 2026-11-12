@@ -312,7 +312,7 @@ func (s *Server) handleVerifyAccounts(writer http.ResponseWriter, request *http.
 	// Seuls les comptes connus se vérifient : une personne qu'on n'a pas encore
 	// rattachée n'a pas de compte introuvable, elle n'en a pas du tout.
 	people := roster.WithAccounts(body.People)
-	job := s.jobs.Start("comptes", "Vérification de "+itoa(len(people))+" compte(s)",
+	job := s.jobs.Start("comptes", "Vérification de "+valid.Plural(len(people), "compte"),
 		func(job *Job) (any, error) {
 			missing := make([]roster.Person, 0)
 			for index, person := range people {

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/anonymize"
@@ -64,7 +63,7 @@ func (s *Server) handlePlagiarismExport(writer http.ResponseWriter, request *htt
 	}
 	client := s.deps.Client
 	job := s.jobs.Start("envoi",
-		strconv.Itoa(len(cibles))+" copie(s) anonymisées de « "+cours.ShortName(id)+" »",
+		valid.Plural(len(cibles), "copie anonymisée", "copies anonymisées")+" de « "+cours.ShortName(id)+" »",
 		func(job *Job) (any, error) {
 			envoi, err := plagiarism.Export(client, requete,
 				anonymize.Options{Parts: body.Parts},
