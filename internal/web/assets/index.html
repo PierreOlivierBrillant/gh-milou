@@ -19,9 +19,17 @@
      aria-label="Chargement en cours" hidden></div>
 
 <!-- Barre globale, à la manière de l'en-tête sombre de GitHub — Milou devant
-     son nom. -->
+     son nom. Elle mène aux trois destinations de l'organisation : ses groupes,
+     les personnes qui y passent, et ce que l'équipe compare et partage. Une
+     demande de collègue s'y signale sans qu'il faille ouvrir une comparaison. -->
 <header class="barre-globale">
   <button type="button" id="accueil" class="produit"><img class="logo" src="/milou/tete.png" alt="" width="24" height="24">Milou <span class="version" id="version"></span></button>
+  <nav class="barre-sections" id="barre-sections" aria-label="Sections" hidden>
+    <button type="button" data-section="groupes">Groupes</button>
+    <button type="button" data-section="utilisateurs">Utilisateurs</button>
+    <button type="button" data-section="comparaisons">Comparaisons
+      <span class="pastille-demandes" id="demandes-pastille" hidden></span></button>
+  </nav>
   <span class="espace"></span>
   <span class="compte" id="compte"></span>
   <button type="button" id="ouvrir-reglages" class="bouton discret inverse">Réglages</button>
@@ -59,7 +67,6 @@
            faire ; deux secondaires ; le reste dans « Actions », en sections. -->
       <div class="actions" id="page-actions">
         <div class="actions" data-pour="parcours">
-          <button type="button" id="parcours-annuaire" class="bouton">Utilisateurs</button>
           <button type="button" id="parcours-reprise" class="bouton">Reprendre des dépôts</button>
           <button type="button" id="parcours-nouveau" class="bouton vert">Nouveau groupe</button>
         </div>
@@ -134,15 +141,16 @@
               <button type="button" id="pl-contre" role="menuitem">Comparer avec un collègue…</button>
               <button type="button" id="pl-envoyer" role="menuitem">Envoyer ces copies à un collègue…</button>
               <button type="button" id="pl-recevoir" role="menuitem">Ajouter des copies reçues…</button>
-              <p class="menu-section">L’organisation</p>
-              <button type="button" id="pl-rattraper" role="menuitem">Publier les index manquants…</button>
-              <button type="button" id="pl-regles-ouvrir" role="menuitem">Règles de comparaison…</button>
             </div>
           </div>
           <button type="button" id="pl-lancer" class="bouton vert">Analyser</button>
         </div>
 
-        <div class="actions" data-pour="plagiat-regles">
+        <div class="actions" data-pour="comparaisons">
+        <button type="button" id="cmp-regles" class="bouton">Règles de comparaison</button>
+      </div>
+
+      <div class="actions" data-pour="plagiat-regles">
           <button type="button" id="pl-regles-ecrire" class="bouton vert">Enregistrer</button>
         </div>
 
@@ -224,7 +232,7 @@
   <section id="vue-parcours" class="vue" hidden>
     <!-- Au-dessus de la liste : une liste périmée doit le dire avant d'être lue. -->
     <div class="avis-pile" id="parcours-source" hidden><p class="avis" id="parcours-source-texte"></p></div>
-    <div class="boite" id="parcours-liste"></div>
+    <div id="parcours-liste"></div>
 
   </section>
 
@@ -1157,11 +1165,21 @@
       </div>
     </details>
 
-    <div id="pl-demandes"></div>
     <div id="pl-collegues"></div>
     <div id="pl-archives"></div>
     <div id="pl-envoi-resultat"></div>
     <div id="pl-apercu-resultat"></div>
+  </section>
+
+  <!-- ------------------------------------------- comparaisons : l'organisation -->
+  <!-- Ce qui vaut pour toute l'organisation, et non pour un travail : les
+       demandes des collègues, les index que l'équipe attend, les comparaisons
+       que ce poste a faites. Les règles, qui valent pour toute l'équipe, s'y
+       ouvrent. -->
+  <section id="vue-comparaisons" class="vue" hidden>
+    <div id="cmp-demandes"></div>
+    <div id="cmp-index"></div>
+    <div id="cmp-analyses"></div>
   </section>
 
   <!-- --------------------------------------------------- plagiat : règles -->
@@ -1370,19 +1388,11 @@
       </div>
     </div>
 
+    <!-- Ce qui part avec chaque distribution, d'un côté ; ce qui ne vaut que
+         pour cette machine, de l'autre. Les deux se mêlaient sous
+         « Création », et le cache vivait seul dans une boîte de plus. -->
     <div class="boite">
-      <div class="boite-entete"><strong>Fichiers</strong></div>
-      <table class="tableau" id="chemins">
-        <thead><tr><th class="etroit">Élément</th><th>Chemin</th><th>État</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div class="boite-pied">
-        <button type="button" id="cache-vider" class="bouton">Vider le cache local</button>
-      </div>
-    </div>
-
-    <div class="boite">
-      <div class="boite-entete"><strong>Création</strong></div>
+      <div class="boite-entete"><strong>Distribution</strong></div>
       <div class="boite-corps">
         <label class="champ-bloc etroit-champ">
           <span class="etiquette">Marge entre deux créations (secondes)</span>
@@ -1401,6 +1411,17 @@
               le savoir.</span>
           </span>
         </label>
+      </div>
+      <div class="boite-pied">
+        <span class="note" id="reglages-etat"></span>
+        <span class="espace"></span>
+        <button type="button" id="reglages-enregistrer" class="bouton vert">Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="boite">
+      <div class="boite-entete"><strong>Ce poste</strong></div>
+      <div class="boite-corps">
         <label class="champ-bloc">
           <span class="etiquette">Dossier des clones</span>
           <div class="depot" data-depot data-dossier="1"
@@ -1412,10 +1433,15 @@
         </label>
         <p class="note" id="reglages-selecteur"></p>
       </div>
+      <table class="tableau" id="chemins">
+        <thead><tr><th class="etroit">Élément</th><th>Chemin</th><th>État</th></tr></thead>
+        <tbody></tbody>
+      </table>
       <div class="boite-pied">
-        <span class="note" id="reglages-etat"></span>
+        <button type="button" id="cache-vider" class="bouton">Vider le cache local</button>
         <span class="espace"></span>
-        <button type="button" id="reglages-enregistrer" class="bouton vert">Enregistrer</button>
+        <span class="note" id="reglages-poste-etat"></span>
+        <button type="button" id="reglages-enregistrer-poste" class="bouton vert">Enregistrer</button>
       </div>
     </div>
   </section>

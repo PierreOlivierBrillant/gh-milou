@@ -114,6 +114,14 @@ func (s *Server) handleClassrooms(writer http.ResponseWriter, request *http.Requ
 		s.precharger(org, visibles, repos)
 	}
 
+	// Les groupes de la session en cours s'ouvrent en cartes, avec ce qui manque
+	// à leurs travaux. Ce qu'on a déjà relevé suffit à le dire, sans rien
+	// demander à GitHub ; les sessions passées n'en ont pas besoin.
+	enCours := map[string]bool{}
+	for _, cours := range classroom.LatestSession(visibles) {
+		enCours[strings.ToLower(cours.Scope())] = true
+	}
+
 	liste := make([]classroomPayload, 0, len(visibles))
 	courts := make([]string, 0, len(visibles))
 	actifs := s.activite(org, repos)
@@ -121,6 +129,13 @@ func (s *Server) handleClassrooms(writer http.ResponseWriter, request *http.Requ
 		equipes := cours.Teams(infos)
 		fiche := s.fiche(cours)
 		fiche.Assignments = cours.Assignments(actifs, equipes)
+		if enCours[strings.ToLower(cours.Scope())] {
+			// Le groupe complet sait qui enseigne : sans lui, un commit
+			// d'enseignant passerait pour une remise.
+			complet := s.enrichi(cours, repos)
+			fiche.Assignments = complet.WithHandins(fiche.Assignments, repos, equipes,
+				s.remisesConnues(org, reposDuGroupe(complet, repos, fiche.Assignments), repos))
+		}
 		fiche.Teams = len(equipes)
 		fiche.Source = source
 		liste = append(liste, fiche)
