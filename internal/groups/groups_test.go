@@ -132,9 +132,6 @@ func TestBuildGroupe(t *testing.T) {
 	if _, _, ok := groupe.Find("tp1-inconnu"); ok {
 		t.Error("Find doit échouer sur un nom absent")
 	}
-	if suffixes := groupe.Suffixes(); !suffixes["jlpicard"] || len(suffixes) != 2 {
-		t.Errorf("suffixes = %+v", suffixes)
-	}
 }
 
 // Un préfixe se saisit sans avoir à dire ce qui le termine : le tiret des noms

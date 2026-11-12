@@ -149,15 +149,6 @@ func (g Group) Find(name string) (Repo, int, bool) {
 	return Repo{}, -1, false
 }
 
-// Suffixes renvoie les suffixes déjà pris, pour repérer les personnes déjà servies.
-func (g Group) Suffixes() map[string]bool {
-	taken := make(map[string]bool, len(g.Repos))
-	for _, repo := range g.Repos {
-		taken[strings.ToLower(repo.Suffix)] = true
-	}
-	return taken
-}
-
 // Detected est un groupe deviné à partir des noms de dépôts.
 type Detected struct {
 	Prefix string `json:"prefix"`
