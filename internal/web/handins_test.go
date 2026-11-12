@@ -2,10 +2,12 @@ package web_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +279,70 @@ func TestUnEnvoiPosterieurAuReleveLeRendANouveauNonReleve(t *testing.T) {
 	}
 }
 
+// Le relevé ordinaire — celui que la page lance d'elle-même quand un dépôt
+// n'est pas relevé — relit ce qu'un envoi a dépassé, et seulement cela. S'il
+// s'en remettait à la mémoire, le dépôt resterait « non relevé », et la page
+// redemanderait un relevé à chaque ouverture.
+func TestLeReleveOrdinaireRelitCeQuUnEnvoiADepasse(t *testing.T) {
+	h := travailAvecHistoriques(t)
+	h.travail(http.MethodPost, "/api/classrooms/a26.5n6.01/assignments/tp1/handins", nil)
+	// Le relevé date d'une demi-heure, mais la mémoire le garde encore : elle
+	// ne l'oublie qu'au bout d'une heure. Émilie a poussé il y a une minute.
+	apres := h.releveVieilli(30*time.Minute,
+		cohorte("a26", "5n6", "01", "Émilie Côté", "ecote", "Jean-Luc Picard", "jlpicard"))
+	h.State.Touch("acme/a26.5n6.01.tp1.emilie-cote",
+		time.Now().Add(-time.Minute).UTC().Format(time.RFC3339))
+	avant := apres.etatsDesDepots("/api/classrooms/a26.5n6.01/assignments/tp1?refresh=1")
+	if avant["a26.5n6.01.tp1.emilie-cote"] != "non relevé" {
+		t.Fatalf("le dépôt poussé depuis le relevé est dit %q avant tout relevé",
+			avant["a26.5n6.01.tp1.emilie-cote"])
+	}
+	lectures := h.State.CallCount("/contributors")
+
+	apres.travail(http.MethodPost, "/api/classrooms/a26.5n6.01/assignments/tp1/handins", nil)
+
+	if relus := h.State.CallCount("/contributors") - lectures; relus != 1 {
+		t.Errorf("%d historique(s) relus, attendu le seul dépôt poussé depuis", relus)
+	}
+	etats := apres.etatsDesDepots("/api/classrooms/a26.5n6.01/assignments/tp1")
+	if etats["a26.5n6.01.tp1.emilie-cote"] == "non relevé" {
+		t.Error("le dépôt poussé depuis le relevé reste « non relevé » après un relevé")
+	}
+}
+
+// releveVieilli rouvre l'interface sur la même mémoire, dont chaque relevé
+// d'historique est daté de « par » plus tôt. L'âge des entrées, lui, ne bouge
+// pas : la mémoire les rend encore, comme si le relevé datait vraiment de là.
+func (h *harnais) releveVieilli(par time.Duration, cours ...classroom.Classroom) *harnais {
+	h.t.Helper()
+	dossier := filepath.Join(filepath.Dir(h.Groupes), "cache")
+	chemin := filepath.Join(dossier, "cache.json")
+	contenu, err := os.ReadFile(chemin)
+	if err != nil {
+		h.t.Fatalf("mémoire : %v", err)
+	}
+	var entrees map[string]map[string]any
+	if err := json.Unmarshal(contenu, &entrees); err != nil {
+		h.t.Fatalf("mémoire illisible : %v", err)
+	}
+	for cle, entree := range entrees {
+		remise, historique := entree["value"].(map[string]any)
+		if !strings.HasPrefix(cle, "handin:") || !historique {
+			continue
+		}
+		vu, err := time.Parse(time.RFC3339, fmt.Sprint(remise["seen"]))
+		if err != nil {
+			h.t.Fatalf("%s : relevé sans date (%v)", cle, err)
+		}
+		remise["seen"] = vu.Add(-par).Format(time.RFC3339)
+	}
+	vieillie, _ := json.Marshal(entrees)
+	if err := os.WriteFile(chemin, vieillie, 0o600); err != nil {
+		h.t.Fatalf("mémoire : %v", err)
+	}
+	return h.relance(0, cours...)
+}
+
 func TestLesPastillesDunTravailSeLisentSansRienRedemander(t *testing.T) {
 	h := travailAvecHistoriques(t)
 	h.json(http.MethodPut, "/api/classrooms/a26.5n6.01/assignments/tp1/deadline",
@@ -450,5 +516,42 @@ func TestLesDepotsSeFiltrentParEtatDeRemise(t *testing.T) {
 		"/api/classrooms/a26.5n6.01/assignments/tp1?handin=presque", nil)
 	if reponse.StatusCode < 400 {
 		t.Fatalf("statut %d, attendu un refus — %s", reponse.StatusCode, contenu)
+	}
+}
+
+// La synthèse qui coiffe la liste parle du travail entier : filtrer la liste
+// n'en retire rien. Chaque dépôt relevé dit aussi quand il l'a été.
+func TestLaSyntheseDUnTravailIgnoreLeFiltre(t *testing.T) {
+	h := travailAvecInvitation(t)
+	h.travail(http.MethodPost, "/api/classrooms/a26.5n6.01/assignments/tp1/handins", nil)
+
+	var detail struct {
+		States []struct {
+			State string `json:"state"`
+			Count int    `json:"count"`
+		} `json:"states"`
+		Private int `json:"private"`
+		Total   int `json:"total"`
+		Repos   []struct {
+			Name   string `json:"name"`
+			SeenAt string `json:"seen_at"`
+		} `json:"repos"`
+	}
+	h.json(http.MethodGet, "/api/classrooms/a26.5n6.01/assignments/tp1?handin=remis", nil, &detail)
+	if len(detail.Repos) != 1 {
+		t.Fatalf("le filtre « remis » retient %d dépôts", len(detail.Repos))
+	}
+	synthese := map[string]int{}
+	for _, item := range detail.States {
+		synthese[item.State] = item.Count
+	}
+	if synthese["remis"] != 1 || synthese["non accepté"] != 1 || len(synthese) != 2 {
+		t.Errorf("synthèse = %v, attendu le travail entier malgré le filtre", detail.States)
+	}
+	if detail.Private != detail.Total {
+		t.Errorf("%d dépôts privés sur %d", detail.Private, detail.Total)
+	}
+	if _, err := time.Parse(time.RFC3339, detail.Repos[0].SeenAt); err != nil {
+		t.Errorf("seen_at = %q, attendu l'instant du relevé : %v", detail.Repos[0].SeenAt, err)
 	}
 }

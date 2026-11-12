@@ -431,6 +431,31 @@ func TestLesCommitsDEnseignantNeSeComptentPas(t *testing.T) {
 
 // ------------------------------------------------- où en est une remise
 
+// La synthèse d'un travail se lit dans l'ordre des états, du plus tranquille au
+// plus alarmant ; un état qu'aucun dépôt n'a n'y figure pas.
+func TestLaSyntheseDUnTravailSuitLOrdreDesEtats(t *testing.T) {
+	synthese := classroom.Tally([]classroom.HandinState{
+		classroom.Unread, classroom.Delivered, classroom.Overdue,
+		classroom.Delivered, classroom.Unread, classroom.Delivered,
+	})
+	attendu := []classroom.StateCount{
+		{State: classroom.Delivered, Count: 3},
+		{State: classroom.Overdue, Count: 1},
+		{State: classroom.Unread, Count: 2},
+	}
+	if len(synthese) != len(attendu) {
+		t.Fatalf("synthèse = %+v, attendu %+v", synthese, attendu)
+	}
+	for rang := range attendu {
+		if synthese[rang] != attendu[rang] {
+			t.Errorf("rang %d : %+v, attendu %+v", rang, synthese[rang], attendu[rang])
+		}
+	}
+	if vide := classroom.Tally(nil); vide == nil || len(vide) != 0 {
+		t.Errorf("sans dépôt, la synthèse doit être vide et non absente : %#v", vide)
+	}
+}
+
 // Un dépôt qu'on n'a pas relevé ne prétend rien : c'est ce qui le distingue
 // d'un dépôt vide, et les trois interfaces doivent pouvoir le dire.
 func TestUnDepotNonReleveNeConclutRien(t *testing.T) {

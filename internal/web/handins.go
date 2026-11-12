@@ -129,13 +129,27 @@ func reposDuGroupe(cours classroom.Classroom, repos []groups.RepoInfo,
 // releve compose le travail de fond qui lit les historiques. Il sert aux deux
 // portées — un travail, ou le groupe entier — parce que c'est le même geste :
 // seule la liste des dépôts change.
+//
+// Un relevé ordinaire va chercher ce qui manque, et aussi ce qu'un envoi a
+// dépassé depuis sa lecture : la mémoire seule le croirait encore bon, et
+// l'écran, qui le montre « non relevé », redemanderait sans fin un relevé qui
+// ne changerait rien. C'est ce qui permet à la page de relever d'elle-même.
 func (s *Server) releve(cours classroom.Classroom, titre string, noms []string,
-	jusqua identity.Reading, resultat func(map[string]groups.Handin) any) *Job {
+	repos []groups.RepoInfo, jusqua identity.Reading,
+	resultat func(map[string]groups.Handin) any) *Job {
 	return s.jobs.Start("remises", titre, func(job *Job) (any, error) {
-		remises := s.resolver(cours.Org).Handins(cours.Org, noms, jusqua,
-			func(done, total int, repo string) {
-				job.Progress(done, total, repo)
-			})
+		resolveur := s.resolver(cours.Org)
+		progres := func(done, total int, repo string) { job.Progress(done, total, repo) }
+		var remises map[string]groups.Handin
+		if jusqua == identity.Fetch {
+			depasses, autres := groups.Overtaken(noms, repos, resolveur.Histories(cours.Org, noms))
+			remises = resolveur.Handins(cours.Org, depasses, identity.Refresh, progres)
+			for nom, remise := range resolveur.Handins(cours.Org, autres, identity.Fetch, progres) {
+				remises[nom] = remise
+			}
+		} else {
+			remises = resolveur.Handins(cours.Org, noms, jusqua, progres)
+		}
 		if job.Canceled() {
 			return resultat(remises), nil
 		}
@@ -191,7 +205,7 @@ func (s *Server) handleAssignmentHandins(writer http.ResponseWriter, request *ht
 		return
 	}
 	job := s.releve(cours, "Remises de « "+cours.ShortName(id)+" »",
-		nomsDeDepots(depots), jusqua(request),
+		nomsDeDepots(depots), repos, jusqua(request),
 		func(remises map[string]groups.Handin) any {
 			return cours.Reviews(id, repos, equipes, remises)
 		})
@@ -223,7 +237,7 @@ func (s *Server) handleClassroomHandins(writer http.ResponseWriter, request *htt
 		fail(writer, valid.Errorf("Aucun dépôt dans « %s ».", cours.Label()))
 		return
 	}
-	job := s.releve(cours, "Remises de « "+cours.Label()+" »", noms, jusqua(request),
+	job := s.releve(cours, "Remises de « "+cours.Label()+" »", noms, repos, jusqua(request),
 		func(remises map[string]groups.Handin) any {
 			return map[string]any{
 				"assignments": cours.WithHandins(travaux, repos, equipes, remises),

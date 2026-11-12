@@ -127,7 +127,7 @@ func (w *Warmer) Warm(reader Reader, org string, cours []classroom.Classroom,
 // l'écran ne le montre plus, et la mémoire seule le croirait encore bon. Les
 // autres ne sont relus que s'ils manquent ou ont vieilli.
 func (w *Warmer) lire(reader Reader, org string, noms []string, repos []groups.RepoInfo) {
-	depasses, autres := partager(noms, repos, reader.Histories(org, noms))
+	depasses, autres := groups.Overtaken(noms, repos, reader.Histories(org, noms))
 	for _, lot := range lots(depasses) {
 		if w.Stopped() {
 			return
@@ -146,23 +146,6 @@ func (w *Warmer) lire(reader Reader, org string, noms []string, repos []groups.R
 		}
 		reader.Accesses(org, lot, identity.Fetch, nil)
 	}
-}
-
-// partager sépare les dépôts dont l'historique relevé a été dépassé par un
-// envoi de tous les autres — jamais relevés, ou relevés et encore complets.
-func partager(noms []string, repos []groups.RepoInfo,
-	histoires map[string]groups.Handin) (depasses, autres []string) {
-	completes := groups.Complete(repos, histoires)
-	for _, nom := range noms {
-		_, releve := histoires[nom]
-		_, complete := completes[nom]
-		if releve && !complete {
-			depasses = append(depasses, nom)
-			continue
-		}
-		autres = append(autres, nom)
-	}
-	return depasses, autres
 }
 
 // Stop abandonne les préchargements en cours : les lots qui restent ne partent

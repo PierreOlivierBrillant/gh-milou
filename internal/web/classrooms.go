@@ -888,7 +888,10 @@ type assignmentRepo struct {
 	PushedAt   string   `json:"pushed_at"`
 	// Ce que l'historique dit du dépôt, quand il a été relevé. « Seen » à faux
 	// veut dire qu'on ne l'a pas encore regardé, et non qu'il est vide.
-	Seen    bool            `json:"seen"`
+	Seen bool `json:"seen"`
+	// SeenAt est l'instant du relevé, au format RFC 3339 : c'est ce qui permet
+	// à la page de dire « relevé il y a deux heures ».
+	SeenAt  string          `json:"seen_at,omitempty"`
 	Commits int             `json:"commits"`
 	Last    string          `json:"last,omitempty"`
 	Late    bool            `json:"late"`
@@ -1002,19 +1005,48 @@ func (s *Server) handleAssignment(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
+	// Chaque dépôt du travail reçoit son état, filtre ou non : la synthèse qui
+	// coiffe la liste parle du travail entier, pas de ce que le filtre en
+	// laisse voir. Sans accès relevés, une invitation en attente ne se voit
+	// pas : l'état dit alors ce que l'historique seul permet de dire.
+	type lecture struct {
+		bilan  classroom.Review
+		releve bool
+		etat   classroom.HandinState
+	}
+	lectures := make(map[string]lecture, len(trouves))
+	etats := make([]classroom.HandinState, 0, len(trouves))
+	prives := 0
+	for _, repo := range trouves {
+		var lu lecture
+		remise, releve := remises[repo.Name]
+		if releve {
+			lu.bilan, lu.releve = cours.Review(repo.Name, remise, echeance, equipes), true
+		}
+		attend := cours.Awaiting(repo.Name, equipes, acces[repo.Name].Pending())
+		lu.etat = classroom.StateOf(lu.bilan, lu.releve, attend)
+		lectures[repo.Name] = lu
+		etats = append(etats, lu.etat)
+		if repo.Private {
+			prives++
+		}
+	}
+
 	lignes := make([]assignmentRepo, 0, len(retenues))
 	for _, retenue := range retenues {
 		repo := parNom[retenue.Repos[0].Name]
+		lu := lectures[repo.Name]
+		if !remiseVoulue.Keep(lu.etat) {
+			continue
+		}
 		ligne := assignmentRepo{
 			Name: repo.Name, Student: repo.Suffix, Private: repo.Private,
 			Visibility: repo.Visibility(), URL: s.urlOf(cours.Org, repo),
-			PushedAt: repo.PushedAt,
+			PushedAt: repo.PushedAt, State: string(lu.etat),
 		}
-		var bilan classroom.Review
-		remise, releve := remises[repo.Name]
-		if releve {
-			bilan = cours.Review(repo.Name, remise, echeance, equipes)
-			ligne.Seen, ligne.Commits = true, bilan.Commits
+		if lu.releve {
+			bilan := lu.bilan
+			ligne.Seen, ligne.SeenAt, ligne.Commits = true, remises[repo.Name].Seen, bilan.Commits
 			ligne.Last, ligne.Late, ligne.Silent = bilan.Last, bilan.Late, bilan.Silent
 			ligne.Strangers = bilan.Strangers
 		}
@@ -1025,13 +1057,6 @@ func (s *Server) handleAssignment(writer http.ResponseWriter, request *http.Requ
 		invitation, _ := cours.InvitationOf(repo.Name, equipes, ligne.Access)
 		ligne.Invitation = string(invitation)
 		ligne.Invitable = len(cours.ToInvite([]string{repo.Name}, equipes, acces, droit)) > 0
-		// Sans accès relevés, une invitation en attente ne se voit pas : l'état
-		// dit alors ce que l'historique seul permet de dire.
-		attend := cours.Awaiting(repo.Name, equipes, connu.Pending())
-		ligne.State = string(classroom.StateOf(bilan, releve, attend))
-		if !remiseVoulue.Keep(classroom.HandinState(ligne.State)) {
-			continue
-		}
 		if equipe, appartient := cours.TeamOf(repo.Name, equipes); appartient {
 			ligne.FullName, ligne.Team = equipe.Label(), equipe.Short
 			ligne.Members = cours.Members(equipe)
@@ -1055,8 +1080,10 @@ func (s *Server) handleAssignment(writer http.ResponseWriter, request *http.Requ
 		"due": cours.DueOf(id), "may_decide": users.MayDecide(set, s.deps.Viewer),
 		// Le total dit combien le filtre a écarté ; « names » nomme tous les
 		// dépôts du travail, filtrés compris — ce qu'on cache à l'écran ne sort
-		// pas du travail pour autant.
+		// pas du travail pour autant. La synthèse et le nombre de dépôts privés
+		// parlent aussi du travail entier.
 		"shown": len(lignes), "total": len(trouves), "names": tous,
+		"states": classroom.Tally(etats), "private": prives,
 	})
 }
 

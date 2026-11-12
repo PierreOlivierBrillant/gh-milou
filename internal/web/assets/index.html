@@ -45,7 +45,10 @@
           <button type="button" id="page-recharger" class="lien icone" hidden></button>
         </div>
         <p class="note" id="page-sous-titre"></p>
-        <p class="note" id="detail-resume" data-pour="travail"></p>
+        <p class="note" id="detail-resume" data-pour="travail plagiat"></p>
+        <!-- Où en sont les remises, d'un coup d'œil : chaque pastille filtre la
+             liste sur son état. -->
+        <div class="jetons synthese" id="detail-synthese" data-pour="travail"></div>
         <p class="note" id="pl-regles-sous-titre" data-pour="plagiat-regles"></p>
         <p class="note" id="pl-rapport-resume" data-pour="plagiat-rapport"></p>
         <p class="note" id="pl-paire-resume" data-pour="plagiat-paire"></p>
@@ -93,9 +96,7 @@
               <button type="button" id="detail-inviter" role="menuitem">Envoyer les invitations manquantes…</button>
               <button type="button" id="detail-fichier" role="menuitem">Déposer un fichier dans tous les dépôts…</button>
               <button type="button" id="detail-partager" role="menuitem" hidden>Partager avec les équipes…</button>
-              <button type="button" id="detail-remises" role="menuitem">Relever les remises</button>
               <p class="menu-section">Ce travail</p>
-              <button type="button" id="detail-plagiat" role="menuitem">Comparer les copies…</button>
               <button type="button" id="detail-echeance" role="menuitem">Date cible…</button>
               <button type="button" id="detail-renommer" role="menuitem">Renommer…</button>
               <button type="button" id="detail-deplacer" role="menuitem">Déplacer…</button>
@@ -152,11 +153,18 @@
       </div>
     </div>
     <div id="page-avis" class="avis-pile" hidden></div>
-    <nav class="onglets" id="onglets" hidden>
+    <!-- Les onglets sont ceux de l'objet affiché : le groupe a les siens, un
+         travail aussi. Sur la page d'un travail, c'est le fil qui ramène au
+         groupe. -->
+    <nav class="onglets" id="onglets" data-pour="travaux etudiants equipes groupe-reglages assistant">
       <button type="button" data-vue="travaux" class="actif">Travaux</button>
       <button type="button" data-vue="etudiants">Étudiants</button>
       <button type="button" data-vue="equipes">Équipes</button>
       <button type="button" data-vue="groupe-reglages">Réglages du groupe</button>
+    </nav>
+    <nav class="onglets" id="onglets-travail" data-pour="travail plagiat">
+      <button type="button" data-vue="travail" class="actif">Dépôts</button>
+      <button type="button" data-vue="plagiat">Comparaisons</button>
     </nav>
   </div>
 </div>
@@ -675,10 +683,28 @@
             </div>
           </div>
         </div>
-        <button type="button" id="detail-copier" class="bouton">Copier les URL</button>
-        <button type="button" id="detail-csv" class="bouton">Exporter en CSV</button>
-        <button type="button" id="detail-cloner" class="bouton">Cloner</button>
-        <button type="button" id="detail-pull" class="bouton">Mettre à jour des clones</button>
+        <!-- Une même intention, un menu : ce qui sort la liste d'un côté, ce
+             qui la copie sur ce poste de l'autre. Chaque commande dit sur quoi
+             elle porte — la sélection, ou à défaut tout ce que la liste
+             montre. -->
+        <div class="menu-ancre">
+          <button type="button" id="detail-exporter-ouvrir" class="bouton deroulant"
+            aria-expanded="false" aria-haspopup="true"
+            aria-controls="detail-exporter">Exporter</button>
+          <div class="menu-flottant menu-liste" id="detail-exporter" hidden role="menu">
+            <button type="button" id="detail-copier" role="menuitem">Copier les URL</button>
+            <button type="button" id="detail-csv" role="menuitem">Exporter en CSV</button>
+          </div>
+        </div>
+        <div class="menu-ancre">
+          <button type="button" id="detail-clones-ouvrir" class="bouton deroulant"
+            aria-expanded="false" aria-haspopup="true"
+            aria-controls="detail-clones">Clones</button>
+          <div class="menu-flottant menu-liste" id="detail-clones" hidden role="menu">
+            <button type="button" id="detail-cloner" role="menuitem">Cloner…</button>
+            <button type="button" id="detail-pull" role="menuitem">Mettre à jour des clones…</button>
+          </div>
+        </div>
       </div>
       <div class="tableau-large">
       <table class="tableau triable" id="detail-table">
@@ -686,17 +712,18 @@
           <tr>
             <th class="etroit"></th>
             <th data-tri="nom"><button type="button"><span id="detail-colonne">Étudiant</span><span class="fleche"></span></button></th>
-            <!-- Les dépôts d'un travail ne diffèrent que par ce qui suit le
-                 préfixe commun : les ordonner par compte, c'est les ordonner
-                 par nom. -->
-            <th data-tri="compte"><button type="button">Dépôt<span class="fleche"></span></button></th>
-            <th>Visibilité</th>
+            <!-- Relever les remises est un rafraîchissement de cette colonne,
+                 pas une commande : il se fait d'ici, et la page le fait
+                 d'elle-même quand un dépôt n'est pas relevé. -->
+            <th><span class="entete-remise">Remise
+              <button type="button" id="detail-relever" class="lien icone"></button></span></th>
+            <!-- Le dernier envoi ne se montre que s'il dit autre chose que la
+                 date de la remise. -->
             <th data-tri="envoi"><button type="button">Dernier envoi<span class="fleche"></span></button></th>
             <!-- Les commits ne se lisent pas dans l'inventaire : la colonne
                  reste vide tant que les historiques n'ont pas été relevés. -->
-            <th>Commits</th>
-            <th>Remise</th>
-            <th>Invitation</th>
+            <th class="chiffre">Commits</th>
+            <th class="col-invitation">Invitation</th>
             <th class="etroit"></th>
           </tr>
         </thead>
@@ -999,7 +1026,7 @@
       </div>
     </div>
 
-    <h2 class="zone-sensible">Zone sensible</h2>
+    <h2 class="intertitre sensible">Zone sensible</h2>
 
     <div class="boite sensible" id="migration-boite">
       <div class="boite-entete"><strong id="migration-titre">Déplacer le groupe</strong></div>
@@ -1061,6 +1088,9 @@
   <section id="vue-plagiat" class="vue" hidden>
     <p class="avertissement" id="pl-avertissement"></p>
 
+    <div id="pl-analyses"></div>
+
+    <h2 class="intertitre">Nouvelle comparaison</h2>
     <div class="boite">
       <div class="boite-entete"><strong>Ce qui est inspecté</strong></div>
       <div class="boite-corps">
