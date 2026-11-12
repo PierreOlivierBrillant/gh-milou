@@ -82,7 +82,7 @@ func (c *Console) Info(text string) string { return c.style(infoStyle, text) }
 // Heading imprime un titre de section.
 func (c *Console) Heading(title string) {
 	c.Blank()
-	c.Print(c.style(titleStyle, "── "+title+" "+strings.Repeat("─", maxInt(3, 60-len([]rune(title))))))
+	c.Print(c.style(titleStyle, "── "+title+" "+strings.Repeat("─", maxInt(3, 60-VisibleWidth(title)))))
 }
 
 // Banner imprime l'en-tête de l'outil.
@@ -128,12 +128,12 @@ func (c *Console) Table(headers []string, rows [][]string, limit int) {
 
 	widths := make([]int, len(headers))
 	for index, header := range headers {
-		widths[index] = visibleWidth(header)
+		widths[index] = VisibleWidth(header)
 	}
 	for _, row := range shown {
 		for index, cell := range row {
-			if index < len(widths) && visibleWidth(cell) > widths[index] {
-				widths[index] = visibleWidth(cell)
+			if index < len(widths) && VisibleWidth(cell) > widths[index] {
+				widths[index] = VisibleWidth(cell)
 			}
 		}
 	}
@@ -160,7 +160,7 @@ func joinCells(cells []string, widths []int) string {
 		if index < len(widths) {
 			width = widths[index]
 		}
-		padding := width - visibleWidth(cell)
+		padding := width - VisibleWidth(cell)
 		if padding < 0 {
 			padding = 0
 		}
@@ -169,8 +169,10 @@ func joinCells(cells []string, widths []int) string {
 	return strings.TrimRight(strings.Join(parts, "  "), " ")
 }
 
-// visibleWidth mesure la largeur affichée, séquences de style exclues.
-func visibleWidth(text string) int {
+// VisibleWidth mesure la largeur affichée, séquences de style exclues. C'est
+// la seule mesure d'un alignement au terminal : compter des octets, c'est
+// donner deux colonnes à un « é ».
+func VisibleWidth(text string) int {
 	return lipgloss.Width(text)
 }
 

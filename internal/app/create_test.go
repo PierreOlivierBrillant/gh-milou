@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/app"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/cache"
@@ -78,6 +79,52 @@ func TestCreationNonInteractive(t *testing.T) {
 	// Hors terminal, aucune couleur ni retour chariot.
 	if strings.Contains(h.texte(), "\x1b[") || strings.Contains(h.texte(), "\r") {
 		t.Errorf("sortie non lisible dans un journal :\n%q", h.texte())
+	}
+}
+
+// Un libellé se mesure en colonnes, pas en octets : « Dépôts à traiter » a
+// trois lettres accentuées, et sa valeur doit partir de la même colonne que
+// celle d'« Organisation ».
+func TestLeRecapitulatifAligneSesValeurs(t *testing.T) {
+	h := nouveau(t, nil)
+	h.Options.Roster = h.cohorteCSV()
+	h.Options.Assignment = "tp1"
+	h.Options.Yes = true
+
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	_, suite, trouve := strings.Cut(h.texte(), "── Récapitulatif")
+	if !trouve {
+		t.Fatalf("aucun récapitulatif :\n%s", h.texte())
+	}
+	libelles := []string{"Organisation", "Travail", "Dépôts à traiter", "Source",
+		"Fichiers de départ", "Visibilité", "Invitations", "Mode"}
+	var bloc []string
+	colonnes := map[int]bool{}
+	reconnus := 0
+	// Le bloc suit la ligne du titre et s'arrête à la ligne vide qui ouvre le
+	// tableau des dépôts. Sans couleur ni caractère large, une colonne y est
+	// un caractère.
+	for _, ligne := range strings.Split(suite, "\n")[1:] {
+		if ligne == "" {
+			break
+		}
+		bloc = append(bloc, ligne)
+		for _, libelle := range libelles {
+			if reste, ok := strings.CutPrefix(ligne, "  "+libelle+" "); ok {
+				valeur := strings.TrimLeft(reste, " ")
+				colonnes[utf8.RuneCountInString(ligne)-utf8.RuneCountInString(valeur)] = true
+				reconnus++
+			}
+		}
+	}
+	if reconnus != len(libelles) {
+		t.Fatalf("récapitulatif inattendu :\n%s", strings.Join(bloc, "\n"))
+	}
+	if len(colonnes) != 1 {
+		t.Errorf("les valeurs ne partent pas toutes de la même colonne :\n%s",
+			strings.Join(bloc, "\n"))
 	}
 }
 

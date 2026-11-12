@@ -812,9 +812,7 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 
 	width := 10
 	for _, item := range items {
-		if len(item.Name) > width {
-			width = len(item.Name)
-		}
+		width = max(width, ui.VisibleWidth(item.Name))
 	}
 	// Un groupe cloisonné doit le rester : un dépôt ajouté va d'emblée à son
 	// équipe enseignante, comme ceux que « creer » distribue.

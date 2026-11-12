@@ -757,9 +757,7 @@ func (s *Session) execute(items []plan.PlannedRepo) (int, error) {
 	s.Console.Heading("Exécution")
 	width := 10
 	for _, item := range items {
-		if len(item.Name) > width {
-			width = len(item.Name)
-		}
+		width = max(width, ui.VisibleWidth(item.Name))
 	}
 
 	// Un groupe cloisonné doit le rester : chaque dépôt créé va d'emblée à son
@@ -864,11 +862,11 @@ func (s *Session) urlOf(name, known string) string {
 	return "https://github.com/" + s.Settings.Org + "/" + name
 }
 
+// pad complète un libellé jusqu'à width colonnes, comptées comme celles des
+// tableaux : « Dépôts à traiter » en occupe seize, pas les dix-neuf octets
+// qui l'écrivent.
 func pad(text string, width int) string {
-	if len(text) >= width {
-		return text
-	}
-	return text + strings.Repeat(" ", width-len(text))
+	return text + strings.Repeat(" ", max(0, width-ui.VisibleWidth(text)))
 }
 
 func itoa(value int) string { return strconv.Itoa(value) }
