@@ -29,6 +29,9 @@ func (m *manageSession) publierIndex(group *groups.Group) error {
 	console := m.session.Console
 	cours, nom, reconnu := m.travail(group)
 	if !reconnu {
+		if err := m.plusieursTravaux(group, "Un index d'empreintes"); err != nil {
+			return err
+		}
 		return valid.Errorf(
 			"« %s » ne dit pas à quel groupe il appartient : seul un travail d'un "+
 				"groupe déclaré se publie.", group.Prefix)

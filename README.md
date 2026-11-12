@@ -267,7 +267,13 @@ c'est la place du groupe qui en tient lieu (`--manage a26.5n6.01 --teams`). La
 comparaison des copies se lance des trois façons, mais ses deux vues côte à
 côte — deux projets, deux fichiers — n'existent que dans l'interface web :
 surligner un passage commun et sauter au suivant n'a pas d'équivalent
-scriptable. Tout le reste est disponible partout.
+scriptable. Seule l'interface web renomme ou déplace un groupe entier et retient
+ses réglages par défaut : en ligne de commande, les drapeaux ne valent que pour
+un lancement. Les règles de comparaison s'écrivent dans l'interface web ou dans
+un fichier (`--rules`, `--publish-rules`), pas dans l'assistant, qui ne publie
+que l'index du travail géré : ceux de toute l'organisation se publient dans
+l'interface web ou par `--publish-index` seul. Tout le reste est disponible
+partout.
 
 ## Fiabilité
 
@@ -295,8 +301,9 @@ Les inventaires d'organisation sont mis en cache dans le répertoire du système
   hasard — l'origine et l'en-tête `Host` sont vérifiés, si bien qu'un autre site
   ouvert dans le même navigateur ne peut rien déclencher.
 - Les actions destructives demandent une confirmation explicite ; supprimer un
-  dépôt exige d'en retaper le nom exact, et aucune option, `--yes` compris, ne
-  court-circuite cette confirmation.
+  dépôt exige d'en écrire le nom exact — retapé dans l'assistant ou l'interface
+  web, ou donné en entier à `--delete-repo` —, et aucune option, `--yes`
+  compris, ne court-circuite cette confirmation.
 - Les données d'étudiants (bilans, listes, clones) sont exclues du dépôt par le
   `.gitignore`. Le registre, lui, vit dans un dépôt privé de l'organisation :
   l'outil refuse d'y écrire s'il devient public, signale une permission de base

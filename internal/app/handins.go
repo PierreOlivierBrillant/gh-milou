@@ -39,6 +39,42 @@ func (m *manageSession) travail(group *groups.Group) (classroom.Classroom, strin
 	return groupes[0], nom, true
 }
 
+// plusieursTravaux refuse un geste qui porte sur un seul travail quand le
+// préfixe géré en réunit plusieurs — un groupe, un cours, une session —, et
+// nomme ceux qu'on peut gérer à la place. Sans cette garde, un groupe entier
+// passait pour un travail : le déplacer fondait tous ses travaux en un seul.
+//
+// Un préfixe hérité ne dit pas à quel groupe il appartient : la garde le laisse
+// passer, et chaque geste dit alors ce qui lui manque.
+func (m *manageSession) plusieursTravaux(group *groups.Group, geste string) error {
+	if _, _, travail := naming.SplitAssignment(group.Prefix); travail {
+		return nil
+	}
+	infos := make([]groups.RepoInfo, 0, group.Len())
+	for _, repo := range group.Repos {
+		infos = append(infos, groups.RepoInfo{Name: repo.Name})
+	}
+	travaux := make([]string, 0)
+	for _, cours := range m.groupesDe(group) {
+		for _, travail := range cours.Assignments(infos, nil) {
+			travaux = append(travaux, travail.ID)
+		}
+	}
+	switch len(travaux) {
+	case 0:
+		return nil
+	case 1:
+		return valid.Errorf("%s porte sur un seul travail, et « %s » n'en est pas un : "+
+			"gérez « %s ».", geste, group.Prefix, travaux[0])
+	}
+	montres := travaux
+	if len(montres) > 4 {
+		montres = append(append([]string(nil), travaux[:4]...), "…")
+	}
+	return valid.Errorf("%s porte sur un seul travail, et « %s » en réunit %d : gérez "+
+		"l'un d'eux — %s.", geste, group.Prefix, len(travaux), strings.Join(montres, ", "))
+}
+
 // groupesDe compose les groupes auxquels appartiennent les dépôts listés. Un
 // travail n'en touche qu'un, mais un cours ou une session en réunissent
 // plusieurs : chaque dépôt se nomme et se juge ensuite par le sien, que
@@ -258,6 +294,9 @@ func (m *manageSession) pourquoiRien(groupes []classroom.Classroom,
 func (m *manageSession) echeance(group *groups.Group) error {
 	cours, nom, reconnu := m.travail(group)
 	if !reconnu {
+		if err := m.plusieursTravaux(group, "Une date cible"); err != nil {
+			return err
+		}
 		return valid.Errorf(
 			"« %s » ne dit pas à quel groupe il appartient : une date cible s'attache "+
 				"à un travail d'un groupe. Déplacez-le d'abord vers une place "+
@@ -446,6 +485,9 @@ func (m *manageSession) reunirEtranger(group *groups.Group) error {
 func (m *manageSession) dueFromFlag(group *groups.Group) error {
 	cours, nom, reconnu := m.travail(group)
 	if !reconnu {
+		if err := m.plusieursTravaux(group, "--due : une date cible"); err != nil {
+			return err
+		}
 		return valid.Errorf(
 			"--due : « %s » ne dit pas à quel groupe il appartient. Une date cible "+
 				"s'attache à un travail d'un groupe — déplacez-le d'abord vers une "+

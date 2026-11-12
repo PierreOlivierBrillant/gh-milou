@@ -190,19 +190,40 @@ func changement(console *ui.Console, avant, apres, vide string) string {
 
 // ------------------------------------------------------------------- menu
 
-// corriger mène la correction depuis la gestion d'un travail : l'étudiant
-// appartient au groupe du travail, et ses dépôts de tous les travaux de ce
-// groupe suivent.
+// horsGroupe dit pourquoi le préfixe géré n'a pas de liste où corriger un
+// étudiant. Un cours ou une session disent leur place, mais réunissent des
+// groupes, et chacun a sa liste ; seul un préfixe hérité n'en dit aucune.
+func (m *manageSession) horsGroupe(group *groups.Group) error {
+	places := m.groupesDe(group)
+	switch len(places) {
+	case 0:
+		return valid.Errorf("« %s » ne dit pas à quel groupe il appartient : ses "+
+			"étudiants n'ont pas de liste où se corriger. Déplacez-le d'abord vers une "+
+			"place « session.cours.groupe ».", group.Prefix)
+	case 1:
+		return valid.Errorf("« %s » n'est pas un groupe : un étudiant se corrige dans la "+
+			"liste du sien. Gérez « %s ».", group.Prefix, places[0].Scope())
+	}
+	noms := make([]string, 0, len(places))
+	for _, cours := range places {
+		noms = append(noms, cours.Scope())
+	}
+	return valid.Errorf("« %s » réunit %d groupes : un étudiant se corrige dans la liste "+
+		"du sien. Gérez l'un d'eux — %s.", group.Prefix, len(places), strings.Join(noms, ", "))
+}
+
+// corriger mène la correction depuis la gestion d'un travail ou de son groupe :
+// l'étudiant appartient au groupe, et ses dépôts de tous les travaux de ce
+// groupe suivent. C'est la règle de « --student », qui accepte l'un et l'autre.
 func (m *manageSession) corriger(group *groups.Group) error {
 	if _, err := m.loadRepos(false); err != nil {
 		return err
 	}
-	cours, _, reconnu := m.travail(group)
-	if !reconnu {
-		return valid.Errorf("« %s » ne dit pas à quel groupe il appartient : ses "+
-			"étudiants n'ont pas de liste où se corriger. Déplacez-le d'abord vers une "+
-			"place « session.cours.groupe ».", group.Prefix)
+	groupes := m.composer(placeDuGroupe(group.Prefix))
+	if len(groupes) == 0 {
+		return m.horsGroupe(group)
 	}
+	cours := groupes[0]
 
 	options := make([]ui.Option, 0, len(cours.Students))
 	for _, identite := range cours.Identities() {

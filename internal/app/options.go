@@ -218,6 +218,31 @@ type Options struct {
 	// NoBaseline renonce à écarter le gabarit distribué. Sans lui, l'outil s'en
 	// sert : il sait quel modèle il a déposé, et toutes les copies le portent.
 	NoBaseline bool
+	// Les gestes que l'assistant range dans ses sections ont aussi leur
+	// drapeau : chacun porte sur le préfixe géré, fait une chose et s'en va.
+	// Access montre qui a accès à chaque dépôt ; URLs écrit leurs adresses, et
+	// ExportCSV les enregistre avec le nom de chacun.
+	Access    bool
+	URLs      bool
+	ExportCSV string
+	// Clone récupère les dépôts dans un dossier, UpdateClones met à jour ceux
+	// qui y sont déjà. Sans valeur, c'est le dossier des clones suivi du
+	// préfixe géré : celui que l'assistant propose.
+	Clone           string
+	CloneSet        bool
+	UpdateClones    string
+	UpdateClonesSet bool
+	// AddCollaborator et RemoveCollaborator donnent ou retirent à un compte
+	// l'accès au dépôt Repo, que son nom complet ou son suffixe désigne.
+	// Retirer un compte qui n'a encore qu'une invitation l'annule.
+	AddCollaborator    string
+	RemoveCollaborator string
+	Repo               string
+	// DeleteRepo supprime définitivement un dépôt du préfixe géré. Son nom
+	// complet, écrit exactement, en est la confirmation : c'est ce que
+	// l'assistant et le navigateur font retaper, et aucune option, « --yes »
+	// compris, n'en tient lieu.
+	DeleteRepo string
 	// MoveTo déplace le travail ouvert vers une place de la nomenclature
 	// courante — « a26.5n6.01 » —, et RenameTo dit le nom qu'il y prendra. Sans
 	// MoveTo, RenameTo renomme le travail là où il est déjà.
@@ -292,6 +317,11 @@ Utilisation :
   gh milou --manage a26.5n6.01.tp1 --handins
   gh milou --manage a26.5n6.01.tp1 --send-invitations
   gh milou --manage a26.5n6.01.tp1 --push-file consignes.md --push-path docs/CONSIGNES.md
+  gh milou --manage a26.5n6.01.tp1 --access
+  gh milou --manage a26.5n6.01.tp1 --handin "non remis" --export-csv relance.csv
+  gh milou --manage a26.5n6.01.tp1 --clone ~/clones/tp1
+  gh milou --manage a26.5n6.01.tp1 --add-collaborator jdupont --repo ecote --permission maintain
+  gh milou --manage a26.5n6.01.tp1 --delete-repo a26.5n6.01.tp1.ecote
   gh milou --plagiarism --manage a26.5n6.01.tp1
   gh milou --plagiarism --manage a26.5n6.01.tp1 --profile next --languages tsx,css
   gh milou --plagiarism --manage a26.5n6.01.tp1 --reach annees
@@ -368,6 +398,23 @@ Drapeaux :
   --push-message TEXTE     message du commit (défaut : « Ajoute CHEMIN »)
   --push-overwrite         remplacer un fichier déjà présent dont le contenu diffère
   --push-raw               déposer le contenu tel quel, sans y remplir de champ
+  --access                 inspecter les accès des dépôts du préfixe géré :
+                           collaborateurs et invitations en attente
+  --urls                   afficher l'URL de chaque dépôt, une par ligne
+  --export-csv FICHIER     enregistrer les dépôts en CSV : nom complet, dépôt, URL
+  --clone [DOSSIER]        cloner les dépôts (défaut : le dossier des clones, suivi
+                           du préfixe géré). Ces trois drapeaux portent sur ce que
+                           la liste retient : --filter, --handin… s'y appliquent
+  --update-clones [DOSSIER]  mettre à jour les clones du dossier, sans jamais écraser
+                           un travail local
+  --add-collaborator COMPTE  inviter un compte sur le dépôt de --repo, avec le droit
+                           de --permission (défaut : celui des réglages)
+  --remove-collaborator COMPTE  retirer à un compte son accès au dépôt de --repo, ou
+                           annuler son invitation
+  --repo DEPOT             dépôt visé, par son nom complet ou son suffixe
+  --delete-repo NOM        supprimer définitivement un dépôt du préfixe géré. Son nom
+                           complet, écrit exactement, vaut confirmation : un suffixe
+                           ne suffit pas, et --yes n'en dispense pas
   --plagiarism             comparer entre elles les copies du travail géré et les
                            classer par ordre de suspicion (ce n'est pas un verdict :
                            une ressemblance forte n'est pas une preuve)
@@ -493,6 +540,8 @@ func Parse(args []string, out io.Writer) (*Options, error) {
 	starter := set.String("starter", unset, "dossier de fichiers de départ")
 	delay := set.Float64("delay", -1, "marge entre deux créations")
 	due := set.String("due", unset, "date cible du travail")
+	cloner := set.String("clone", unset, "cloner les dépôts du préfixe géré")
+	misesAJour := set.String("update-clones", unset, "mettre à jour des clones")
 
 	set.StringVar(&options.Org, "org", "", "organisation GitHub cible")
 	set.BoolVar(&options.StudentsRequested, "students", false,
@@ -602,6 +651,14 @@ func Parse(args []string, out io.Writer) (*Options, error) {
 	set.BoolVar(&options.TeamDeleteRepos, "team-delete-repos", false,
 		"supprimer aussi les dépôts de l'équipe")
 	set.BoolVar(&options.TeamShare, "team-share", false, "repartager les dépôts avec les équipes")
+	set.BoolVar(&options.Access, "access", false, "inspecter les accès des dépôts")
+	set.BoolVar(&options.URLs, "urls", false, "afficher les URL des dépôts")
+	set.StringVar(&options.ExportCSV, "export-csv", "", "exporter les dépôts en CSV")
+	set.StringVar(&options.AddCollaborator, "add-collaborator", "", "donner accès à un compte")
+	set.StringVar(&options.RemoveCollaborator, "remove-collaborator", "",
+		"retirer l'accès d'un compte")
+	set.StringVar(&options.Repo, "repo", "", "dépôt visé")
+	set.StringVar(&options.DeleteRepo, "delete-repo", "", "supprimer un dépôt")
 	set.StringVar(&options.MoveTo, "move-to", "", "place d'arrivée du travail géré")
 	set.StringVar(&options.RenameTo, "rename-to", "", "nom que le travail prend")
 	set.StringVar(&options.Pattern, "pattern", "", "gabarit de nom des dépôts")
@@ -688,6 +745,14 @@ func Parse(args []string, out io.Writer) (*Options, error) {
 		options.EmitWorkflowSet = true
 		options.EmitWorkflow = *emitWorkflow
 	}
+	if *cloner != unset {
+		options.CloneSet = true
+		options.Clone = *cloner
+	}
+	if *misesAJour != unset {
+		options.UpdateClonesSet = true
+		options.UpdateClones = *misesAJour
+	}
 	if *manage != unset {
 		options.ManageRequested = true
 		options.Manage = *manage
@@ -702,7 +767,7 @@ func Parse(args []string, out io.Writer) (*Options, error) {
 	// ceux qui n'ont pas d'index.
 	if options.Plagiarism || options.SendInvitations || options.PushFile != "" ||
 		(options.PublishIndex && options.Manage != "") ||
-		(options.ExportZip != "" && !options.decidesAsk()) {
+		(options.ExportZip != "" && !options.decidesAsk()) || len(options.gestes()) > 0 {
 		options.ManageRequested = true
 	}
 	if *importer != unset {
@@ -744,6 +809,9 @@ func Parse(args []string, out io.Writer) (*Options, error) {
 	if err := options.checkStudent(); err != nil {
 		return nil, err
 	}
+	if err := options.checkGestes(); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(options.PushFile) == "" && (options.PushPath != "" ||
 		options.PushMessage != "" || options.PushOverwrite || options.PushRaw) {
 		return nil, valid.Errorf("--push-path, --push-message, --push-overwrite et " +
@@ -780,6 +848,59 @@ func (o *Options) checkStudent() error {
 	if reunir && o.Separate {
 		return valid.Errorf("--same-as réunit deux comptes, --separate les sépare : " +
 			"choisissez l'un ou l'autre.")
+	}
+	return nil
+}
+
+// gestes nomme les drapeaux posés qui font, sur le préfixe géré, ce qu'une
+// section de l'assistant fait.
+func (o *Options) gestes() []string {
+	poses := make([]string, 0, 2)
+	for _, geste := range []struct {
+		pose bool
+		nom  string
+	}{
+		{o.Access, "--access"},
+		{o.URLs || strings.TrimSpace(o.ExportCSV) != "", "--urls et --export-csv"},
+		{o.CloneSet, "--clone"},
+		{o.UpdateClonesSet, "--update-clones"},
+		{strings.TrimSpace(o.AddCollaborator) != "", "--add-collaborator"},
+		{strings.TrimSpace(o.RemoveCollaborator) != "", "--remove-collaborator"},
+		{strings.TrimSpace(o.DeleteRepo) != "", "--delete-repo"},
+	} {
+		if geste.pose {
+			poses = append(poses, geste.nom)
+		}
+	}
+	return poses
+}
+
+// checkGestes refuse ce que ces drapeaux ne peuvent pas vouloir dire. Deux
+// gestes à la fois laisseraient l'un d'eux sans suite, sans un mot.
+func (o *Options) checkGestes() error {
+	if poses := o.gestes(); len(poses) > 1 {
+		return valid.Errorf("%s font chacun une chose : lancez-les l'un après l'autre.",
+			strings.Join(poses, ", "))
+	}
+	collaborateur := strings.TrimSpace(o.AddCollaborator) != "" ||
+		strings.TrimSpace(o.RemoveCollaborator) != ""
+	if collaborateur && strings.TrimSpace(o.Repo) == "" {
+		return valid.Errorf("--add-collaborator et --remove-collaborator portent sur un " +
+			"dépôt : nommez-le avec « --repo DEPOT ».")
+	}
+	if !collaborateur && strings.TrimSpace(o.Repo) != "" {
+		return valid.Errorf("--repo accompagne « --add-collaborator COMPTE » ou " +
+			"« --remove-collaborator COMPTE » : ajoutez l'un d'eux pour dire quoi faire.")
+	}
+	for drapeau, compte := range map[string]string{
+		"--add-collaborator": o.AddCollaborator, "--remove-collaborator": o.RemoveCollaborator,
+	} {
+		if strings.TrimSpace(compte) == "" {
+			continue
+		}
+		if _, err := valid.Login(compte, drapeau); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -832,6 +953,7 @@ func normalizeArgs(args []string) []string {
 	optional := map[string]bool{
 		"-manage": true, "--manage": true, "-import": true, "--import": true,
 		"-teacher": true, "--teacher": true,
+		"-clone": true, "--clone": true, "-update-clones": true, "--update-clones": true,
 	}
 	normalized := make([]string, 0, len(args))
 	for index := 0; index < len(args); index++ {
