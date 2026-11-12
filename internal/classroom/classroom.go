@@ -686,25 +686,49 @@ func (c Classroom) Recipients(assignmentID string, repos []groups.RepoInfo,
 	return waiting, served
 }
 
-// servies dit, pour chacune de ces personnes, si un dépôt du travail est déjà
-// le sien.
+// Pending répartit les personnes d'une liste entre celles qui attendent encore
+// leur dépôt d'un travail et celles qui l'ont déjà, dans l'ordre de la liste.
 //
-// Une personne qui travaille sous deux comptes n'a qu'un dépôt — c'est son nom
-// qui le nomme, pas son compte : le trouver la tient pour servie sous chacun
-// d'eux, sans quoi le second en réclamerait un autre du même nom. Le dépôt se
-// rattache à sa ligne, et la ligne à sa personne par ce qui la désigne, compte
-// ou matricule, jamais par un compte absent : c'est par cette clé vide que le
-// dépôt d'une inscrite sans compte tenait pour servies toutes les autres.
-func (c Classroom) servies(identites []Identity, assignmentID string,
-	repos []groups.RepoInfo) []bool {
-	parDesignation := map[string]int{}
-	for position, identite := range identites {
-		for _, cle := range identite.Designations() {
-			parDesignation[cle] = position
+// C'est Recipients pour qui ne connaît le travail que par ses dépôts — un
+// préfixe ouvert au terminal, hérité ou de la nomenclature —, et non par un
+// groupe déclaré. Le dernier niveau de chaque dépôt y désigne quelqu'un comme
+// partout ailleurs : par le fragment de son nom, que la nomenclature écrit, ou
+// par l'un de ses comptes, comme les dépôts de GitHub Classroom. Le comparer
+// au seul compte laissait pour neuve une personne servie sous la nomenclature,
+// et on lui préparait un second dépôt.
+//
+// Le registre ne comble que ce que la liste ne sait pas nommer, comme il le
+// fait pour un groupe : le slug d'un nom corrigé depuis.
+func Pending(people []roster.Person, travail groups.Group, names Names) (
+	waiting, served []roster.Person) {
+	connus := knownBy(people)
+	fragments := make([]string, 0, travail.Len())
+	for _, repo := range travail.Repos {
+		fragments = append(fragments, repo.Suffix)
+		if _, nomme := connus.personne(repo.Suffix); nomme || names == nil {
+			continue
+		}
+		if trouve, ok := names.Lookup(repo.Suffix); ok {
+			connus[strings.ToLower(repo.Suffix)] = trouve
 		}
 	}
-	servies := make([]bool, len(identites))
-	connus := c.fragments()
+	identites := identitiesOf(people)
+	servies := servedBy(identites, connus, fragments)
+	for _, person := range people {
+		if position, trouvee := rang(identites, Handle(person)); trouvee && servies[position] {
+			served = append(served, person)
+			continue
+		}
+		waiting = append(waiting, person)
+	}
+	return waiting, served
+}
+
+// servies dit, pour chacune de ces personnes, si un dépôt du travail est déjà
+// le sien.
+func (c Classroom) servies(identites []Identity, assignmentID string,
+	repos []groups.RepoInfo) []bool {
+	fragments := make([]string, 0, len(repos))
 	for _, repo := range repos {
 		parts, reconnu := naming.Parse(repo.Name)
 		if !reconnu {
@@ -714,7 +738,30 @@ func (c Classroom) servies(identites []Identity, assignmentID string,
 		if !strings.EqualFold(id, assignmentID) {
 			continue
 		}
-		student, inscrit := connus.personne(parts.Student)
+		fragments = append(fragments, parts.Student)
+	}
+	return servedBy(identites, c.fragments(), fragments)
+}
+
+// servedBy dit, pour chacune de ces personnes, si l'un de ces fragments — le
+// dernier niveau d'un nom de dépôt — la désigne.
+//
+// Une personne qui travaille sous deux comptes n'a qu'un dépôt — c'est son nom
+// qui le nomme, pas son compte : le trouver la tient pour servie sous chacun
+// d'eux, sans quoi le second en réclamerait un autre du même nom. Le dépôt se
+// rattache à sa ligne, et la ligne à sa personne par ce qui la désigne, compte
+// ou matricule, jamais par un compte absent : c'est par cette clé vide que le
+// dépôt d'une inscrite sans compte tenait pour servies toutes les autres.
+func servedBy(identites []Identity, connus known, fragments []string) []bool {
+	parDesignation := map[string]int{}
+	for position, identite := range identites {
+		for _, cle := range identite.Designations() {
+			parDesignation[cle] = position
+		}
+	}
+	servies := make([]bool, len(identites))
+	for _, fragment := range fragments {
+		student, inscrit := connus.personne(fragment)
 		if !inscrit {
 			continue
 		}

@@ -246,6 +246,62 @@ func TestRecipientsDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
 	}
 }
 
+// « ajouter », au terminal, ne connaît un travail que par ses dépôts : il doit
+// y reconnaître qui est déjà servi comme le navigateur le reconnaît. Le dernier
+// niveau d'un nom de dépôt désigne une personne par son nom — c'est ce que la
+// nomenclature écrit — ou par l'un de ses comptes, comme les dépôts hérités de
+// GitHub Classroom. Le comparer au seul compte laissait pour neuve une personne
+// servie sous la nomenclature : « jean-luc-picard » n'est pas « jlpicard ».
+func TestPendingReconnaitQuiADejaSonDepot(t *testing.T) {
+	for _, cas := range []struct {
+		nom, prefixe, depot, visiteur string
+	}{
+		{"nomenclature, par le nom", "a26.5n6.01.tp1",
+			"a26.5n6.01.tp1.jean-luc-picard", "a26.5n6.01.tp1.visiteur"},
+		{"préfixe hérité, par le compte", "tp1", "tp1-jlpicard", "tp1-visiteur"},
+		{"préfixe hérité, par le nom", "tp1", "tp1-jean-luc-picard", "tp1-visiteur"},
+		{"marque de doublon de GitHub", "tp1", "tp1-JLPicard-1", "tp1-visiteur"},
+	} {
+		t.Run(cas.nom, func(t *testing.T) {
+			// Le dépôt d'un visiteur que la liste ignore ne sert personne.
+			travail := groups.Build(cas.prefixe, depots(cas.depot, cas.visiteur))
+			attendus, servis := classroom.Pending(cohorte, travail, nil)
+			if lesNoms(servis) != "Jean-Luc Picard" ||
+				lesNoms(attendus) != "Émilie Côté, Aminata Diallo" {
+				t.Errorf("attendus : %s ; servis : %s", lesNoms(attendus), lesNoms(servis))
+			}
+		})
+	}
+}
+
+// Une inscrite sans compte se reconnaît à son nom, et son dépôt ne tient pas les
+// autres pour servies : elles ne partagent pas un compte, elles n'en ont aucun.
+// Le registre rattache en plus un dépôt que le nom courant ne produit plus — un
+// nom corrigé depuis —, comme il le fait au navigateur : sans lui, Jean-Luc en
+// recevrait un second sous son nom corrigé.
+func TestPendingSansCompteEtSousUnNomCorrige(t *testing.T) {
+	liste := append(personnes("Jean-Luc Picard", "jlpicard"),
+		roster.Person{FullName: "Naomi Chéry", StudentID: "2100456"},
+		roster.Person{FullName: "Aminata Diallo", StudentID: "2100789"},
+	)
+	travail := groups.Build("a26.5n6.01.tp1",
+		depots("a26.5n6.01.tp1.naomi-chery", "a26.5n6.01.tp1.jean-luc-picar"))
+	connus := annuaire{
+		"jean-luc-picar": {FullName: "Jean-Luc Picar", Username: "jlpicard"},
+	}
+
+	attendus, servis := classroom.Pending(liste, travail, connus)
+	if lesNoms(servis) != "Jean-Luc Picard, Naomi Chéry" || lesNoms(attendus) != "Aminata Diallo" {
+		t.Errorf("avec le registre — attendus : %s ; servis : %s",
+			lesNoms(attendus), lesNoms(servis))
+	}
+	attendus, _ = classroom.Pending(liste, travail, nil)
+	if lesNoms(attendus) != "Jean-Luc Picard, Aminata Diallo" {
+		t.Errorf("sans registre, le nom d'avant n'est à personne : attendus %s",
+			lesNoms(attendus))
+	}
+}
+
 func TestDepotRattacheASonEtudiant(t *testing.T) {
 	cours := groupe("a26", "5n6", "01", cohorte)
 
