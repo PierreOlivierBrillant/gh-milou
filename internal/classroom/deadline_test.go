@@ -627,3 +627,38 @@ func TestUnDepotSeJugeSurLaDateDeSonPropreTravail(t *testing.T) {
 		t.Error("un dépôt d'un autre groupe prend l'échéance de celui-ci")
 	}
 }
+
+// Un groupe entier, un cours : les dépôts y relèvent de plusieurs groupes, et
+// chacun s'invite au nom du sien — qui il vise, et le droit de ce groupe. Un
+// dépôt hors nomenclature ne vise personne : seule son invitation expirée, qui
+// nomme déjà quelqu'un, se renvoie.
+func TestChaqueDepotSInviteAuNomDeSonGroupe(t *testing.T) {
+	premier := groupe("a26", "5n6", "01", personnes("Émilie Côté", "ecote"))
+	premier.Defaults.Permission = "push"
+	second := groupe("a26", "5n6", "02", personnes("Jean-Luc Picard", "jlpicard"))
+	second.Defaults.Permission = "maintain"
+	acces := map[string]identity.Access{
+		"a26.5n6.01.tp1.emilie-cote":     {},
+		"a26.5n6.02.tp1.jean-luc-picard": {},
+		"tp1-aminata-d": {Invitations: []identity.Invitation{
+			{ID: 7, Login: "aminata-d", Permission: "triage", Expired: true},
+		}},
+	}
+	sansEquipe := func(classroom.Classroom) []teams.Team { return nil }
+
+	envois := classroom.ToInviteAmong([]classroom.Classroom{premier, second}, sansEquipe,
+		[]string{"a26.5n6.01.tp1.emilie-cote", "a26.5n6.02.tp1.jean-luc-picard", "tp1-aminata-d"},
+		acces, "pull")
+	obtenus := make([]string, 0, len(envois))
+	for _, envoi := range envois {
+		obtenus = append(obtenus, envoi.Repo+" @"+envoi.Invitation.Login+" "+envoi.Invitation.Permission)
+	}
+	attendus := []string{
+		"a26.5n6.01.tp1.emilie-cote @ecote push",
+		"a26.5n6.02.tp1.jean-luc-picard @jlpicard maintain",
+		"tp1-aminata-d @aminata-d triage",
+	}
+	if strings.Join(obtenus, " | ") != strings.Join(attendus, " | ") {
+		t.Errorf("envois =\n%s\nattendus =\n%s", strings.Join(obtenus, "\n"), strings.Join(attendus, "\n"))
+	}
+}

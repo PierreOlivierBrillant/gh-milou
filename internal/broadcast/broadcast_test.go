@@ -280,3 +280,43 @@ func TestRunNArretePasLeLotSurUnEchec(t *testing.T) {
 		t.Errorf("progression = %v", vus)
 	}
 }
+
+// calendrier joue le registre : il ne retient des travaux que leur date.
+type calendrier map[string]string
+
+func (c calendrier) Due(assignmentID string) string { return c[strings.ToLower(assignmentID)] }
+
+// Un groupe entier mêle plusieurs travaux : chaque dépôt reçoit les champs du
+// sien — son nom, son échéance, la personne qu'il vise. Un dépôt hors
+// nomenclature garde ce qu'un préfixe sait dire.
+func TestChaqueDepotRecoitLesChampsDeSonTravail(t *testing.T) {
+	cours := groupe().Scheduling(calendrier{
+		"a26.5n6.01.tp1": "2026-10-01", "a26.5n6.01.tp2": "2026-11-01T23:59",
+	})
+	lots := broadcast.ForRepos("a26.5n6.01", []classroom.Classroom{cours},
+		func(classroom.Classroom) []teams.Team { return nil },
+		depots("a26.5n6.01.tp1.emilie-cote", "a26.5n6.01.tp2.jean-luc-picard",
+			"a26.5n6.01.tp1.jean-luc-picard", "vieux-depot"), jour)
+	plan, err := broadcast.PrepareAll(broadcast.Request{
+		Content: []byte("{nom_etudiant} · {travail} · {echeance}"), Path: "NOTE.md",
+	}, lots)
+	if err != nil {
+		t.Fatalf("PrepareAll : %v", err)
+	}
+	obtenus := map[string]string{}
+	for _, item := range plan.Items {
+		obtenus[item.Repo] = string(item.Content)
+	}
+	attendus := map[string]string{
+		"a26.5n6.01.tp1.emilie-cote":     "Émilie Côté · tp1 · 2026-10-01",
+		"a26.5n6.01.tp1.jean-luc-picard": "Jean-Luc Picard · tp1 · 2026-10-01",
+		"a26.5n6.01.tp2.jean-luc-picard": "Jean-Luc Picard · tp2 · 2026-11-01 23:59",
+		"vieux-depot":                    " · a26.5n6.01 · ",
+	}
+	if !reflect.DeepEqual(obtenus, attendus) {
+		t.Errorf("contenus = %v\nattendus = %v", obtenus, attendus)
+	}
+	if len(plan.Items) != 4 {
+		t.Errorf("%d dépôts dans le plan, attendu 4", len(plan.Items))
+	}
+}

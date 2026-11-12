@@ -81,6 +81,59 @@ func ForPrefix(prefix string, repos []groups.Repo, today time.Time) (Context, []
 	return Context{Assignment: prefix, Today: today}, recipients
 }
 
+// Batch rassemble des dépôts qui partagent un contexte : ceux d'un même travail
+// d'un même groupe.
+type Batch struct {
+	Context    Context
+	Recipients []Recipient
+}
+
+// ForRepos répartit des dépôts qui relèvent de plusieurs travaux — un groupe
+// entier, un cours — en lots qui partagent chacun un contexte. Chaque dépôt
+// reçoit ainsi les champs du sien : le nom de son travail, son échéance, son
+// groupe, et la personne qu'il vise. « equipes » rend les équipes d'un groupe :
+// un même nom court en désigne une dans chacun.
+//
+// Les dépôts hors nomenclature forment un dernier lot, au contexte du préfixe :
+// c'est tout ce qu'on sait d'eux.
+func ForRepos(prefix string, groupes []classroom.Classroom,
+	equipes func(classroom.Classroom) []teams.Team, repos []groups.Repo, today time.Time) []Batch {
+	type travail struct {
+		cours  classroom.Classroom
+		id     string
+		depots []groups.Repo
+	}
+	var ordre []string
+	travaux := map[string]*travail{}
+	var reste []groups.Repo
+	for _, repo := range repos {
+		cours, place := classroom.Of(groupes, repo.Name)
+		parts, _ := naming.Parse(repo.Name)
+		if !place {
+			reste = append(reste, repo)
+			continue
+		}
+		id := cours.AssignmentID(parts.Assignment)
+		cle := strings.ToLower(id)
+		if _, vu := travaux[cle]; !vu {
+			travaux[cle] = &travail{cours: cours, id: id}
+			ordre = append(ordre, cle)
+		}
+		travaux[cle].depots = append(travaux[cle].depots, repo)
+	}
+	lots := make([]Batch, 0, len(ordre)+1)
+	for _, cle := range ordre {
+		lot := travaux[cle]
+		context, recipients := ForClassroom(lot.cours, lot.id, equipes(lot.cours), lot.depots, today)
+		lots = append(lots, Batch{Context: context, Recipients: recipients})
+	}
+	if len(reste) > 0 {
+		context, recipients := ForPrefix(prefix, reste, today)
+		lots = append(lots, Batch{Context: context, Recipients: recipients})
+	}
+	return lots
+}
+
 // Source est le fichier à déposer, tel qu'on l'a lu.
 type Source struct {
 	// Name est le nom du fichier, sans dossier : c'est la destination proposée.
@@ -198,12 +251,22 @@ type Plan struct {
 	Unknown []string
 }
 
-// Prepare remplit le gabarit pour chaque dépôt.
+// Prepare remplit le gabarit pour chaque dépôt d'un même travail.
 func Prepare(request Request, context Context, recipients []Recipient) (*Plan, error) {
+	return PrepareAll(request, []Batch{{Context: context, Recipients: recipients}})
+}
+
+// PrepareAll remplit le gabarit pour des dépôts de plusieurs travaux, chacun
+// avec le contexte de son lot.
+func PrepareAll(request Request, lots []Batch) (*Plan, error) {
 	if len(request.Content) > starter.MaxFileBytes {
 		return nil, tooLarge(len(request.Content))
 	}
-	if len(recipients) == 0 {
+	total := 0
+	for _, lot := range lots {
+		total += len(lot.Recipients)
+	}
+	if total == 0 {
 		return nil, valid.Errorf("Aucun dépôt où déposer le fichier.")
 	}
 	if _, err := CleanPath(request.Path); err != nil {
@@ -217,29 +280,39 @@ func Prepare(request Request, context Context, recipients []Recipient) (*Plan, e
 	}
 	plan := &Plan{Templated: templated, Used: Used(textes...), Unknown: Unknown(textes...)}
 
-	for _, recipient := range recipients {
-		values := context.Values(recipient)
+	for _, lot := range lots {
+		if err := plan.fill(request, gabarit, lot); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+// fill ajoute au plan les dépôts d'un lot, remplis de son contexte.
+func (p *Plan) fill(request Request, gabarit string, lot Batch) error {
+	for _, recipient := range lot.Recipients {
+		values := lot.Context.Values(recipient)
 		chemin, err := CleanPath(Fill(request.Path, values))
 		if err != nil {
-			return nil, valid.Errorf("%s — dans « %s ».", strings.TrimSuffix(err.Error(), "."),
+			return valid.Errorf("%s — dans « %s ».", strings.TrimSuffix(err.Error(), "."),
 				recipient.Repo)
 		}
 		item := Item{Recipient: recipient, Path: chemin, Content: request.Content}
-		if templated {
+		if p.Templated {
 			item.Content = []byte(Fill(gabarit, values))
 		}
 		item.Message = strings.TrimSpace(Fill(request.Message, values))
 		if item.Message == "" {
 			item.Message = "Ajoute " + chemin
 		}
-		for _, champ := range plan.Used {
+		for _, champ := range p.Used {
 			if values[champ] == "" {
 				item.Empty = append(item.Empty, champ)
 			}
 		}
-		plan.Items = append(plan.Items, item)
+		p.Items = append(p.Items, item)
 	}
-	return plan, nil
+	return nil
 }
 
 // Incomplete compte les dépôts où un champ employé reste vide.

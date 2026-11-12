@@ -475,6 +475,48 @@ func (c Classroom) ToInvite(repos []string, equipes []teams.Team,
 	return envois
 }
 
+// ToInviteAmong fait de même pour des dépôts qui relèvent de plusieurs groupes —
+// un groupe entier, un cours, une session — : chacun s'invite au nom du sien,
+// qui dit qui il vise et à quel droit l'inviter. « equipes » rend les équipes
+// d'un groupe : un même nom court désigne une équipe dans chacun.
+//
+// Un dépôt hors nomenclature n'appartient à aucun groupe : il ne vise personne,
+// et seules ses invitations expirées, qui nomment déjà quelqu'un, se renvoient,
+// au droit donné.
+func ToInviteAmong(groupes []Classroom, equipes func(Classroom) []teams.Team,
+	repos []string, acces map[string]identity.Access, permission string) []identity.Dispatch {
+	parGroupe := make([][]string, len(groupes))
+	var orphelins []string
+	for _, repo := range repos {
+		place := -1
+		if parts, reconnu := naming.Parse(repo); reconnu {
+			for position, cours := range groupes {
+				if naming.Belongs(parts, cours.Session, cours.Course, cours.Group) {
+					place = position
+					break
+				}
+			}
+		}
+		if place < 0 {
+			orphelins = append(orphelins, repo)
+			continue
+		}
+		parGroupe[place] = append(parGroupe[place], repo)
+	}
+	var envois []identity.Dispatch
+	for position, cours := range groupes {
+		if len(parGroupe[position]) == 0 {
+			continue
+		}
+		envois = append(envois, cours.ToInvite(parGroupe[position], equipes(cours), acces,
+			cours.Defaults.normalized().Permission)...)
+	}
+	if len(orphelins) > 0 {
+		envois = append(envois, Classroom{}.ToInvite(orphelins, nil, acces, permission)...)
+	}
+	return envois
+}
+
 // comptesVises rend les comptes GitHub de ceux qu'un dépôt vise.
 func (c Classroom) comptesVises(repoName string, equipes []teams.Team) []string {
 	var comptes []string

@@ -136,12 +136,12 @@ type Options struct {
 	// commits, les remises postérieures à la date cible, et les personnes dont
 	// aucun commit ne porte la trace.
 	Handins bool
-	// SendInvitations relit les accès des dépôts du travail géré et envoie les
+	// SendInvitations relit les accès des dépôts du préfixe géré et envoie les
 	// invitations qui manquent : une neuve à la place de chaque invitation
 	// expirée, une première à qui n'en a aucune — jamais invité, invitation
 	// refusée ou annulée. Avec --dry-run, il les nomme sans rien envoyer.
 	SendInvitations bool
-	// PushFile dépose un fichier local dans chaque dépôt du travail géré. Son
+	// PushFile dépose un fichier local dans chaque dépôt du préfixe géré. Son
 	// contenu, son chemin dans le dépôt (PushPath, par défaut son nom) et le
 	// message du commit (PushMessage) acceptent les champs du gabarit —
 	// {nom_etudiant}, {groupe}, {cours}… Un fichier déjà présent au contenu
@@ -383,10 +383,10 @@ Drapeaux :
   --due DATE               date cible du travail (AAAA-MM-JJ ou AAAA-MM-JJTHH:MM,
                            vide pour la retirer)
   --handins                relever les commits des dépôts du travail géré
-  --send-invitations       envoyer les invitations manquantes du travail géré :
+  --send-invitations       envoyer les invitations manquantes du préfixe géré :
                            renouveler les expirées, inviter qui n'en a aucune
                            (avec --dry-run : les nommer sans rien envoyer)
-  --push-file FICHIER      déposer un fichier dans chaque dépôt du travail géré. Son
+  --push-file FICHIER      déposer un fichier dans chaque dépôt du préfixe géré. Son
                            contenu, son chemin et le message du commit acceptent
                            les champs {nom_etudiant}, {prenom}, {nom_famille},
                            {compte}, {matricule}, {equipe}, {session},
