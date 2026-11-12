@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/fakegh"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/runner"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/signature"
 )
 
 // Inscrire une cohorte telle que le collège l'exporte.
@@ -245,5 +247,135 @@ func TestLeDepotDUneInscriteSansCompteNeServPasLesAutres(t *testing.T) {
 	}
 	if strings.Join(servis, ",") != "Naomi Chéry" {
 		t.Errorf("seule Naomi a déjà son dépôt : %v", servis)
+	}
+}
+
+// ligneDeMarque est une ligne du registre des marques, telle qu'elle y est
+// écrite : c'est ce fichier, et lui seul, qui dira un jour à qui une marque
+// appartient.
+type ligneDeMarque struct {
+	Assignment string `json:"assignment"`
+	Username   string `json:"username"`
+	StudentID  string `json:"student_id"`
+	Token      string `json:"token"`
+}
+
+// marquesAuRegistre relit les marques que porte le registre de l'organisation.
+func (h *harnais) marquesAuRegistre() []ligneDeMarque {
+	h.t.Helper()
+	contenu, present := h.State.Files("acme/"+registry.RepoName, registry.Branch)[registry.MarksFile]
+	if !present {
+		return nil
+	}
+	var lu struct {
+		Issued []ligneDeMarque `json:"issued"`
+	}
+	if err := json.Unmarshal([]byte(contenu), &lu); err != nil {
+		h.t.Fatalf("registre des marques illisible : %v\n%s", err, contenu)
+	}
+	return lu.Issued
+}
+
+// distribuerANaomi distribue « tp1 » à un groupe où Naomi Chéry n'a encore que
+// son matricule, et rend la marque déposée dans son dépôt.
+func distribuerANaomi(t *testing.T) (*harnais, string, string) {
+	t.Helper()
+	state := fakegh.NewState()
+	state.Users["jlpicard"] = "Jean-Luc Picard"
+	state.Users["nchery"] = "Naomi Chéry"
+	h := nouveau(t, state)
+	place := h.groupe("a26", "5n6", "1010", "Jean-Luc Picard", "jlpicard")
+	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
+		inscritParMatricule("Naomi Chéry", "2100456"))
+
+	h.travail(http.MethodPost, "/api/classrooms/"+place+"/assignments",
+		map[string]any{"name": "tp1"})
+
+	readme := h.State.Files("acme/a26.5n6.1010.tp1.naomi-chery", "main")["README.md"]
+	token, signe := signature.First([]byte(readme))
+	if !signe {
+		t.Fatalf("le dépôt de Naomi n'est pas signé : %q", readme)
+	}
+	return h, place, signature.Text(token)
+}
+
+// La marque d'une inscrite sans compte monte au registre, rattachée à son
+// matricule. Elle restait dans son dépôt sans y monter : le jeton est tiré au
+// hasard, et ce qui ne monte pas est perdu pour de bon — lui rattacher un
+// compte ensuite n'y changeait rien.
+func TestLaMarqueDUneInscriteSansCompteMonteAuRegistre(t *testing.T) {
+	h, _, marque := distribuerANaomi(t)
+
+	marques := h.marquesAuRegistre()
+	var sienne, siennes = ligneDeMarque{}, 0
+	for _, ligne := range marques {
+		if ligne.Token == marque {
+			sienne, siennes = ligne, siennes+1
+		}
+	}
+	if siennes != 1 {
+		t.Fatalf("la marque de Naomi (%s) n'est pas au registre : %+v", marque, marques)
+	}
+	if sienne.StudentID != "2100456" || sienne.Username != "" ||
+		sienne.Assignment != "a26.5n6.1010.tp1" {
+		t.Errorf("sa marque doit être rattachée à son matricule : %+v", sienne)
+	}
+	// Rien ne change pour qui a un compte : sa marque est rangée sous lui.
+	if len(marques) != 2 {
+		t.Errorf("deux marques attendues, une par dépôt : %+v", marques)
+	}
+	for _, ligne := range marques {
+		if ligne.Token != marque && (ligne.Username != "jlpicard" || ligne.StudentID != "") {
+			t.Errorf("la marque de Jean-Luc doit rester sous son compte : %+v", ligne)
+		}
+	}
+}
+
+// Et elle reste attribuable : une copie qui la porte se nomme par son matricule
+// tant que Naomi n'a pas de compte, puis par son nom dès qu'on lui en rattache
+// un. Le registre apprend le matricule avec le compte : c'est ce qui les relie,
+// et sans lui la marque ne désignerait plus qu'un matricule que rien ne nomme.
+func TestSaMarqueResteAttribuableUneFoisSonCompteRattache(t *testing.T) {
+	h, place, marque := distribuerANaomi(t)
+
+	// Jean-Luc a recopié le travail de Naomi, README compris : la marque a
+	// suivi.
+	readme := h.State.Files("acme/a26.5n6.1010.tp1.naomi-chery", "main")["README.md"]
+	for _, depot := range []string{"a26.5n6.1010.tp1.naomi-chery", "a26.5n6.1010.tp1.jean-luc-picard"} {
+		h.State.SeedCommit("acme/"+depot, map[string]string{
+			"README.md": readme, "src/Solution.java": solutionJava,
+		}, "main")
+	}
+	bilan := h.travail(http.MethodPost,
+		"/api/classrooms/"+place+"/assignments/tp1/plagiat",
+		map[string]any{"profile": "tout"})
+	resultat, _ := bilan["result"].(map[string]any)
+	nom, _ := resultat["report"].(string)
+	if nom == "" {
+		t.Fatalf("aucun rapport produit : %+v", bilan)
+	}
+
+	porteur := func() map[string]any {
+		t.Helper()
+		var rapport struct {
+			Marks map[string]map[string]any `json:"marks"`
+		}
+		h.json(http.MethodGet, "/api/plagiat/reports/"+nom, nil, &rapport)
+		return rapport.Marks[marque]
+	}
+
+	avant := porteur()
+	if phrase, _ := avant["phrase"].(string); !strings.Contains(phrase, "matricule 2100456") ||
+		!strings.Contains(phrase, "a26.5n6.1010.tp1") {
+		t.Fatalf("sans compte, la marque se nomme par son matricule : %+v", avant)
+	}
+
+	if reponse, contenu := h.rattacher(place, "2100456", "nchery"); reponse.StatusCode >= 300 {
+		t.Fatalf("rattachement refusé : %d — %s", reponse.StatusCode, contenu)
+	}
+	apres := porteur()
+	if phrase, _ := apres["phrase"].(string); !strings.Contains(phrase, "Naomi Chéry") ||
+		apres["username"] != "nchery" {
+		t.Fatalf("une fois son compte rattaché, la marque la nomme : %+v", apres)
 	}
 }

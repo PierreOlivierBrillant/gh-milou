@@ -627,8 +627,11 @@ func (s *Server) handleAttachAccount(writer http.ResponseWriter, request *http.R
 		fail(writer, err)
 		return
 	}
+	// Le registre apprend le matricule avec le compte : c'est ce qui relie l'un
+	// à l'autre d'un poste à l'autre, et ce qui rapporte à ce compte les
+	// marques délivrées par matricule avant qu'il soit rattaché.
 	if err := s.apprendre(cours.Org, roster.Person{
-		FullName: personne.FullName, Username: compte,
+		FullName: personne.FullName, Username: compte, StudentID: personne.StudentID,
 	}); err != nil {
 		fail(writer, err)
 		return

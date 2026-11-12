@@ -252,18 +252,18 @@ func (s *Server) porteursDeMarques(report *plagiarism.Report) map[string]any {
 		org = s.org()
 	}
 	set, _ := s.names(org)
-	marques := set.Marks()
 	for _, signal := range report.Result.Signals {
 		if signal.Kind != similarity.SharedSignature || signal.Detail == "" {
 			continue
 		}
-		ligne, connue := marques.Who(signal.Detail)
-		if !connue {
+		titulaire, connu := set.Holder(signal.Detail)
+		if !connu {
 			continue
 		}
 		porteurs[signal.Detail] = map[string]any{
-			"username": ligne.Username, "full_name": set.Name(ligne.Username),
-			"assignment": ligne.Assignment, "issued_at": ligne.IssuedAt,
+			"username": titulaire.Username, "full_name": titulaire.FullName,
+			"student_id": titulaire.StudentID, "phrase": titulaire.Phrase(),
+			"assignment": titulaire.Issued.Assignment, "issued_at": titulaire.Issued.IssuedAt,
 		}
 	}
 	return porteurs

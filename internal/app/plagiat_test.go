@@ -18,6 +18,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/fakegh"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/plagiarism"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/signature"
 )
 
 const gabaritTP = `
@@ -575,4 +576,54 @@ func desindexer(t *testing.T, h *harnais, travail string) {
 	}
 	fichiers[exchange.CatalogFile] = string(payload)
 	h.State.SeedCommit("acme/.cohorte", fichiers, "main")
+}
+
+// Une marque délivrée à une inscrite sans compte se nomme au terminal comme au
+// navigateur : par son matricule tant que personne n'a de compte, puis par son
+// nom dès que le registre connaît un compte qui le porte. Elle s'écrivait
+// « délivrée à @ », quand elle s'écrivait.
+func TestUneMarqueDelivreeParMatriculeSeNommeAuTerminal(t *testing.T) {
+	for _, cas := range []struct{ nom, etudiants, attendu string }{
+		{"sans compte", `{"version": 2, "users": []}`,
+			"délivrée au matricule 2100456 pour « a26.5n6.01.tp1 »"},
+		{"compte rattaché", `{"version": 2, "users": [{"username": "nchery", ` +
+			`"full_name": "Naomi Chéry", "student_id": "2100456", "is_teacher": false}]}`,
+			"délivrée à Naomi Chéry pour « a26.5n6.01.tp1 »"},
+	} {
+		t.Run(cas.nom, func(t *testing.T) {
+			h := groupeRemis(t)
+			tirage, err := signature.New()
+			if err != nil {
+				t.Fatalf("tirage : %v", err)
+			}
+			// Naomi a reçu cette marque dans son README ; Émilie et Jean-Luc
+			// l'ont recopié avec le reste.
+			readme := string(signature.Sign([]byte("# Travail pratique 1\n"), tirage))
+			for _, depot := range []string{
+				"a26.5n6.01.tp1.emilie-cote", "a26.5n6.01.tp1.jean-luc-picard",
+			} {
+				h.State.SeedCommit("acme/"+depot, map[string]string{
+					"src/Inventaire.java": gabaritTP, "src/Solution.java": solutionTP,
+					"README.md": readme,
+				}, "main")
+			}
+			h.State.AddRepo("acme", ".cohorte", true)
+			h.State.SeedCommit("acme/.cohorte", map[string]string{
+				"etudiants.json": cas.etudiants,
+				"signatures.json": `{"version": 1, "issued": [{"assignment": ` +
+					`"a26.5n6.01.tp1", "student_id": "2100456", "token": "` +
+					signature.Text(tirage) + `"}]}`,
+			}, "main")
+
+			h.Options.Plagiarism = true
+			h.Options.Manage = "a26.5n6.01.tp1"
+			h.Options.ManageRequested = true
+			h.Options.Yes = true
+			if code := h.muet(); code != app.ExitOK {
+				t.Fatalf("code = %d\n%s", code, h.texte())
+			}
+			h.contient("Même marque invisible", cas.attendu)
+			h.absent("délivrée à @ ")
+		})
+	}
 }
