@@ -268,7 +268,9 @@ func TestTerminalDistribueUnTravailDEquipe(t *testing.T) {
 		t.Fatalf("distribution : code %d\n%s", code, h.texte())
 	}
 
-	noms := h.State.RepoNames("acme")
+	// Les dépôts de service en sont écartés : « .cohorte » reçoit les marques
+	// des équipes, il n'est le dépôt de personne.
+	noms := h.depots()
 	sort.Strings(noms)
 	attendus := []string{"a26.5n6.01.tp1.eq1", "a26.5n6.01.tp1.eq2"}
 	if strings.Join(noms, ",") != strings.Join(attendus, ",") {
@@ -296,7 +298,7 @@ func TestTerminalDistribueAQuelquesEquipes(t *testing.T) {
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("distribution : code %d\n%s", code, h.texte())
 	}
-	if noms := h.State.RepoNames("acme"); strings.Join(noms, ",") != "a26.5n6.01.tp1.eq2" {
+	if noms := h.depots(); strings.Join(noms, ",") != "a26.5n6.01.tp1.eq2" {
 		t.Fatalf("seule eq2 devait être servie : %v", noms)
 	}
 }

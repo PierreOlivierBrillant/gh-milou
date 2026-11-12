@@ -164,3 +164,55 @@ func TestUnCacheDAvantLesMarquesParMatriculeEstIgnore(t *testing.T) {
 			"matricule (avis : %v)", snapshot.Issues)
 	}
 }
+
+// Une marque délivrée à une équipe se nomme par elle, au terminal comme au
+// navigateur. Le registre ne dit pas qui la composait : les équipes vivent sur
+// GitHub, et leur composition change.
+func TestUneMarqueDEquipeSeNommeParSonEquipe(t *testing.T) {
+	sienne := jeton(t)
+	set, _, err := appliquer(t, registry.Empty(), registry.Mark(signature.Issued{
+		Assignment: "a26.5n6.01.projet", Team: "eq1", Token: sienne,
+	}))
+	if err != nil {
+		t.Fatalf("versement : %v", err)
+	}
+	titulaire, connu := set.Holder(sienne)
+	if !connu || titulaire.Team != "eq1" || titulaire.Username != "" ||
+		titulaire.StudentID != "" {
+		t.Fatalf("titulaire : %+v", titulaire)
+	}
+	if phrase := titulaire.Phrase(); phrase !=
+		"délivrée à l'équipe eq1 pour « a26.5n6.01.projet »" {
+		t.Fatalf("phrase : %q", phrase)
+	}
+}
+
+// Une entrée de cache d'avant les marques d'équipe ne se relit pas : la version
+// qui l'a écrite écartait ces lignes à la lecture, et l'entrée, scellée par le
+// bon commit, les tairait pour toute la durée du sceau.
+func TestUnCacheDAvantLesMarquesDEquipeEstIgnore(t *testing.T) {
+	state := fakegh.NewState()
+	sienne := jeton(t)
+	state.AddRepo("acme", registry.RepoName, true)
+	tete := state.SeedCommit("acme/"+registry.RepoName, map[string]string{
+		registry.UsersFile: `{"version": 2, "users": []}`,
+		registry.MarksFile: `{"version": 1, "issued": [{"assignment": "a26.5n6.01.projet", ` +
+			`"team": "eq1", "token": "` + sienne + `"}]}`,
+	}, registry.Branch)
+	store, stockage := cacheEt(t, state)
+
+	stockage.Set(cache.RegistryKey("acme"), map[string]any{
+		"schema": 9, "head": tete, "users": []any{},
+		"marks":  map[string]any{"version": 1, "issued": []any{}},
+		"issues": []string{"Signatures : une marque de « a26.5n6.01.projet » ne dit pas à qui elle est."},
+	})
+
+	snapshot, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load : %v", err)
+	}
+	if _, connu := snapshot.Set.Holder(sienne); !connu || len(snapshot.Issues) != 0 {
+		t.Fatalf("l'entrée d'une version antérieure a tu la marque de l'équipe "+
+			"(avis : %v)", snapshot.Issues)
+	}
+}

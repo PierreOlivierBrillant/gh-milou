@@ -485,7 +485,9 @@ Drapeaux :
   --move-to PLACE          déplacer le travail géré vers « session.cours.groupe »
   --rename-to NOM          nom que le travail prend ; seul, il le renomme sur place
   --template ORG/DEPOT     dépôt modèle (vide = dépôt neuf initialisé)
-  --pattern GABARIT        gabarit de nom des dépôts (défaut : {assignment}-{username})
+  --pattern GABARIT        gabarit de nom des dépôts d'un préfixe hérité (défaut :
+                           {assignment}-{username}) ; un travail de la nomenclature
+                           nomme les siens {assignment}.{name}
   --starter DOSSIER        dossier local déposé dans chaque dépôt, en un commit
   --commit-message TEXTE   message du commit des fichiers de départ
   --force-starter          déposer même dans un dépôt déjà garni

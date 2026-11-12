@@ -94,8 +94,8 @@ func TestRedistribuerRemplaceLaMarque(t *testing.T) {
 func TestDesMarquesIncompletesSontRefusees(t *testing.T) {
 	bonne := marque(t)
 	cas := map[string]signature.Issued{
-		"travail hors nomenclature": {Assignment: "tp1", Username: "x", Token: bonne},
-		"ni compte ni matricule":    {Assignment: "a26.5n6.01.tp1", Token: bonne},
+		"travail hors nomenclature":          {Assignment: "tp1", Username: "x", Token: bonne},
+		"ni compte, ni matricule, ni équipe": {Assignment: "a26.5n6.01.tp1", Token: bonne},
 		"marque invalide": {Assignment: "a26.5n6.01.tp1", Username: "x",
 			Token: "pas-une-marque"},
 	}
@@ -234,5 +234,89 @@ func TestUnRegistreDejaEcritSeRelitEtSeReecritALIdentique(t *testing.T) {
 	if relu, soucis := signature.DecodeBook(contenu); len(soucis) != 0 ||
 		len(relu.Issued) != 3 {
 		t.Fatalf("relecture : %v, %+v", soucis, relu.Issued)
+	}
+}
+
+// Le dépôt d'une équipe reçoit sa marque comme celui d'une personne. C'est
+// l'équipe qui la porte, aucun de ses membres : elle se range sous le nom court
+// de l'équipe, que le travail situe déjà dans son groupe. Elle n'avait jusqu'ici
+// aucune place où se ranger, et ne montait jamais.
+func TestUneMarqueDEquipeSeRangeSousSonEquipe(t *testing.T) {
+	book, _, _ := registre(t)
+	sienne := marque(t)
+
+	apres, bouge, err := book.With([]signature.Issued{
+		{Assignment: "a26.5n6.01.projet", Team: "EQ1", Token: sienne},
+	})
+	if err != nil || !bouge {
+		t.Fatalf("une marque d'équipe doit se verser : %v", err)
+	}
+	ligne, trouve := apres.Who(sienne)
+	if !trouve || ligne.Team != "eq1" || ligne.Username != "" || ligne.StudentID != "" {
+		t.Fatalf("recherche par marque : %+v", ligne)
+	}
+
+	// Redistribuer lui délivre une nouvelle marque, qui remplace l'ancienne :
+	// la règle est celle d'une personne.
+	nouvelle := marque(t)
+	apres, _, err = apres.With([]signature.Issued{
+		{Assignment: "a26.5n6.01.projet", Team: "eq1", Token: nouvelle},
+	})
+	if err != nil || len(apres.Issued) != 3 {
+		t.Fatalf("redistribution : %v, %+v", err, apres.Issued)
+	}
+	if _, trouve := apres.Who(sienne); trouve {
+		t.Fatal("l'ancienne marque ne doit plus désigner l'équipe")
+	}
+}
+
+// Une équipe et un compte du même nom ne se confondent jamais : rien n'empêche
+// quelqu'un de s'appeler « eq1 » sur GitHub.
+func TestUneEquipeEtUnCompteDuMemeNomNeSeConfondentPas(t *testing.T) {
+	deLEquipe, duCompte := marque(t), marque(t)
+	book, err := signature.Book{Issued: []signature.Issued{
+		{Assignment: "a26.5n6.01.projet", Team: "eq1", Token: deLEquipe},
+		{Assignment: "a26.5n6.01.projet", Username: "eq1", Token: duCompte},
+	}}.Validate()
+	if err != nil || len(book.Issued) != 2 {
+		t.Fatalf("deux destinataires, deux marques : %v, %+v", err, book.Issued)
+	}
+	if ligne, _ := book.Who(deLEquipe); ligne.Team != "eq1" || ligne.Username != "" {
+		t.Fatalf("la marque de l'équipe a changé de mains : %+v", ligne)
+	}
+}
+
+// Une marque d'équipe ne change pas la version du fichier. Un poste resté à la
+// version précédente ne connaît pas « team » : il lit la ligne comme si le
+// champ n'y était pas, l'écarte en le signalant, et garde toutes les autres —
+// alors qu'une version 2 lui ferait écarter le fichier entier, et que sa
+// prochaine distribution le réécrirait avec ses seules marques.
+func TestUneMarqueDEquipeNeChangePasLaVersion(t *testing.T) {
+	book, _, _ := registre(t)
+	avecEquipe, _, err := book.With([]signature.Issued{
+		{Assignment: "a26.5n6.01.projet", Team: "eq1", Token: marque(t)},
+	})
+	if err != nil {
+		t.Fatalf("versement : %v", err)
+	}
+	contenu, err := signature.EncodeBook(avecEquipe)
+	if err != nil {
+		t.Fatalf("écriture : %v", err)
+	}
+	texte := string(contenu)
+	if !strings.Contains(texte, `"version": 1`) || !strings.Contains(texte, `"team": "eq1"`) ||
+		strings.Contains(texte, `"username": ""`) || strings.Contains(texte, `"student_id": ""`) {
+		t.Fatalf("une marque d'équipe s'écrit sous son équipe, en version 1 :\n%s", texte)
+	}
+	if relu, soucis := signature.DecodeBook(contenu); len(soucis) != 0 || len(relu.Issued) != 3 {
+		t.Fatalf("relecture : %v, %+v", soucis, relu.Issued)
+	}
+
+	// Ce que lit le poste d'avant : un champ qu'il ignore, comme s'il manquait.
+	ancien := strings.Replace(texte, `"team": "eq1"`, `"inconnu": "eq1"`, 1)
+	relu, soucis := signature.DecodeBook([]byte(ancien))
+	if len(relu.Issued) != 2 || len(soucis) != 1 {
+		t.Fatalf("le poste d'avant doit écarter la seule ligne d'équipe, en le "+
+			"signalant : %v, %+v", soucis, relu.Issued)
 	}
 }

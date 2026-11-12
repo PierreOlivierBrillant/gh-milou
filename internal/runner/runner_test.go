@@ -13,6 +13,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/fakegh"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ghapi"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/plan"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/runner"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/signature"
@@ -694,5 +695,162 @@ func TestUnDepotSansReadmeNEstPasSigne(t *testing.T) {
 	fichiers := serveur.State.Files("acme/"+rapport.Results[0].Repo, "main")
 	if _, present := fichiers[signature.ReadmeFile]; present {
 		t.Fatal("un README a été créé pour l'occasion")
+	}
+}
+
+// travailDuGroupe règle un travail de la nomenclature, nommé comme le navigateur
+// nomme les siens.
+func travailDuGroupe(nom string) config.Settings {
+	settings := reglages()
+	settings.Assignment = "a26.5n6.01." + nom
+	settings.NamePattern = "{assignment}.{name}"
+	return settings
+}
+
+// marquesDuRegistre relit le registre de l'organisation comme un autre poste
+// le ferait : sans rien de ce que l'exécuteur a gardé en mémoire.
+func marquesDuRegistre(t *testing.T, client *ghapi.Client) *registry.Set {
+	t.Helper()
+	snapshot, err := registry.New(client, "acme", nil).Load()
+	if err != nil {
+		t.Fatalf("lecture du registre : %v", err)
+	}
+	return snapshot.Set
+}
+
+// Les marques montent au registre avec la distribution, sans que l'appelant
+// ait à y penser : c'est le seul endroit qui dira un jour à qui l'une d'elles
+// appartient. Trois chemins signaient sans jamais les y verser — ajouter des
+// dépôts à un groupe au terminal, ajouter une personne au navigateur, et tout
+// dépôt d'équipe — : il suffit maintenant de donner le registre.
+func TestLesMarquesMontentAuRegistreAvecLaDistribution(t *testing.T) {
+	client, _ := monter(t, nil)
+	settings := travailDuGroupe("tp1")
+	gens := []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+	}
+
+	rapport, err := runner.New(client, settings, squelette(t)).Run(
+		construire(t, settings, gens),
+		runner.Options{Sign: true, Registry: registry.New(client, "acme", nil)})
+	if err != nil {
+		t.Fatalf("Run : %v", err)
+	}
+	if rapport.Marks != (runner.Delivery{Signed: 2, Recorded: 2}) {
+		t.Fatalf("versement : %+v", rapport.Marks)
+	}
+	registre := marquesDuRegistre(t, client)
+	for _, result := range rapport.Results {
+		titulaire, connu := registre.Holder(result.Signature)
+		if !connu || titulaire.Issued.Assignment != "a26.5n6.01.tp1" {
+			t.Fatalf("la marque de %s n'est pas au registre : %+v", result.FullName, titulaire)
+		}
+	}
+}
+
+// Le dépôt d'une équipe reçoit sa marque comme celui d'une personne, et elle
+// monte sous le nom de l'équipe. Elle était déposée sans jamais monter : ni
+// compte ni matricule ne désigne une équipe, et le registre n'avait pas de
+// place pour elle.
+func TestLaMarqueDUnDepotDEquipeMonteSousSonEquipe(t *testing.T) {
+	client, _ := monter(t, nil)
+	settings := travailDuGroupe("projet")
+	settings.AddCollaborator = false
+	items, err := plan.BuildTeams([]plan.TeamTarget{
+		{Short: "eq1", Slug: "a26-5n6-01-eq1"}, {Short: "eq2", Slug: "a26-5n6-01-eq2"},
+	}, settings)
+	if err != nil {
+		t.Fatalf("plan.BuildTeams : %v", err)
+	}
+
+	rapport, err := runner.New(client, settings, squelette(t)).Run(items,
+		runner.Options{Sign: true, Registry: registry.New(client, "acme", nil)})
+	if err != nil {
+		t.Fatalf("Run : %v", err)
+	}
+	if rapport.Marks != (runner.Delivery{Signed: 2, Recorded: 2}) {
+		t.Fatalf("versement : %+v", rapport.Marks)
+	}
+	registre := marquesDuRegistre(t, client)
+	for _, result := range rapport.Results {
+		titulaire, connu := registre.Holder(result.Signature)
+		if !connu || titulaire.Team != result.Team {
+			t.Fatalf("la marque de l'équipe %s n'est pas sous son nom : %+v",
+				result.Team, titulaire)
+		}
+	}
+}
+
+// Un préfixe hérité signe ses dépôts, mais le registre ne range que les marques
+// d'un travail de la nomenclature. Cela se dit en clair, d'une phrase qui
+// ne double aucun point : l'avertissement reprenait le refus du registre,
+// « …n'est pas un travail de la nomenclature.. ».
+func TestUnPrefixeHeriteDitQueSesMarquesNeMontentPas(t *testing.T) {
+	client, serveur := monter(t, nil)
+	settings := reglages()
+
+	rapport, err := runner.New(client, settings, squelette(t)).Run(
+		construire(t, settings, cohorte[:1]),
+		runner.Options{Sign: true, Registry: registry.New(client, "acme", nil)})
+	if err != nil {
+		t.Fatalf("Run : %v", err)
+	}
+	if rapport.Marks.Signed != 1 || rapport.Marks.Recorded != 0 ||
+		!strings.Contains(rapport.Marks.Problem, "« tp1 » n'en est pas un") ||
+		strings.Contains(rapport.Marks.Problem, "..") {
+		t.Fatalf("versement : %+v", rapport.Marks)
+	}
+	if _, existe := serveur.State.Repos["acme/"+registry.RepoName]; existe {
+		t.Fatal("rien ne devait être écrit au registre")
+	}
+}
+
+// Qui n'a ni compte ni matricule reçoit son dépôt signé, mais rien ne peut
+// désigner sa marque au registre : un nom n'identifie personne. Cela se dit en
+// le nommant, et les autres marques montent quand même.
+func TestUneMarqueQueRienNeDesigneSeDit(t *testing.T) {
+	client, _ := monter(t, nil)
+	settings := travailDuGroupe("tp1")
+	gens := []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		{FullName: "Naomi Chéry"},
+	}
+
+	rapport, err := runner.New(client, settings, squelette(t)).Run(
+		construire(t, settings, gens),
+		runner.Options{Sign: true, Registry: registry.New(client, "acme", nil)})
+	if err != nil {
+		t.Fatalf("Run : %v", err)
+	}
+	if rapport.Marks.Signed != 2 || rapport.Marks.Recorded != 1 ||
+		!strings.HasPrefix(rapport.Marks.Problem, "Naomi Chéry n'a ni compte ni matricule") {
+		t.Fatalf("versement : %+v", rapport.Marks)
+	}
+}
+
+// Sans registre, aucune marque ne monte : cela se dit aussi. Un chemin qui
+// signe ne peut plus oublier de verser, seulement de donner le registre — et
+// son bilan le trahit.
+func TestSansRegistreLesMarquesNeMontentPasEtLeBilanLeDit(t *testing.T) {
+	client, _ := monter(t, nil)
+	settings := travailDuGroupe("tp1")
+
+	rapport, err := runner.New(client, settings, squelette(t)).Run(
+		construire(t, settings, cohorte[:1]), runner.Options{Sign: true})
+	if err != nil {
+		t.Fatalf("Run : %v", err)
+	}
+	if rapport.Marks.Recorded != 0 || !strings.Contains(rapport.Marks.Problem, "aucun registre") {
+		t.Fatalf("versement : %+v", rapport.Marks)
+	}
+	// Une simulation ne signe rien, et n'a donc rien à en dire.
+	simulation, err := runner.New(client, settings, squelette(t)).Run(
+		construire(t, settings, cohorte[1:2]), runner.Options{Sign: true, DryRun: true})
+	if err != nil {
+		t.Fatalf("Run : %v", err)
+	}
+	if simulation.Marks != (runner.Delivery{}) {
+		t.Fatalf("une simulation n'a rien à dire des marques : %+v", simulation.Marks)
 	}
 }

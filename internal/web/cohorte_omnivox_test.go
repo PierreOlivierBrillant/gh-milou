@@ -257,6 +257,7 @@ type ligneDeMarque struct {
 	Assignment string `json:"assignment"`
 	Username   string `json:"username"`
 	StudentID  string `json:"student_id"`
+	Team       string `json:"team"`
 	Token      string `json:"token"`
 }
 

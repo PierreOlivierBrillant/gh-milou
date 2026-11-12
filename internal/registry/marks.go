@@ -19,6 +19,10 @@ type Holder struct {
 	Username  string
 	FullName  string
 	StudentID string
+	// Team est le nom court de l'équipe qui a reçu la marque, pour un travail
+	// d'équipe. Qui la composait ce jour-là, le registre ne le sait pas : les
+	// équipes vivent sur GitHub, et leur composition change.
+	Team string
 }
 
 // Holder rend la personne à qui une marque a été délivrée, et dit si le
@@ -34,7 +38,8 @@ func (s *Set) Holder(token string) (Holder, bool) {
 	if !delivree {
 		return Holder{}, false
 	}
-	titulaire := Holder{Issued: ligne, Username: ligne.Username, StudentID: ligne.StudentID}
+	titulaire := Holder{Issued: ligne, Username: ligne.Username, StudentID: ligne.StudentID,
+		Team: ligne.Team}
 	fiche, connue := s.PersonOf(ligne.Username)
 	if !connue {
 		fiche, connue = s.withStudentID(ligne.StudentID)
@@ -68,7 +73,8 @@ func (s *Set) withStudentID(matricule string) (User, bool) {
 
 // Phrase dit à qui, et pour quel travail, la marque a été délivrée : par son
 // nom quand le registre le connaît, par son compte à défaut, par son matricule
-// en dernier recours. Le navigateur et le terminal la disent mot pour mot.
+// en dernier recours — ou par son équipe, pour un travail d'équipe. Le
+// navigateur et le terminal la disent mot pour mot.
 func (h Holder) Phrase() string {
 	pour := " pour « " + h.Issued.Assignment + " »"
 	switch {
@@ -76,6 +82,8 @@ func (h Holder) Phrase() string {
 		return "délivrée à " + strings.TrimSpace(h.FullName) + pour
 	case h.Username != "":
 		return "délivrée à @" + h.Username + pour
+	case h.Team != "":
+		return "délivrée à l'équipe " + h.Team + pour
 	default:
 		return "délivrée au matricule " + h.StudentID + pour
 	}

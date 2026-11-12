@@ -34,6 +34,11 @@ import (
 // connaît pas, et sa prochaine distribution le réécrirait avec ses seules
 // marques : perdre une marque est un désagrément, perdre toutes les autres
 // serait une perte sèche.
+//
+// Une marque délivrée à une équipe ne la change pas davantage, pour la même
+// raison : elle s'écrit sous le nom de l'équipe, dans une ligne que ce poste
+// ne sait pas lire et qu'il écarte seule. Ce qu'il réécrit ensuite la perd,
+// elle, et rien d'autre.
 const Version = 1
 
 // BookFile porte les marques, dans le registre de l'organisation.
@@ -52,6 +57,11 @@ type Issued struct {
 	// désigne. La ligne n'est pas réécrite quand un compte lui est rattaché
 	// ensuite : c'est le registre des utilisateurs qui relie l'un à l'autre.
 	StudentID string `json:"student_id,omitempty"`
+	// Team est le nom court de l'équipe, quand le dépôt est celui d'un travail
+	// d'équipe : c'est elle qui a reçu la marque, aucun de ses membres en
+	// particulier. Le travail situe déjà le groupe, et le nom court suffit à
+	// désigner l'équipe dans son groupe.
+	Team string `json:"team,omitempty"`
 	// Token est la marque, sous sa forme lisible.
 	Token    string `json:"token"`
 	IssuedAt string `json:"issued_at,omitempty"`
@@ -62,16 +72,21 @@ func (i Issued) Key() string {
 	return strings.ToLower(i.Assignment + "\x00" + i.designation())
 }
 
-// designation dit ce qui désigne la personne, comme une liste de classe le
-// fait : son compte, et à défaut son matricule. Celui-ci porte un « # »
-// qu'aucun compte GitHub ne peut porter, si bien qu'un compte fait de chiffres
-// et un matricule écrit pareil ne se confondent jamais.
+// designation dit ce qui désigne le destinataire, comme une liste de classe le
+// fait : son compte, et à défaut son matricule — ou son équipe, pour un
+// travail d'équipe. Le matricule porte un « # » et l'équipe un « / »,
+// qu'aucun compte GitHub ne peut porter : un compte fait de chiffres et un
+// matricule écrit pareil ne se confondent jamais, pas plus qu'une équipe
+// « eq1 » et le compte du même nom.
 func (i Issued) designation() string {
 	if compte := strings.TrimSpace(i.Username); compte != "" {
 		return compte
 	}
 	if matricule := strings.TrimSpace(i.StudentID); matricule != "" {
 		return "#" + matricule
+	}
+	if equipe := strings.TrimSpace(i.Team); equipe != "" {
+		return "/" + equipe
 	}
 	return ""
 }
@@ -80,6 +95,7 @@ func (i Issued) validate() (Issued, error) {
 	i.Assignment = strings.ToLower(strings.TrimSpace(i.Assignment))
 	i.Username = strings.ToLower(strings.TrimSpace(i.Username))
 	i.StudentID = strings.TrimSpace(i.StudentID)
+	i.Team = strings.ToLower(strings.TrimSpace(i.Team))
 	i.Token = strings.ToLower(strings.TrimSpace(i.Token))
 	if _, _, ok := naming.SplitAssignment(i.Assignment); !ok {
 		return i, valid.Errorf(
