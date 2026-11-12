@@ -38,6 +38,9 @@ func (m *manageSession) plagiat(group *groups.Group) error {
 	console := m.session.Console
 	cours, nom, reconnu := m.travail(group)
 	if !reconnu {
+		if err := m.plusieursTravaux(group, "La comparaison des copies"); err != nil {
+			return err
+		}
 		return valid.Errorf(
 			"« %s » ne dit pas à quel groupe il appartient : la détection de plagiat "+
 				"a besoin d'un travail d'un groupe déclaré.", group.Prefix)

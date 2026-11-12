@@ -35,6 +35,9 @@ func (m *manageSession) exporter(group *groups.Group, destination string) error 
 	console := m.session.Console
 	cours, nom, reconnu := m.travail(group)
 	if !reconnu {
+		if err := m.plusieursTravaux(group, "L'envoi anonymisé"); err != nil {
+			return err
+		}
 		return valid.Errorf(
 			"« %s » ne dit pas à quel groupe il appartient : l'envoi anonymisé a "+
 				"besoin d'un travail d'un groupe déclaré.", group.Prefix)

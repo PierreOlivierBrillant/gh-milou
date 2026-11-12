@@ -981,7 +981,6 @@ func (m *manageSession) manageCollaborators(group *groups.Group) error {
 }
 
 func (m *manageSession) addCollaborator(repo groups.Repo) error {
-	console := m.session.Console
 	username, err := m.session.Prompt.Ask(ui.Question{
 		Title:      "Compte GitHub à inviter (vide pour annuler)",
 		AllowEmpty: true,
@@ -990,14 +989,7 @@ func (m *manageSession) addCollaborator(repo groups.Repo) error {
 	if err != nil || username == "" {
 		return err
 	}
-	var exists bool
-	ui.Await(console, "Vérification du compte @"+username+"…", func() {
-		exists, err = m.session.Client.UserExists(username)
-	})
-	if err != nil {
-		console.Warning("Vérification impossible : %v", err)
-	} else if !exists {
-		console.Failure("Le compte « %s » n'existe pas sur GitHub.", username)
+	if !m.compteExiste(username) {
 		return nil
 	}
 
@@ -1009,13 +1001,43 @@ func (m *manageSession) addCollaborator(repo groups.Repo) error {
 	if err != nil {
 		return err
 	}
+	m.donnerAcces(repo, username, permission)
+	return nil
+}
+
+// compteExiste vérifie qu'un compte existe avant de l'inviter : GitHub
+// accepterait l'invitation d'un compte mal tapé, et personne ne la recevrait.
+// Une vérification impossible n'arrête rien : elle se signale.
+func (m *manageSession) compteExiste(username string) bool {
+	console := m.session.Console
+	var exists bool
+	var err error
+	ui.Await(console, "Vérification du compte @"+username+"…", func() {
+		exists, err = m.session.Client.UserExists(username)
+	})
+	if err != nil {
+		console.Warning("Vérification impossible : %v", err)
+		return true
+	}
+	if !exists {
+		console.Failure("Le compte « %s » n'existe pas sur GitHub.", username)
+	}
+	return exists
+}
+
+// donnerAcces invite un compte sur un dépôt, et dit ce que GitHub en a fait :
+// un membre de l'organisation reçoit l'accès d'emblée, les autres une
+// invitation. Rend faux quand l'invitation n'a pas pu partir.
+func (m *manageSession) donnerAcces(repo groups.Repo, username, permission string) bool {
+	console := m.session.Console
 	var state string
+	var err error
 	ui.Await(console, "Envoi de l'invitation à @"+username+"…", func() {
 		state, err = m.session.Client.AddCollaborator(m.org, repo.Name, username, permission)
 	})
 	if err != nil {
 		console.Failure("Invitation impossible : %v", err)
-		return nil
+		return false
 	}
 	// Ce qu'on savait des accès de ce dépôt vient de devenir faux.
 	m.resolver.ForgetAccess(m.org, repo.Name)
@@ -1025,7 +1047,7 @@ func (m *manageSession) addCollaborator(repo groups.Repo) error {
 		label = "invitation envoyée"
 	}
 	console.Success("@%s : %s (%s).", username, label, permission)
-	return nil
+	return true
 }
 
 // etiquetteDInvitation nomme une invitation dans un menu.
@@ -1065,12 +1087,7 @@ func (m *manageSession) removeCollaborator(repo groups.Repo, acces identity.Acce
 		if err != nil || !confirmed {
 			return err
 		}
-		if err := m.session.Client.CancelInvitation(m.org, repo.Name, identifier); err != nil {
-			console.Failure("%v", err)
-			return nil
-		}
-		m.resolver.ForgetAccess(m.org, repo.Name)
-		console.Success("Invitation annulée.")
+		m.annulerInvitation(repo, identifier)
 		return nil
 	}
 
@@ -1080,13 +1097,32 @@ func (m *manageSession) removeCollaborator(repo groups.Repo, acces identity.Acce
 	if err != nil || !confirmed {
 		return err
 	}
-	if err := m.session.Client.RemoveCollaborator(m.org, repo.Name, login); err != nil {
-		console.Failure("%v", err)
-		return nil
+	m.retirerCollaborateur(repo, login)
+	return nil
+}
+
+// annulerInvitation retire une invitation d'un dépôt. Rend faux quand GitHub a
+// refusé.
+func (m *manageSession) annulerInvitation(repo groups.Repo, identifier int64) bool {
+	if err := m.session.Client.CancelInvitation(m.org, repo.Name, identifier); err != nil {
+		m.session.Console.Failure("%v", err)
+		return false
 	}
 	m.resolver.ForgetAccess(m.org, repo.Name)
-	console.Success("@%s n'a plus accès à « %s ».", login, repo.Name)
-	return nil
+	m.session.Console.Success("Invitation annulée.")
+	return true
+}
+
+// retirerCollaborateur retire à un compte son accès à un dépôt. Rend faux quand
+// GitHub a refusé.
+func (m *manageSession) retirerCollaborateur(repo groups.Repo, login string) bool {
+	if err := m.session.Client.RemoveCollaborator(m.org, repo.Name, login); err != nil {
+		m.session.Console.Failure("%v", err)
+		return false
+	}
+	m.resolver.ForgetAccess(m.org, repo.Name)
+	m.session.Console.Success("@%s n'a plus accès à « %s ».", login, repo.Name)
+	return true
 }
 
 // urls affiche les adresses des dépôts, prêtes à être copiées.
@@ -1102,12 +1138,7 @@ func (m *manageSession) urls(group *groups.Group) error {
 		return nil
 	}
 
-	// Sans décor ni indentation : la liste doit se copier telle quelle.
-	console.Blank()
-	for _, repo := range chosen {
-		console.Print(m.session.urlOf(repo.Name, repo.URL))
-	}
-	console.Blank()
+	m.afficherURL(chosen)
 
 	save, err := m.session.Prompt.Confirm("Enregistrer cette liste dans un fichier ?", false)
 	if err != nil || !save {
@@ -1121,32 +1152,54 @@ func (m *manageSession) urls(group *groups.Group) error {
 	if err != nil {
 		return err
 	}
-	path, err := roster.ExpandPath(target)
+	if err := m.exporterCSV(group, chosen, target); err != nil {
+		console.Failure("%v", err)
+	}
+	return nil
+}
+
+// afficherURL écrit l'adresse de chaque dépôt, sans décor ni indentation : la
+// liste doit se copier telle quelle.
+func (m *manageSession) afficherURL(depots []groups.Repo) {
+	console := m.session.Console
+	console.Blank()
+	for _, repo := range depots {
+		console.Print(m.session.urlOf(repo.Name, repo.URL))
+	}
+	console.Blank()
+}
+
+// exporterCSV enregistre les dépôts avec le nom de chacun et son adresse. Ce
+// sont les colonnes de l'export du navigateur, et un dépôt dont on ne connaît
+// pas la personne y porte son suffixe, comme là-bas.
+func (m *manageSession) exporterCSV(group *groups.Group, depots []groups.Repo, cible string) error {
+	path, err := roster.ExpandPath(cible)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		console.Failure("Enregistrement impossible : %v", err)
-		return nil
+		return valid.Errorf("Enregistrement impossible : %v", err)
 	}
 	file, err := os.Create(path)
 	if err != nil {
-		console.Failure("Enregistrement impossible : %v", err)
-		return nil
+		return valid.Errorf("Enregistrement impossible : %v", err)
 	}
 	defer file.Close()
 
 	names := m.names(group)
-	writer := csv.NewWriter(file)
 	records := [][]string{{"nom_complet", "depot", "url"}}
-	for _, repo := range chosen {
-		records = append(records, []string{names[repo.Name], repo.Name, m.session.urlOf(repo.Name, repo.URL)})
+	for _, repo := range depots {
+		nom := names[repo.Name]
+		if nom == "" {
+			nom = repo.Suffix
+		}
+		records = append(records, []string{nom, repo.Name, m.session.urlOf(repo.Name, repo.URL)})
 	}
-	if err := writer.WriteAll(records); err != nil {
-		console.Failure("Enregistrement impossible : %v", err)
-		return nil
+	if err := csv.NewWriter(file).WriteAll(records); err != nil {
+		return valid.Errorf("Enregistrement impossible : %v", err)
 	}
-	console.Success("%s dans %s", valid.Plural(len(chosen), "URL enregistrée", "URL enregistrées"), path)
+	m.session.Console.Success("%s dans %s",
+		valid.Plural(len(depots), "URL enregistrée", "URL enregistrées"), path)
 	return nil
 }
 
@@ -1163,13 +1216,9 @@ func (m *manageSession) cloneRepos(group *groups.Group) error {
 		return nil
 	}
 
-	parent := session.Settings.CloneDir
-	if parent == "" {
-		parent = clone.DefaultParent()
-	}
 	answer, err := session.Prompt.Ask(ui.Question{
 		Title:      "Dossier de destination (« - » pour annuler)",
-		Default:    filepath.Join(parent, group.Prefix),
+		Default:    m.dossierDesClones(group),
 		AllowEmpty: true,
 		Complete:   complete.Dir,
 	})
@@ -1195,7 +1244,25 @@ func (m *manageSession) cloneRepos(group *groups.Group) error {
 		console.Warning("Annulé.")
 		return nil
 	}
+	_, err = m.cloner(chosen, destination)
+	return err
+}
 
+// dossierDesClones est le dossier que l'assistant propose pour les clones d'un
+// préfixe : celui des clones, réglé ou par défaut, suivi du préfixe.
+func (m *manageSession) dossierDesClones(group *groups.Group) string {
+	parent := m.session.Settings.CloneDir
+	if parent == "" {
+		parent = clone.DefaultParent()
+	}
+	return filepath.Join(parent, group.Prefix)
+}
+
+// cloner récupère des dépôts dans un dossier déjà préparé, dit ce qu'il en est
+// advenu et rend le nombre d'échecs. Le dossier parent devient celui des
+// clones : la fois suivante, c'est lui qu'on propose.
+func (m *manageSession) cloner(chosen []groups.Repo, destination string) (int, error) {
+	session, console := m.session, m.session.Console
 	targets := make([]clone.Target, 0, len(chosen))
 	for _, repo := range chosen {
 		targets = append(targets, clone.Target{Name: repo.Name, URL: session.urlOf(repo.Name, repo.URL)})
@@ -1207,7 +1274,7 @@ func (m *manageSession) cloneRepos(group *groups.Group) error {
 		})
 	progress.Finish("")
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	counts := map[string]int{}
@@ -1230,7 +1297,7 @@ func (m *manageSession) cloneRepos(group *groups.Group) error {
 	}
 	console.Printf("  Dossier : %s", console.Dim(destination))
 	session.Settings.CloneDir = filepath.Dir(destination)
-	return nil
+	return counts[clone.Failed], nil
 }
 
 // pullClones met à jour des clones existants, sans jamais écraser un travail local.
@@ -1238,16 +1305,12 @@ func (m *manageSession) pullClones(group *groups.Group) error {
 	session, console := m.session, m.session.Console
 	console.Heading("Mettre à jour des clones")
 
-	parent := session.Settings.CloneDir
-	if parent == "" {
-		parent = clone.DefaultParent()
-	}
 	var clones []clone.Clone
 	var folder string
 	for {
 		answer, err := session.Prompt.Ask(ui.Question{
 			Title:      "Dossier contenant les clones (« - » pour annuler)",
-			Default:    filepath.Join(parent, group.Prefix),
+			Default:    m.dossierDesClones(group),
 			AllowEmpty: true,
 			Complete:   complete.Dir,
 		})
@@ -1302,7 +1365,14 @@ func (m *manageSession) pullClones(group *groups.Group) error {
 		}
 		return err
 	}
+	_, err = m.mettreAJour(chosen, folder)
+	return err
+}
 
+// mettreAJour met à jour des clones, sans jamais écraser un travail local, et
+// rend le nombre d'échecs. Le dossier parent devient celui des clones.
+func (m *manageSession) mettreAJour(chosen []clone.Clone, folder string) (int, error) {
+	session, console := m.session, m.session.Console
 	progress := ui.NewProgress(console, "Mise à jour", len(chosen))
 	results, err := clone.New(session.Options.Jobs, 0).
 		Update(chosen, func(done, total int, result clone.Result) {
@@ -1310,7 +1380,7 @@ func (m *manageSession) pullClones(group *groups.Group) error {
 		})
 	progress.Finish("")
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	updated := 0
@@ -1330,7 +1400,7 @@ func (m *manageSession) pullClones(group *groups.Group) error {
 	if absolute, err := filepath.Abs(folder); err == nil {
 		session.Settings.CloneDir = filepath.Dir(absolute)
 	}
-	return nil
+	return len(failed), nil
 }
 
 // deleteRepo supprime définitivement un dépôt, après confirmation renforcée.
@@ -1348,11 +1418,7 @@ func (m *manageSession) deleteRepo(group *groups.Group) error {
 		return nil
 	}
 
-	console.Print("  " + console.Err("⚠ Suppression définitive de "+m.org+"/"+repo.Name))
-	console.Note("   Le contenu, les tickets et l'historique seront perdus.")
-	if repo.URL != "" {
-		console.Note("   %s", repo.URL)
-	}
+	m.avertirDeLaSuppression(*repo)
 
 	// Aucune option ne court-circuite cette confirmation : le nom exact du
 	// dépôt doit être retapé.
@@ -1367,6 +1433,24 @@ func (m *manageSession) deleteRepo(group *groups.Group) error {
 		console.Warning("Annulé : rien n'a été supprimé.")
 		return nil
 	}
+	m.supprimer(*repo)
+	return nil
+}
+
+// avertirDeLaSuppression dit ce qui va disparaître, avant qu'on le confirme.
+func (m *manageSession) avertirDeLaSuppression(repo groups.Repo) {
+	console := m.session.Console
+	console.Print("  " + console.Err("⚠ Suppression définitive de "+m.org+"/"+repo.Name))
+	console.Note("   Le contenu, les tickets et l'historique seront perdus.")
+	if repo.URL != "" {
+		console.Note("   %s", repo.URL)
+	}
+}
+
+// supprimer supprime un dépôt dont la suppression vient d'être confirmée, et
+// rend faux quand elle n'a pas eu lieu.
+func (m *manageSession) supprimer(repo groups.Repo) bool {
+	console := m.session.Console
 	var removal error
 	attempt := func() {
 		ui.Await(console, "Suppression de "+repo.Name+"…", func() {
@@ -1382,13 +1466,13 @@ func (m *manageSession) deleteRepo(group *groups.Group) error {
 	}
 	if removal != nil {
 		console.Failure("Suppression impossible : %v", removal)
-		return nil
+		return false
 	}
 	console.Success("« %s » supprimé.", repo.Name)
 	m.suivre(func(repos []groups.RepoInfo) []groups.RepoInfo {
 		return groups.WithoutRepo(repos, repo.Name)
 	})
-	return nil
+	return true
 }
 
 // -------------------------------------------------- déplacer vers un groupe
@@ -1405,6 +1489,9 @@ func (m *manageSession) deleteRepo(group *groups.Group) error {
 
 // relocate demande la place d'arrivée, puis y déplace le travail.
 func (m *manageSession) relocate(group *groups.Group) (int, error) {
+	if err := m.plusieursTravaux(group, "Un déplacement"); err != nil {
+		return ExitOK, err
+	}
 	place, err := m.session.Prompt.Ask(ui.Question{
 		Title:      "Place d'arrivée « session.cours.groupe » (vide pour annuler)",
 		AllowEmpty: true,
@@ -1426,6 +1513,9 @@ func (m *manageSession) relocate(group *groups.Group) (int, error) {
 // donnée. Le plan se montre en entier avant la première écriture : c'est la
 // seule façon de vérifier que ce sont bien ces dépôts-là qu'on déplace.
 func (m *manageSession) relocateTo(group *groups.Group, place, name string) (int, error) {
+	if err := m.plusieursTravaux(group, "Un déplacement"); err != nil {
+		return ExitOK, err
+	}
 	console := m.session.Console
 	repos, err := m.loadRepos(false)
 	if err != nil {
@@ -1565,6 +1655,9 @@ func (m *manageSession) renameTo(group *groups.Group, name string) (int, error) 
 	}
 	place, _, reconnu := naming.SplitAssignment(group.Prefix)
 	if !reconnu {
+		if err := m.plusieursTravaux(group, "Un renommage"); err != nil {
+			return ExitOK, err
+		}
 		return ExitOK, valid.Errorf(
 			"« %s » ne dit pas à quel groupe il appartient : renommer ce travail y "+
 				"composerait un nom de dépôt illisible. Déplacez-le d'abord vers une place "+
@@ -1723,6 +1816,12 @@ func (m *manageSession) run() (int, error) {
 				return ExitValidation, err
 			}
 			return ExitOK, nil
+		}
+
+		// Les gestes que l'assistant range dans ses sections ont aussi leur
+		// drapeau, et chacun fait une chose et s'en va.
+		if code, fait, err := m.gesteDeDrapeau(group); fait {
+			return code, err
 		}
 
 		// Passé les drapeaux qui font une chose et s'en vont, l'assistant reste
