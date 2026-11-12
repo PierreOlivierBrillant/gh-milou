@@ -17,7 +17,6 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/rules"
-	"github.com/PierreOlivierBrillant/gh-milou/internal/signature"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/similarity"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ui"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
@@ -144,7 +143,7 @@ func (m *manageSession) plagiat(group *groups.Group) error {
 				"depuis, il n'y avait rien à retélécharger."))
 	}
 	registre, _ := m.session.names(m.org)
-	montrerRapport(console, rapport, registre.Marks())
+	montrerRapport(console, rapport, registre)
 	chemin, csv, err := rapport.Save(m.session.Options.ReportDir)
 	if err != nil {
 		return err
@@ -331,7 +330,7 @@ func racineDite(root string) string {
 
 // montrerRapport affiche les paires, du plus suspect au moins suspect.
 func montrerRapport(console *ui.Console, rapport *plagiarism.Report,
-	marques signature.Book) {
+	registre *registry.Set) {
 	console.Blank()
 	if écartées := rapport.Result.IgnoredBaseline + rapport.Result.IgnoredCommon; écartées > 0 {
 		console.Note("%s : %d venant du gabarit distribué, "+
@@ -375,7 +374,7 @@ func montrerRapport(console *ui.Console, rapport *plagiarism.Report,
 		console.Note("%s", rapport.Result.ThresholdNote)
 	}
 	montrerChronologie(console, rapport)
-	montrerSignaux(console, rapport, marques)
+	montrerSignaux(console, rapport, registre)
 	montrerSoucis(console, rapport)
 }
 
@@ -427,7 +426,7 @@ func repere(seuil, similarite float64) string {
 
 // montrerSignaux rapporte ce que le winnowing ne voit pas.
 func montrerSignaux(console *ui.Console, rapport *plagiarism.Report,
-	marques signature.Book) {
+	registre *registry.Set) {
 	if len(rapport.Result.Signals) == 0 {
 		return
 	}
@@ -436,12 +435,12 @@ func montrerSignaux(console *ui.Console, rapport *plagiarism.Report,
 		switch signal.Kind {
 		case similarity.SharedSignature:
 			// La marque seule ne dit rien : c'est le registre qui répond à
-			// « de qui est-elle ». Un collègue qui ne l'a pas voit la
+			// « de qui est-elle », et le domaine qui le dit, mot pour mot
+			// comme au navigateur. Un collègue qui ne l'a pas voit la
 			// coïncidence sans voir le nom, et c'est voulu.
 			porteur := ""
-			if ligne, connue := marques.Who(signal.Detail); connue {
-				porteur = " — délivrée à @" + ligne.Username +
-					" pour « " + ligne.Assignment + " »"
+			if titulaire, connu := registre.Holder(signal.Detail); connu {
+				porteur = " — " + titulaire.Phrase()
 			}
 			console.Warning("Même marque invisible dans %s%s. Deux travaux qui "+
 				"la portent n'ont pas d'explication innocente.",

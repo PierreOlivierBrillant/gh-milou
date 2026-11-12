@@ -52,6 +52,9 @@ const (
 type Result struct {
 	Username string `json:"username"`
 	FullName string `json:"full_name"`
+	// StudentID est le matricule, quand la liste le donne. C'est lui qui range
+	// la marque du dépôt au registre tant que la personne n'a pas de compte.
+	StudentID string `json:"student_id,omitempty"`
 	// Team nomme l'équipe destinataire ; vide pour un travail individuel.
 	Team         string `json:"team,omitempty"`
 	Repo         string `json:"repo"`
@@ -154,16 +157,32 @@ func (r *Report) Save(directory string) (string, string, error) {
 // qu'on ne verserait pas resterait dans le dépôt sans que personne ne puisse
 // dire de qui elle est — la détection la verrait encore en double, mais
 // s'arrêterait là.
+//
+// Chacun y est désigné comme dans sa liste de classe : par son compte, et à
+// défaut par son matricule. Une inscrite sans compte — toute cohorte importée
+// du collège — en reçoit donc une comme les autres, et c'est maintenant
+// qu'elle doit monter : le jeton est tiré au hasard, rien ne le retrouverait
+// une fois son compte rattaché.
 func (r *Report) Signatures(assignment string) []signature.Issued {
 	delivrees := make([]signature.Issued, 0, len(r.Results))
 	for _, result := range r.Results {
-		if result.Signature == "" || result.Username == "" {
+		if result.Signature == "" {
 			continue
 		}
-		delivrees = append(delivrees, signature.Issued{
-			Assignment: assignment, Username: result.Username,
-			Token: result.Signature, IssuedAt: r.StartedAt,
-		})
+		delivree := signature.Issued{
+			Assignment: assignment, Token: result.Signature, IssuedAt: r.StartedAt,
+		}
+		switch {
+		case strings.TrimSpace(result.Username) != "":
+			delivree.Username = result.Username
+		case strings.TrimSpace(result.StudentID) != "":
+			delivree.StudentID = result.StudentID
+		default:
+			// Ni compte ni matricule : c'est un dépôt d'équipe, qui ne désigne
+			// personne en particulier. Sa marque n'a pas encore où se ranger.
+			continue
+		}
+		delivrees = append(delivrees, delivree)
 	}
 	return delivrees
 }
@@ -274,6 +293,7 @@ func (e *Executor) process(item plan.PlannedRepo, templateOwner, templateRepo st
 	result := Result{
 		Username:     item.Person.Username,
 		FullName:     item.Person.FullName,
+		StudentID:    item.Person.StudentID,
 		Team:         item.Team,
 		Repo:         item.Name,
 		Status:       Skipped,

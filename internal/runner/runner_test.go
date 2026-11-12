@@ -608,6 +608,47 @@ func TestLaDistributionDeposeUneMarqueInvisible(t *testing.T) {
 	}
 }
 
+// Une inscrite sans compte — toute cohorte importée du collège — reçoit son
+// dépôt, et sa marque. Celle-ci se verse au registre comme les autres, sous son
+// matricule : le jeton est tiré au hasard, et ce qui n'y monte pas est perdu
+// pour de bon, même une fois son compte rattaché.
+func TestLaMarqueDUneInscriteSansCompteSeVerseSousSonMatricule(t *testing.T) {
+	client, _ := monter(t, nil)
+	settings := reglages()
+	settings.NamePattern = "{assignment}-{name}"
+	gens := []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+	}
+
+	rapport, err := runner.New(client, settings, squelette(t)).Run(
+		construire(t, settings, gens), runner.Options{Sign: true})
+	if err != nil {
+		t.Fatalf("Run : %v", err)
+	}
+	if rapport.Signed() != len(gens) {
+		t.Fatalf("dépôts signés : %d sur %d", rapport.Signed(), len(gens))
+	}
+
+	delivrees := rapport.Signatures("a26.5n6.01.tp1")
+	if len(delivrees) != len(gens) {
+		t.Fatalf("marques à verser : %+v", delivrees)
+	}
+	for _, delivree := range delivrees {
+		// Chacun est désigné comme dans sa liste de classe : son compte, à
+		// défaut son matricule — jamais les deux, rien ne change pour qui a un
+		// compte.
+		parCompte := delivree.Username == "jlpicard" && delivree.StudentID == ""
+		parMatricule := delivree.Username == "" && delivree.StudentID == "2100456"
+		if !parCompte && !parMatricule {
+			t.Fatalf("marque mal rattachée : %+v", delivree)
+		}
+	}
+	if _, _, err := (signature.Book{}).With(delivrees); err != nil {
+		t.Fatalf("le registre refuse une marque délivrée : %v", err)
+	}
+}
+
 // Sans le drapeau, rien n'est déposé : c'est un réglage, et il se respecte.
 func TestSansLeDrapeauAucuneMarqueNEstDeposee(t *testing.T) {
 	client, serveur := monter(t, nil)

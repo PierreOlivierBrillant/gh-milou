@@ -8315,19 +8315,16 @@ function ligneDeSignal(signal, porteurs) {
 }
 
 // ligneDeMarque dit qui porte une même marque invisible. La marque seule ne dit
-// rien : c'est le registre qui répond à « de qui est-elle ». Un collègue qui ne
-// l'a pas voit la coïncidence sans le nom.
+// rien : c'est le registre qui répond à « de qui est-elle », et le domaine qui
+// le dit — mot pour mot comme au terminal. Un collègue qui ne l'a pas voit la
+// coïncidence sans le nom.
 function ligneDeMarque(signal, nom) {
   const porteur = (etat.plagiat.donnees.marks || {})[signal.detail];
   return el('p', {},
     el('strong', { texte: 'Même marque invisible : ' }),
     el('span', { texte: signal.works.map(nom).join(', ') }),
     porteur
-      ? el('span', {
-        classe: 'note',
-        texte: ` — délivrée à ${porteur.full_name || '@' + porteur.username}`
-          + ` pour « ${porteur.assignment} ».`,
-      })
+      ? el('span', { classe: 'note', texte: ` — ${porteur.phrase}.` })
       : el('span', {
         classe: 'note',
         texte: ' — le registre ne dit pas à qui elle a été délivrée : elle '
