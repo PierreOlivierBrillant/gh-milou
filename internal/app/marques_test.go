@@ -195,8 +195,7 @@ func TestAjouterDesDepotsAuGroupeVerseLeursMarques(t *testing.T) {
 
 	code, _ := h.script(
 		"depots", "ajouter",
-		"{assignment}.{name}", // gabarit du groupe
-		"",                    // aucun dossier de fichiers de départ
+		"", // aucun dossier de fichiers de départ
 		"fichier", liste,
 		"oui", // confirmer la création
 		"quitter",

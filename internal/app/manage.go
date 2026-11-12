@@ -721,17 +721,25 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 		console.Note("Aucun dépôt modèle détecté : les dépôts seront créés neufs.")
 	}
 
-	pattern, err := session.Prompt.Ask(ui.Question{
-		Title:   "Gabarit de nom (doit reproduire celui du groupe)",
-		Default: session.Settings.NamePattern,
-		Validate: func(value string) (string, error) {
-			return plan.ValidatePattern(value, "Gabarit de nom", true)
-		},
-	})
-	if err != nil {
-		return err
+	// Un travail de la nomenclature nomme ses dépôts par elle, comme « creer »
+	// et le navigateur : son gabarit ne se choisit pas. Seul un préfixe hérité
+	// demande le sien, et c'est le seul qu'on retienne.
+	if _, _, nomenclature := naming.SplitAssignment(group.Prefix); nomenclature {
+		console.Printf("  Gabarit de nom : %s %s", console.OK(classroom.NamePattern),
+			console.Dim("(celui de la nomenclature)"))
+	} else {
+		pattern, err := session.Prompt.Ask(ui.Question{
+			Title:   "Gabarit de nom (doit reproduire celui du groupe)",
+			Default: session.Settings.NamePattern,
+			Validate: func(value string) (string, error) {
+				return plan.ValidatePattern(value, "Gabarit de nom", true)
+			},
+		})
+		if err != nil {
+			return err
+		}
+		session.Settings.NamePattern = pattern
 	}
-	session.Settings.NamePattern = pattern
 
 	if template == "" {
 		if err := m.askStarter(); err != nil {
@@ -749,16 +757,8 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 	}
 
 	// Les personnes déjà servies sont écartées : leur dépôt existe déjà.
-	taken := group.Suffixes()
-	var fresh []roster.Person
-	var skipped []roster.Person
-	for _, person := range people {
-		if taken[strings.ToLower(person.Username)] {
-			skipped = append(skipped, person)
-			continue
-		}
-		fresh = append(fresh, person)
-	}
+	set, _ := session.names(m.org)
+	fresh, skipped := classroom.Pending(people, *group, set)
 	if len(skipped) > 0 {
 		console.Warning("%s dans le groupe :",
 			valid.Plural(len(skipped), "personne déjà présente", "personnes déjà présentes"))
@@ -766,7 +766,7 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 			if index == 10 {
 				break
 			}
-			console.Printf("    %s %s (@%s)", console.Dim("•"), person.FullName, person.Username)
+			console.Printf("    %s %s", console.Dim("•"), nommer(person))
 		}
 	}
 	if len(fresh) == 0 {
@@ -774,7 +774,8 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 		return nil
 	}
 
-	items, err := plan.Build(fresh, session.Settings)
+	reglages := classroom.PlanSettings(session.Settings)
+	items, err := plan.Build(fresh, reglages)
 	if err != nil {
 		return err
 	}
@@ -794,6 +795,12 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 		console.Warning("Annulé.")
 		return nil
 	}
+	// Comme pour « creer », la liste monte au registre une fois la création
+	// confirmée et avant le premier dépôt : c'est lui qui dira, depuis
+	// n'importe quel poste, à qui est chacun d'eux.
+	if err := session.apprendre(m.org, people); err != nil {
+		return err
+	}
 
 	width := 10
 	for _, item := range items {
@@ -801,14 +808,19 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 			width = len(item.Name)
 		}
 	}
-	executor := runner.New(session.Client, session.Settings, session.Starter).
+	// Un groupe cloisonné doit le rester : un dépôt ajouté va d'emblée à son
+	// équipe enseignante, comme ceux que « creer » distribue.
+	equipe, droit := session.teacherGrant(m.org, reglages.Assignment)
+	executor := runner.New(session.Client, reglages, session.Starter).
 		WithClock(session.Sleep, session.Now)
 	// Les dépôts ajoutés sont signés comme les autres, et leurs marques montent
 	// au même registre : sans lui, rien ne dirait jamais à qui elles sont.
 	report, err := executor.Run(items, runner.Options{
-		ForceStarter: session.Options.ForceStarter,
-		Sign:         !session.Settings.NoSign,
-		Registry:     session.registryOf(m.org),
+		ForceStarter:      session.Options.ForceStarter,
+		Sign:              !session.Settings.NoSign,
+		Registry:          session.registryOf(m.org),
+		TeacherTeam:       equipe,
+		TeacherPermission: droit,
 		OnProgress: func(index, total int, result runner.Result) {
 			session.printProgress(index, total, result, width)
 		},
