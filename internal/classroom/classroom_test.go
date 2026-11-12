@@ -191,13 +191,58 @@ func TestUnCompteSansNomCompletResteUnEtudiantDuGroupe(t *testing.T) {
 	}
 }
 
-func TestServedRepereLesEtudiantsDejaServis(t *testing.T) {
+// lesNoms rend les noms complets d'une liste, dans son ordre.
+func lesNoms(gens []roster.Person) string {
+	noms := make([]string, 0, len(gens))
+	for _, personne := range gens {
+		noms = append(noms, personne.FullName)
+	}
+	return strings.Join(noms, ", ")
+}
+
+func TestRecipientsEcarteLesDejaServis(t *testing.T) {
 	inventaire := depots("a26.5n6.01.tp1.emilie-cote")
 	cours := groupe("a26", "5n6", "01", cohorte)
 
-	servis := cours.Served("a26.5n6.01.tp1", inventaire)
-	if !servis["emilie-cote"] || servis["jlpicard"] {
-		t.Fatalf("étudiants servis : %v", servis)
+	attendus, servis := cours.Recipients("a26.5n6.01.tp1", inventaire, nil)
+	if lesNoms(servis) != "Émilie Côté" ||
+		lesNoms(attendus) != "Jean-Luc Picard, Aminata Diallo" {
+		t.Fatalf("attendus : %s ; servis : %s", lesNoms(attendus), lesNoms(servis))
+	}
+}
+
+// Une cohorte importée du collège n'a que des matricules : c'est par eux que
+// la sélection désigne ces personnes, comme Find les désigne. Et le dépôt de
+// l'une ne tient pas les autres pour servies : elles n'ont pas un compte en
+// commun, elles n'en ont aucun.
+func TestRecipientsDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
+	cours := groupe("a26", "5n6", "01", append(personnes("Jean-Luc Picard", "jlpicard"),
+		roster.Person{FullName: "Naomi Chéry", StudentID: "2100456"},
+		roster.Person{FullName: "Aminata Diallo", StudentID: "2100789"},
+	))
+	inventaire := depots("a26.5n6.01.tp1.naomi-chery")
+
+	attendus, servis := cours.Recipients("a26.5n6.01.tp1", inventaire,
+		[]string{"2100456", "2100789"})
+	if lesNoms(attendus) != "Aminata Diallo" || lesNoms(servis) != "Naomi Chéry" {
+		t.Errorf("sélection par matricule — attendus : %s ; servis : %s",
+			lesNoms(attendus), lesNoms(servis))
+	}
+
+	attendus, _ = cours.Recipients("a26.5n6.01.tp1", inventaire, nil)
+	if lesNoms(attendus) != "Jean-Luc Picard, Aminata Diallo" {
+		t.Errorf("sans sélection, tout le groupe attend sauf Naomi : %s", lesNoms(attendus))
+	}
+
+	// Une désignation vide ne désigne personne : c'est elle que l'aperçu
+	// envoyait pour qui n'avait pas de compte, et sélectionner tout le monde
+	// revenait alors à l'oublier.
+	for _, selection := range [][]string{{}, {""}} {
+		attendus, servis = cours.Recipients("a26.5n6.01.tp1", inventaire, selection)
+		if len(attendus)+len(servis) != 0 {
+			t.Errorf("%q ne retient personne : attendus %s ; servis %s",
+				selection, lesNoms(attendus), lesNoms(servis))
+		}
 	}
 }
 

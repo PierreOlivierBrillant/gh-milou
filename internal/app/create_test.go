@@ -81,6 +81,57 @@ func TestCreationNonInteractive(t *testing.T) {
 	}
 }
 
+// cohorteSansCompte écrit une liste comme le collège la donne : des noms et des
+// matricules, aucun compte GitHub.
+func (h *harnais) cohorteSansCompte() string {
+	h.t.Helper()
+	chemin := filepath.Join(h.t.TempDir(), "cohorte.csv")
+	if err := os.WriteFile(chemin,
+		[]byte("nom_complet,matricule\nNaomi Chéry,2100456\nAminata Diallo,2100789\n"),
+		0o644); err != nil {
+		h.t.Fatal(err)
+	}
+	return chemin
+}
+
+// Au terminal comme dans le navigateur, qui n'a qu'un matricule reçoit son
+// dépôt, nommé par son nom, et le bilan dit qu'il reste un compte à rattacher.
+func TestUneCohorteSansCompteRecoitSesDepots(t *testing.T) {
+	h := nouveau(t, nil)
+	h.Options.Roster = h.cohorteSansCompte()
+	h.Options.Assignment = "tp1"
+	h.Options.Pattern = "{assignment}-{name}"
+	h.Options.Yes = true
+
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	if noms := strings.Join(h.depots(), ","); noms != "tp1-aminata-diallo,tp1-naomi-chery" &&
+		noms != "tp1-naomi-chery,tp1-aminata-diallo" {
+		t.Fatalf("dépôts = %s\n%s", noms, h.texte())
+	}
+	h.contient("à rattacher")
+}
+
+// Le gabarit par défaut nomme par le compte : il le dit, et ne crée rien,
+// plutôt que de nommer « tp1- » la première et d'annoncer ensuite une
+// collision sans cause.
+func TestLeGabaritParCompteRefuseUneCohorteSansCompte(t *testing.T) {
+	h := nouveau(t, nil)
+	h.Options.Roster = h.cohorteSansCompte()
+	h.Options.Assignment = "tp1"
+	h.Options.Yes = true
+
+	if code := h.muet(); code == app.ExitOK {
+		t.Fatalf("un refus était attendu\n%s", h.texte())
+	}
+	h.contient("Naomi Chéry", "{name}")
+	h.absent("Collision")
+	if noms := h.depots(); len(noms) != 0 {
+		t.Fatalf("rien ne devait être créé : %v", noms)
+	}
+}
+
 func TestNonInteractifExigeLOrganisation(t *testing.T) {
 	h := nouveau(t, nil)
 	h.Options.Org = ""

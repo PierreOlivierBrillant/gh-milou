@@ -510,19 +510,8 @@ func (c Classroom) Add(person roster.Person) (Classroom, error) {
 // qu'on veut en rattacher un, puisqu'une liste du collège n'en donne aucun.
 func (c Classroom) Find(handle string) (roster.Person, bool) {
 	identites := c.Identities()
-	for _, identite := range identites {
-		if identite.Has(handle) {
-			return identite.Person(), true
-		}
-	}
-	matricule := strings.TrimSpace(handle)
-	if matricule == "" {
-		return roster.Person{}, false
-	}
-	for _, identite := range identites {
-		if strings.EqualFold(strings.TrimSpace(identite.StudentID), matricule) {
-			return identite.Person(), true
-		}
+	if position, trouvee := rang(identites, handle); trouvee {
+		return identites[position].Person(), true
 	}
 	return roster.Person{}, false
 }
@@ -639,15 +628,56 @@ func sortAssignments(found []Assignment) {
 	})
 }
 
-// Served renvoie les comptes du groupe qui ont déjà un dépôt pour ce travail.
+// Recipients répartit les personnes retenues pour un travail entre celles qui
+// attendent encore leur dépôt et celles qui l'ont déjà, dans l'ordre du groupe.
+//
+// handles restreint la distribution : chaque mot désigne une personne comme
+// Find la désigne, par l'un de ses comptes ou, à défaut, par son matricule —
+// c'est ainsi que se choisit qui n'a encore aucun compte. Nil, tout le groupe
+// est retenu ; vide, personne : décocher tout le monde ne doit pas revenir à
+// servir tout le groupe.
+func (c Classroom) Recipients(assignmentID string, repos []groups.RepoInfo,
+	handles []string) (waiting, served []roster.Person) {
+	identites := c.Identities()
+	retenues := make([]bool, len(identites))
+	for _, handle := range handles {
+		if position, trouvee := rang(identites, handle); trouvee {
+			retenues[position] = true
+		}
+	}
+	servies := c.servies(identites, assignmentID, repos)
+	for position, identite := range identites {
+		if handles != nil && !retenues[position] {
+			continue
+		}
+		if servies[position] {
+			served = append(served, identite.Person())
+			continue
+		}
+		waiting = append(waiting, identite.Person())
+	}
+	return waiting, served
+}
+
+// servies dit, pour chacune de ces personnes, si un dépôt du travail est déjà
+// le sien.
 //
 // Une personne qui travaille sous deux comptes n'a qu'un dépôt — c'est son nom
 // qui le nomme, pas son compte : le trouver la tient pour servie sous chacun
-// d'eux, sans quoi le second en réclamerait un autre du même nom.
-func (c Classroom) Served(assignmentID string, repos []groups.RepoInfo) map[string]bool {
-	servis := map[string]bool{}
+// d'eux, sans quoi le second en réclamerait un autre du même nom. Le dépôt se
+// rattache à sa ligne, et la ligne à sa personne par ce qui la désigne, compte
+// ou matricule, jamais par un compte absent : c'est par cette clé vide que le
+// dépôt d'une inscrite sans compte tenait pour servies toutes les autres.
+func (c Classroom) servies(identites []Identity, assignmentID string,
+	repos []groups.RepoInfo) []bool {
+	parDesignation := map[string]int{}
+	for position, identite := range identites {
+		for _, cle := range identite.designations() {
+			parDesignation[cle] = position
+		}
+	}
+	servies := make([]bool, len(identites))
 	connus := c.fragments()
-	comptes := c.Accounts()
 	for _, repo := range repos {
 		parts, reconnu := naming.Parse(repo.Name)
 		if !reconnu {
@@ -661,12 +691,11 @@ func (c Classroom) Served(assignmentID string, repos []groups.RepoInfo) map[stri
 		if !inscrit {
 			continue
 		}
-		servis[strings.ToLower(student.Username)] = true
-		for _, autre := range comptes[strings.ToLower(student.Username)] {
-			servis[strings.ToLower(autre)] = true
+		if position, trouvee := parDesignation[designation(student)]; trouvee {
+			servies[position] = true
 		}
 	}
-	return servis
+	return servies
 }
 
 // Repos renvoie les dépôts d'un travail du groupe, du plus récent au plus ancien.

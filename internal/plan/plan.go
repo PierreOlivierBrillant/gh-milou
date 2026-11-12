@@ -272,6 +272,38 @@ func sameName(targets []Target) error {
 	return nil
 }
 
+// sansCompte refuse de nommer un dépôt d'après le compte de qui n'en a pas.
+//
+// {username} y serait vide : une personne seule recevrait « tp1- », un nom que
+// personne ne relirait, et une cohorte importée du collège, qui n'a que des
+// matricules, buterait sur une collision qui ne dit pas d'où elle vient. Le nom
+// de la personne, lui, est toujours là : c'est par lui que la nomenclature
+// nomme les dépôts.
+func sansCompte(pattern string, targets []Target) error {
+	if !strings.Contains(pattern, "{username}") {
+		return nil
+	}
+	var noms []string
+	for _, cible := range targets {
+		if strings.TrimSpace(cible.Person.Username) == "" {
+			noms = append(noms, cible.Person.FullName)
+		}
+	}
+	if len(noms) == 0 {
+		return nil
+	}
+	cites := strings.Join(noms, ", ")
+	if len(noms) > 3 {
+		cites = strings.Join(noms[:3], ", ") + "…"
+	}
+	return valid.Errorf(
+		"Le gabarit « %s » nomme chaque dépôt par un compte GitHub, et %s : %s. "+
+			"Nommez les dépôts par le nom des étudiants — {name} plutôt que {username} —, "+
+			"ou rattachez d'abord les comptes manquants.",
+		pattern, valid.Plural(len(noms), "personne n'en a pas encore",
+			"personnes n'en ont pas encore"), cites)
+}
+
 // Build construit le plan complet et refuse toute collision de noms de dépôts.
 func Build(people []roster.Person, settings config.Settings) ([]PlannedRepo, error) {
 	cibles := make([]Target, 0, len(people))
@@ -289,6 +321,9 @@ func BuildFor(targets []Target, settings config.Settings) ([]PlannedRepo, error)
 		return nil, err
 	}
 	if err := sameName(targets); err != nil {
+		return nil, err
+	}
+	if err := sansCompte(settings.NamePattern, targets); err != nil {
 		return nil, err
 	}
 	assembleur := &assembler{settings: settings, description: description,

@@ -161,3 +161,89 @@ func TestUnDepotEstCreePourQuiNAPasEncoreDeCompte(t *testing.T) {
 		t.Errorf("le bilan ne dit pas que personne n'était à inviter : %s", bilan)
 	}
 }
+
+// inscritParCompte et inscritParMatricule décrivent une ligne de liste de
+// classe : l'une désignée par son compte, l'autre par son seul matricule.
+func inscritParCompte(nom, compte string) map[string]any {
+	return map[string]any{"full_name": nom, "username": compte}
+}
+
+func inscritParMatricule(nom, matricule string) map[string]any {
+	return map[string]any{"full_name": nom, "student_id": matricule}
+}
+
+// poserListe remplace la liste d'un groupe, comme un import de fichier.
+func (h *harnais) poserListe(place string, gens ...map[string]any) {
+	h.t.Helper()
+	h.json(http.MethodPost, "/api/classrooms/"+place+"/students",
+		map[string]any{"people": gens}, nil)
+}
+
+// apercuDeDistribution rend les dépôts qu'une distribution créerait, et les
+// noms de ceux qu'elle écarte parce qu'ils ont déjà le leur.
+func (h *harnais) apercuDeDistribution(place string, corps map[string]any) (depots, servis []string) {
+	h.t.Helper()
+	var apercu struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+		Served []struct {
+			FullName string `json:"full_name"`
+		} `json:"served"`
+	}
+	h.json(http.MethodPost, "/api/classrooms/"+place+"/assignments/preview", corps, &apercu)
+	for _, item := range apercu.Items {
+		depots = append(depots, item.Name)
+	}
+	for _, personne := range apercu.Served {
+		servis = append(servis, personne.FullName)
+	}
+	sort.Strings(depots)
+	return depots, servis
+}
+
+// Le navigateur envoie toujours ce qu'il a coché, tout le groupe compris. Qui
+// n'a encore qu'un matricule y est désigné par lui : l'étape « Distribution »
+// le montrait coché, puis l'oubliait — six étudiants cochés, cinq dépôts.
+func TestLaSelectionDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
+	h := nouveau(t, fakegh.NewState())
+	place := h.groupe("a26", "5n6", "1010", "Jean-Luc Picard", "jlpicard")
+	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
+		inscritParMatricule("Naomi Chéry", "2100456"))
+
+	depots, _ := h.apercuDeDistribution(place, map[string]any{
+		"name": "tp1", "usernames": []string{"jlpicard", "2100456"},
+	})
+	attendus := []string{"a26.5n6.1010.tp1.jean-luc-picard", "a26.5n6.1010.tp1.naomi-chery"}
+	if strings.Join(depots, ",") != strings.Join(attendus, ",") {
+		t.Fatalf("aperçu :\n  %v\nattendu :\n  %v", depots, attendus)
+	}
+
+	h.travail(http.MethodPost, "/api/classrooms/"+place+"/assignments",
+		map[string]any{"name": "tp1", "usernames": []string{"2100456"}})
+	if noms := h.depots(); len(noms) != 1 || noms[0] != "a26.5n6.1010.tp1.naomi-chery" {
+		t.Fatalf("dépôts créés : %v", noms)
+	}
+}
+
+// Le dépôt d'une inscrite sans compte ne tient pas les autres pour servies. Il
+// les y tenait toutes : elles n'ont aucun compte, et c'est ce compte absent qui
+// servait de clé — si bien que « Distribuer aux manquants » en oubliait.
+func TestLeDepotDUneInscriteSansCompteNeServPasLesAutres(t *testing.T) {
+	state := fakegh.NewState()
+	state.AddRepo("acme", "a26.5n6.1010.tp1.naomi-chery", true)
+	h := nouveau(t, state)
+	place := h.groupe("a26", "5n6", "1010", "Jean-Luc Picard", "jlpicard")
+	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
+		inscritParMatricule("Naomi Chéry", "2100456"),
+		inscritParMatricule("Aminata Diallo", "2100789"))
+
+	depots, servis := h.apercuDeDistribution(place, map[string]any{"name": "tp1"})
+	attendus := []string{"a26.5n6.1010.tp1.aminata-diallo", "a26.5n6.1010.tp1.jean-luc-picard"}
+	if strings.Join(depots, ",") != strings.Join(attendus, ",") {
+		t.Errorf("aperçu :\n  %v\nattendu :\n  %v", depots, attendus)
+	}
+	if strings.Join(servis, ",") != "Naomi Chéry" {
+		t.Errorf("seule Naomi a déjà son dépôt : %v", servis)
+	}
+}

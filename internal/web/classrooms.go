@@ -1248,7 +1248,9 @@ type assignmentInput struct {
 	// Due est la date cible du travail, fixée dès la distribution. Elle
 	// n'entre dans aucun dépôt : c'est le groupe qui la retient.
 	Due string `json:"due"`
-	// Usernames restreint la distribution ; vide, tout le groupe est servi.
+	// Usernames restreint la distribution ; absent, tout le groupe est servi.
+	// Chacun y désigne une personne comme Find la désigne : par un compte, ou
+	// à défaut par son matricule, seul nom de qui n'a pas encore de compte.
 	Usernames []string `json:"usernames"`
 	// Teams demande un travail d'équipe : un dépôt par équipe, nommé d'après
 	// elle, et partagé avec elle plutôt qu'avec chacun de ses membres.
@@ -1362,39 +1364,13 @@ func (s *Server) prepare(request *http.Request, body assignmentInput) (distribut
 				"Retrouvez les noms depuis l'onglet Étudiants.", strings.Join(comptes, ", "))
 	}
 
-	// Une sélection présente, fût-elle vide, reste une sélection : cocher
-	// personne ne doit pas revenir à servir tout le groupe.
-	restreint := body.Usernames != nil
-	voulus := map[string]bool{}
-	for _, login := range body.Usernames {
-		voulus[strings.ToLower(login)] = true
-	}
-	servis := cours.Served(settings.Assignment, repos)
-
 	// La distribution va aux personnes, non aux comptes : deux comptes d'un
 	// même nom n'ont qu'un dépôt, et cocher l'un revient à cocher la personne.
+	// Une sélection présente, fût-elle vide, reste une sélection.
 	partage := distribution{Cours: cours, Settings: settings, Due: echeance}
-	for _, identite := range cours.Identities() {
-		if restreint && !voulue(identite, voulus) {
-			continue
-		}
-		if servis[strings.ToLower(identite.Username())] {
-			partage.SkippedPeople = append(partage.SkippedPeople, identite.Person())
-			continue
-		}
-		partage.People = append(partage.People, identite.Person())
-	}
+	partage.People, partage.SkippedPeople = cours.Recipients(
+		settings.Assignment, repos, body.Usernames)
 	return partage, nil
-}
-
-// voulue dit qu'une personne a été retenue, sous l'un quelconque de ses comptes.
-func voulue(identite classroom.Identity, voulus map[string]bool) bool {
-	for _, compte := range identite.Accounts {
-		if voulus[strings.ToLower(compte)] {
-			return true
-		}
-	}
-	return false
 }
 
 // prepareTeams compose la distribution d'un travail d'équipe : un dépôt par
