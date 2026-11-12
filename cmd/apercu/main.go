@@ -191,6 +191,9 @@ func garnirPourLaComparaison(state *fakegh.State) {
 			state.AddRepo("acme", nom, true)
 		}
 		state.Repos["acme/"+nom].History = []fakegh.HistoryEntry{remises[nom]}
+		// Celui qui a remis est aussi celui que GitHub compte parmi les
+		// contributeurs : sans lui, chacun paraîtrait muet dans son propre dépôt.
+		state.Contributors["acme/"+nom] = []string{remises[nom].Login}
 		state.SeedCommit("acme/"+nom, map[string]string{
 			"src/Inventaire.java": modele,
 			"src/Solution.java":   source,
