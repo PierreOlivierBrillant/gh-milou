@@ -196,7 +196,7 @@ func (m *pathModel) columns() string {
 	for _, suggestion := range shown {
 		label := lastSegment(suggestion)
 		labels = append(labels, label)
-		if width := visibleWidth(label); width > widest {
+		if width := VisibleWidth(label); width > widest {
 			widest = width
 		}
 	}
@@ -210,7 +210,7 @@ func (m *pathModel) columns() string {
 		if index%columns == 0 {
 			view.WriteString("  ")
 		}
-		padding := widest + columnPadding - visibleWidth(label)
+		padding := widest + columnPadding - VisibleWidth(label)
 		if index%columns == columns-1 || index == len(labels)-1 {
 			view.WriteString(m.console.Dim(label) + "\n")
 			continue
