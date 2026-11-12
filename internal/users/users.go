@@ -20,6 +20,7 @@ import (
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/teams"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
@@ -85,10 +86,13 @@ func (r Row) Role() string {
 // laisserait tout le monde à « aucun dépôt », alors que tout le monde en a un.
 func Build(cours classroom.Classroom, repos []groups.RepoInfo,
 	equipes []teams.Team) []Row {
+	// Un dépôt est rangé sous ce qui désigne sa personne : son compte, à défaut
+	// son matricule. Rangés sous un compte vide, ceux de qui n'en a pas encore
+	// n'étaient à personne, et la liste lui disait « aucun dépôt ».
 	parEtudiant := map[string][]Repo{}
 	scope := cours.Scope()
-	ajouter := func(username string, depot Repo) {
-		cle := strings.ToLower(username)
+	ajouter := func(personne roster.Person, depot Repo) {
+		cle := classroom.Designation(personne)
 		parEtudiant[cle] = append(parEtudiant[cle], depot)
 	}
 
@@ -101,7 +105,7 @@ func Build(cours classroom.Classroom, repos []groups.RepoInfo,
 			if equipe, appartient := cours.TeamOf(depot.Name, equipes); appartient {
 				ligne.Team = equipe.Short
 				for _, membre := range equipe.Members {
-					ajouter(membre, ligne)
+					ajouter(roster.Person{Username: membre}, ligne)
 				}
 				continue
 			}
@@ -109,7 +113,7 @@ func Build(cours classroom.Classroom, repos []groups.RepoInfo,
 			if !inscrit {
 				continue
 			}
-			ajouter(student.Username, ligne)
+			ajouter(student, ligne)
 		}
 	}
 
@@ -119,11 +123,12 @@ func Build(cours classroom.Classroom, repos []groups.RepoInfo,
 	lignes := make([]Row, 0, len(identites))
 	for _, identite := range identites {
 		// Les dépôts d'une personne peuvent être arrivés sous l'un ou l'autre
-		// de ses comptes : ils sont les siens sous tous.
+		// de ses comptes, ou sous son seul matricule : ils sont les siens sous
+		// chacun.
 		depots := make([]Repo, 0)
 		vus := map[string]bool{}
-		for _, compte := range identite.Accounts {
-			for _, depot := range parEtudiant[strings.ToLower(compte)] {
+		for _, cle := range identite.Designations() {
+			for _, depot := range parEtudiant[cle] {
 				if vus[strings.ToLower(depot.Name)] {
 					continue
 				}

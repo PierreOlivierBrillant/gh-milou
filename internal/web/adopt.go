@@ -29,6 +29,7 @@ type movePlace struct {
 type moveInput struct {
 	// Username désigne une personne seule ; Usernames, plusieurs. Les deux se
 	// cumulent : l'interface envoie l'un ou l'autre selon ce qui est coché.
+	// Chacun est un compte ou, pour qui n'en a pas encore, un matricule.
 	Username  string   `json:"username"`
 	Usernames []string `json:"usernames"`
 	// Target est la place d'un groupe qui existe déjà.
@@ -74,7 +75,8 @@ func (s *Server) handleMoveStudent(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
-	personnes, err := movers(depart, body)
+	// Ce que le groupe de départ ne connaît pas refuse le tout, d'emblée.
+	personnes, err := depart.Movers(append(append([]string(nil), body.Usernames...), body.Username))
 	if err != nil {
 		fail(writer, err)
 		return
@@ -101,7 +103,7 @@ func (s *Server) handleMoveStudent(writer http.ResponseWriter, request *http.Req
 			fail(writer, err)
 			return
 		}
-		bilan["moved"], bilan["count"] = comptes(personnes), len(personnes)
+		bilan["moved"], bilan["count"] = designees(personnes), len(personnes)
 		writeJSON(writer, http.StatusOK, bilan)
 		return
 	}
@@ -138,7 +140,7 @@ func (s *Server) handleMoveStudent(writer http.ResponseWriter, request *http.Req
 		if err := s.suivent(depart, arrivee, personnes); err != nil {
 			return nil, err
 		}
-		bilan["moved"], bilan["count"] = comptes(personnes), len(personnes)
+		bilan["moved"], bilan["count"] = designees(personnes), len(personnes)
 		return bilan, nil
 	})
 	writeJSON(writer, http.StatusAccepted, job.State())
@@ -147,7 +149,7 @@ func (s *Server) handleMoveStudent(writer http.ResponseWriter, request *http.Req
 // suivent fait suivre les fiches une fois les dépôts arrivés : elles quittent
 // la liste du départ et rejoignent celle de l'arrivée.
 func (s *Server) suivent(depart, arrivee classroom.Classroom, personnes []roster.Person) error {
-	if _, err := s.classrooms.Save(depart.Without(comptes(personnes)...)); err != nil {
+	if _, err := s.classrooms.Save(depart.Without(personnes...)); err != nil {
 		return err
 	}
 	_, err := s.classrooms.Save(arrivee.With(personnes...))
@@ -186,49 +188,9 @@ func (s *Server) moveTarget(cible string, neuf *movePlace, repos []groups.RepoIn
 	return arrivee, true, err
 }
 
-// movers rassemble les personnes à déplacer, en refusant d'emblée celles que le
-// groupe de départ ne connaît pas.
-//
-// Figurer déjà dans la liste d'arrivée n'en fait pas partie : c'est même la
-// situation qu'on vient réparer. Une erreur d'inscription laisse quelqu'un avec
-// des dépôts dans deux groupes, et le déplacement est justement ce qui les
-// rassemble — ses dépôts rejoignent l'arrivée, sa fiche quitte le départ et
-// fusionne avec celle qui l'y attendait. Refuser ici ne laissait d'autre issue
-// que de le désinscrire à la main des deux côtés.
-func movers(depart classroom.Classroom, body moveInput) ([]roster.Person, error) {
-	demandes := append([]string(nil), body.Usernames...)
-	if strings.TrimSpace(body.Username) != "" {
-		demandes = append(demandes, body.Username)
-	}
-
-	vus := map[string]bool{}
-	personnes := make([]roster.Person, 0, len(demandes))
-	for _, demande := range demandes {
-		username, err := valid.Login(demande, "Compte GitHub")
-		if err != nil {
-			return nil, err
-		}
-		if vus[strings.ToLower(username)] {
-			continue
-		}
-		vus[strings.ToLower(username)] = true
-
-		personne, trouvee := depart.Find(username)
-		if !trouvee {
-			return nil, valid.Errorf("@%s n'est pas dans « %s ».", username, depart.Label())
-		}
-		personnes = append(personnes, personne)
-	}
-	if len(personnes) == 0 {
-		return nil, valid.Errorf("Aucune personne à déplacer.")
-	}
-	return personnes, nil
-}
-
 // comptes rend les comptes GitHub d'une liste de personnes, tous ceux d'une
-// même personne compris. Quitter une liste se fait par compte : n'en nommer
-// qu'un laisserait dans le groupe de départ la moitié de quelqu'un qui
-// travaille sous deux comptes.
+// même personne compris : c'est ce que nomme le bilan d'une équipe déplacée,
+// dont chaque membre a un compte.
 func comptes(personnes []roster.Person) []string {
 	liste := make([]string, 0, len(personnes))
 	for _, personne := range personnes {
@@ -237,10 +199,30 @@ func comptes(personnes []roster.Person) []string {
 	return liste
 }
 
-// personnesEnMots nomme ce qu'un déplacement emporte, pour le titre du journal.
-func personnesEnMots(personnes []roster.Person) string {
-	if len(personnes) == 1 {
-		return "@" + personnes[0].Username
+// designees rend ce qui désigne chaque personne déplacée, comme le navigateur
+// l'a envoyé : son compte, à défaut son matricule.
+func designees(personnes []roster.Person) []string {
+	liste := make([]string, 0, len(personnes))
+	for _, personne := range personnes {
+		liste = append(liste, classroom.Handle(personne))
 	}
-	return strconv.Itoa(len(personnes)) + " étudiants"
+	return liste
+}
+
+// personnesEnMots nomme ce qu'un déplacement emporte, pour le titre du journal.
+// Une personne seule s'y dit comme au terminal : par son compte, à défaut par
+// son nom, à défaut par son matricule. Qui n'a pas encore de compte n'y
+// laissait qu'une arobase.
+func personnesEnMots(personnes []roster.Person) string {
+	if len(personnes) != 1 {
+		return strconv.Itoa(len(personnes)) + " étudiants"
+	}
+	personne := personnes[0]
+	if compte := strings.TrimSpace(personne.Username); compte != "" {
+		return "@" + compte
+	}
+	if nom := strings.TrimSpace(personne.FullName); nom != "" {
+		return nom
+	}
+	return "matricule " + strings.TrimSpace(personne.StudentID)
 }

@@ -632,7 +632,7 @@ func (s *Server) handleAttachAccount(writer http.ResponseWriter, request *http.R
 	}
 	// Le compte pouvait être inscrit à part : le rattacher le retire de là,
 	// sans quoi la même personne y figurerait deux fois.
-	modifie, err := cours.Without(compte).Rename(handle, augmente)
+	modifie, err := cours.Without(roster.Person{Username: compte}).Rename(handle, augmente)
 	if err != nil {
 		fail(writer, err)
 		return

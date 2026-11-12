@@ -335,6 +335,7 @@ const etat = {
       texte: '', role: '', session: '', cours: '', activite: '', apres: '',
       avant: '', tri: 'nom', desc: false,
     },
+    // Les lignes dépliées, chacune sous ce qui la désigne (voir designer).
     deplies: new Set(),
   },
   // La fiche d'un utilisateur : ce que le serveur en a rendu, et le compte
@@ -344,6 +345,8 @@ const etat = {
   // Le cloisonnement du groupe ouvert : son équipe enseignante, et qui peut
   // en être.
   cloisonnement: null,
+  // Les étudiants cochés dans la liste d'un groupe, chacun sous ce qui le
+  // désigne (voir designer).
   deplaces: new Set(),
   // Les travaux cochés dans la liste d'un groupe, pour les déplacer ensemble.
   travauxChoisis: new Set(),
@@ -3423,6 +3426,21 @@ async function distribuer(simulation) {
 
 // ------------------------------------------------------------------ étudiants
 
+// designer rend ce qui désigne une ligne de la liste auprès du serveur : son
+// compte, à défaut son matricule. Le compte absent de ceux qui n'en ont pas
+// encore faisait une clé commune à tous : en cocher un les cochait tous, et le
+// déplacement n'en désignait aucun.
+function designer(ligne) {
+  return ligne.username || ligne.student_id || '';
+}
+
+// nomDeLigne nomme une ligne de la liste là où une phrase l'attend : son nom,
+// à défaut son compte, à défaut son matricule — jamais une arobase seule.
+function nomDeLigne(ligne) {
+  if (ligne.full_name) return ligne.full_name;
+  return ligne.username ? '@' + ligne.username : 'matricule ' + (ligne.student_id || '');
+}
+
 // Le tri et le filtre ne sont pas appliqués ici : l'adresse les transmet, et le
 // serveur répond la liste déjà réduite et ordonnée. C'est ce qui fait que
 // « dernier envoi avant le 1er octobre » veut dire la même chose au navigateur
@@ -3451,8 +3469,8 @@ async function chargerEtudiants(force) {
 
   // Une sélection ne survit pas à ce que le filtre écarte : on déplace ce
   // qu'on voit, et rien d'autre.
-  const visibles = new Set(etat.etudiants.map((ligne) => ligne.username));
-  etat.deplaces = new Set([...etat.deplaces].filter((compte) => visibles.has(compte)));
+  const visibles = new Set(etat.etudiants.map(designer));
+  etat.deplaces = new Set([...etat.deplaces].filter((cle) => visibles.has(cle)));
 
   remplirTravauxDuFiltre(donnees.assignments || []);
 
@@ -3468,10 +3486,10 @@ async function chargerEtudiants(force) {
     corps.append(el('tr', {},
       el('td', {}, el('input', {
         type: 'checkbox',
-        checked: etat.deplaces.has(ligne.username),
+        checked: etat.deplaces.has(designer(ligne)),
         onchange: (evenement) => {
-          if (evenement.target.checked) etat.deplaces.add(ligne.username);
-          else etat.deplaces.delete(ligne.username);
+          if (evenement.target.checked) etat.deplaces.add(designer(ligne));
+          else etat.deplaces.delete(designer(ligne));
           majSelectionEtudiants();
         },
       })),
@@ -3508,7 +3526,7 @@ async function chargerEtudiants(force) {
           onclick: () => renommerEtudiant(ligne),
         }, icone('crayon')),
         boutonIcone('fleche', 'Déplacer…',
-          `Déplacer ${ligne.full_name || '@' + ligne.username} vers un autre groupe`,
+          `Déplacer ${nomDeLigne(ligne)} vers un autre groupe`,
           () => deplacerEtudiants([ligne]))))));
   }
 
@@ -3549,7 +3567,7 @@ plageDeCases($('etudiants-table').querySelector('tbody'));
 
 $('etudiants-tout').addEventListener('change', (evenement) => {
   etat.deplaces = evenement.target.checked
-    ? new Set(etat.etudiants.map((ligne) => ligne.username))
+    ? new Set(etat.etudiants.map(designer))
     : new Set();
   for (const case_ of $('etudiants-table').querySelectorAll('tbody input[type="checkbox"]')) {
     case_.checked = evenement.target.checked;
@@ -3558,7 +3576,7 @@ $('etudiants-tout').addEventListener('change', (evenement) => {
 });
 
 $('etudiants-deplacer').addEventListener('click', () => {
-  const choisis = etat.etudiants.filter((ligne) => etat.deplaces.has(ligne.username));
+  const choisis = etat.etudiants.filter((ligne) => etat.deplaces.has(designer(ligne)));
   if (choisis.length) deplacerEtudiants(choisis);
 });
 
@@ -3987,7 +4005,7 @@ function dessinerAnnuaire() {
   $('annuaire-vide').hidden = etat.annuaire.lignes.length > 0;
   for (const ligne of etat.annuaire.lignes) {
     corps.append(ligneAnnuaire(ligne));
-    if (etat.annuaire.deplies.has(ligne.username)) corps.append(depotsAnnuaire(ligne));
+    if (etat.annuaire.deplies.has(designer(ligne))) corps.append(depotsAnnuaire(ligne));
   }
 }
 
@@ -4017,10 +4035,10 @@ function ligneAnnuaire(ligne) {
           classe: 'lien', type: 'button', texte: String(ligne.repos),
           title: 'Voir ses dépôts',
           onclick: () => {
-            if (etat.annuaire.deplies.has(ligne.username)) {
-              etat.annuaire.deplies.delete(ligne.username);
+            if (etat.annuaire.deplies.has(designer(ligne))) {
+              etat.annuaire.deplies.delete(designer(ligne));
             } else {
-              etat.annuaire.deplies.add(ligne.username);
+              etat.annuaire.deplies.add(designer(ligne));
             }
             dessinerAnnuaire();
           },
@@ -6949,7 +6967,7 @@ async function deplacerEtudiants(personnes) {
   const { bloc, destination, preparer } = await choixDeGroupe();
   const seule = personnes.length === 1;
   const titre = seule
-    ? `Déplacer ${personnes[0].full_name || '@' + personnes[0].username}`
+    ? `Déplacer ${nomDeLigne(personnes[0])}`
     : `Déplacer ${personnes.length} étudiants`;
   const leurs = seule ? 'ses' : 'leurs';
   const depots = personnes.reduce(
@@ -6974,9 +6992,7 @@ async function deplacerEtudiants(personnes) {
   const cible = destination();
   if (!cible) return;
 
-  const corps = Object.assign({
-    usernames: personnes.map((personne) => personne.username),
-  }, cible);
+  const corps = Object.assign({ usernames: personnes.map(designer) }, cible);
 
   const fiche = await tenter(() => api('POST',
     `/api/classrooms/${encode(etat.groupe.scope)}/students/move`, corps), 'Déplacement');
@@ -6994,10 +7010,13 @@ async function deplacerEtudiants(personnes) {
     afficherVue('etudiants');
     return;
   }
-  const qui = bilan.count === 1
-    ? `@${bilan.moved[0]} déplacé`
-    : `${bilan.count} étudiants déplacés`;
-  message(`${qui} vers « ${bilan.target} »` +
+  // Une personne seule se nomme : le bilan ne la désigne que par son compte ou
+  // son matricule, et « rejoint » n'a pas à deviner si l'on parle d'elle ou de
+  // lui.
+  const qui = bilan.count === 1 && seule
+    ? `${nomDeLigne(personnes[0])} rejoint`
+    : `${pluriel(bilan.count, 'étudiant')} ${accord(bilan.count, 'rejoint', 'rejoignent')}`;
+  message(`${qui} « ${bilan.target} »` +
     (bilan.created ? ' · groupe créé' : '') +
     (bilan.renamed ? ` · ${pluriel(bilan.renamed, 'dépôt renommé', 'dépôts renommés')}` : ''));
   etat.deplaces = new Set();

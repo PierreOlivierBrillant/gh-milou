@@ -164,7 +164,7 @@ func (s *Server) handleRelocate(writer http.ResponseWriter, request *http.Reques
 		// lui inventerait une liste retenue qu'il n'avait pas.
 		if len(plan.quittent) > 0 {
 			if _, err := s.classrooms.Save(
-				plan.depart.Without(comptes(plan.quittent)...)); err != nil {
+				plan.depart.Without(plan.quittent...)); err != nil {
 				return nil, err
 			}
 		}

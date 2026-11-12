@@ -755,7 +755,7 @@ func (c Classroom) servies(identites []Identity, assignmentID string,
 func servedBy(identites []Identity, connus known, fragments []string) []bool {
 	parDesignation := map[string]int{}
 	for position, identite := range identites {
-		for _, cle := range identite.designations() {
+		for _, cle := range identite.Designations() {
 			parDesignation[cle] = position
 		}
 	}
@@ -765,7 +765,7 @@ func servedBy(identites []Identity, connus known, fragments []string) []bool {
 		if !inscrit {
 			continue
 		}
-		if position, trouvee := parDesignation[designation(student)]; trouvee {
+		if position, trouvee := parDesignation[Designation(student)]; trouvee {
 			servies[position] = true
 		}
 	}
@@ -883,7 +883,7 @@ func dedupe(people []roster.Person) []roster.Person {
 	for _, person := range people {
 		person.Username = strings.TrimSpace(person.Username)
 		person.FullName = strings.TrimSpace(person.FullName)
-		cle := designation(person)
+		cle := Designation(person)
 		if cle == "" {
 			continue
 		}
@@ -904,7 +904,10 @@ func dedupe(people []roster.Person) []roster.Person {
 	return uniques
 }
 
-// designation dit ce qui, dans une liste de classe, désigne une personne.
+// Designation dit ce qui, dans une liste de classe, désigne une personne :
+// « @ » et son compte, ou « # » et son matricule. Deux désignations égales sont
+// une même inscription ; un compte et un matricule ne se confondent jamais,
+// même écrits pareil.
 //
 // Le compte GitHub s'impose quand il est là. À défaut, le matricule suffit :
 // c'est lui qui identifie vraiment quelqu'un, et une liste sortie d'Omnivox n'a
@@ -914,7 +917,7 @@ func dedupe(people []roster.Person) []roster.Person {
 // Une ligne qui n'a ni l'un ni l'autre, en revanche, ne peut être rapprochée de
 // rien. Deux homonymes y seraient confondus, et leur donner un seul dépôt pour
 // deux est précisément ce que le refus des homonymes empêche ailleurs.
-func designation(person roster.Person) string {
+func Designation(person roster.Person) string {
 	if compte := strings.TrimSpace(person.Username); compte != "" {
 		return "@" + strings.ToLower(compte)
 	}
@@ -922,6 +925,22 @@ func designation(person roster.Person) string {
 		return "#" + strings.ToLower(matricule)
 	}
 	return ""
+}
+
+// designationsDe rend tout ce qui désigne une personne, sous la forme de
+// Designation : chacun de ses comptes, puis son matricule. Une seule ne suffit
+// pas à la retrouver : une personne inscrite deux fois — sa ligne du collège,
+// puis son compte — est désignée autrement par chacune de ses lignes.
+func designationsDe(person roster.Person) []string {
+	comptes := person.Accounts()
+	cles := make([]string, 0, len(comptes)+1)
+	for _, compte := range comptes {
+		cles = append(cles, Designation(roster.Person{Username: compte}))
+	}
+	if cle := Designation(roster.Person{StudentID: person.StudentID}); cle != "" {
+		cles = append(cles, cle)
+	}
+	return cles
 }
 
 // sansMarque ramène à leur compte les personnes qu'une marque de doublon a fait

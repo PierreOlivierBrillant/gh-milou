@@ -25,6 +25,9 @@ type directoryRow struct {
 	// Accounts les porte tous : une ligne peut réunir deux comptes, et c'est
 	// en les voyant côte à côte qu'on sait qu'une réunion a eu lieu.
 	Accounts []string `json:"accounts"`
+	// StudentID est son matricule. Sans compte, c'est lui qui désigne la
+	// ligne au navigateur : un compte vide serait celui de tous.
+	StudentID string `json:"student_id,omitempty"`
 	// IsTeacher est ce que le registre déclare, Role le mot qui le dit.
 	IsTeacher   bool                  `json:"is_teacher"`
 	Role        string                `json:"role"`
@@ -172,7 +175,7 @@ func (s *Server) directoryRow(org string, ligne users.Row) directoryRow {
 	}
 	return directoryRow{
 		FullName: ligne.FullName, Username: ligne.Username, Accounts: ligne.Accounts,
-		IsTeacher: ligne.IsTeacher, Role: ligne.Role(),
+		StudentID: ligne.StudentID, IsTeacher: ligne.IsTeacher, Role: ligne.Role(),
 		Enrollments: inscriptions, Repos: len(ligne.Repos), PushedAt: ligne.PushedAt,
 	}
 }

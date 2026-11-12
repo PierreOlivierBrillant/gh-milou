@@ -318,6 +318,178 @@ func TestDeplacerParLeMatriculeNEmporteQueSesDepots(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------- déplacer une personne
+
+// Une personne inscrite deux fois — sa ligne du collège, puis son compte — n'a
+// qu'un dépôt, nommé d'après la ligne qui porte son nom. Il part avec elle,
+// même quand c'est par son compte qu'on la désigne.
+func TestDeplacerQuelquUnInscritDeuxFoisEmporteSesDepots(t *testing.T) {
+	inventaire := depots("a26.5n6.01.tp1.naomi-chery")
+	depart := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{Username: "nchery", StudentID: "2100456"},
+	}).Enrich(nil, inventaire)
+	naomi, _ := depart.Find("nchery")
+
+	lignes, err := classroom.PlanMove(depart, groupe("a26", "5n6", "02", nil),
+		[]roster.Person{naomi}, inventaire)
+	if err != nil {
+		t.Fatalf("plan refusé : %v", err)
+	}
+	if len(lignes) != 1 || lignes[0].Target != "a26.5n6.02.tp1.naomi-chery" {
+		t.Fatalf("son dépôt doit partir avec elle : %+v", lignes)
+	}
+}
+
+// sansCompte est un groupe au lendemain d'un import du collège : Jean-Luc a
+// déjà son compte, Naomi et Claire n'ont que leur matricule.
+func sansCompte() []roster.Person {
+	return []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Claire Otis", StudentID: "2100789"},
+	}
+}
+
+// nomsDe rend les noms d'une liste, dans son ordre.
+func nomsDe(gens []roster.Person) string {
+	noms := make([]string, 0, len(gens))
+	for _, personne := range gens {
+		noms = append(noms, personne.FullName)
+	}
+	return strings.Join(noms, ", ")
+}
+
+// Le matricule désigne qui n'a pas de compte : c'est lui que l'on coche. Un
+// compte vide, que toutes les personnes sans compte partagent, n'en désignait
+// aucune — ou toutes à la fois.
+func TestChoisirParLeMatriculeNeRetientQuElle(t *testing.T) {
+	depart := groupe("a26", "5n6", "01", sansCompte())
+
+	choisies, err := depart.Movers([]string{"2100456"})
+	if err != nil {
+		t.Fatalf("choix refusé : %v", err)
+	}
+	if len(choisies) != 1 || choisies[0].FullName != "Naomi Chéry" ||
+		choisies[0].StudentID != "2100456" {
+		t.Fatalf("personnes choisies : %+v", choisies)
+	}
+
+	ensemble, err := depart.Movers([]string{"jlpicard", "2100789"})
+	if err != nil {
+		t.Fatalf("choix refusé : %v", err)
+	}
+	if nomsDe(ensemble) != "Jean-Luc Picard, Claire Otis" {
+		t.Fatalf("personnes choisies : %+v", ensemble)
+	}
+}
+
+// Deux désignations d'une même personne la choisissent une fois : elle ne part
+// pas deux fois, et le décompte du déplacement ne la compte pas double.
+func TestDeuxDesignationsDUnePersonneNeLaChoisissentQuUneFois(t *testing.T) {
+	depart := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{Username: "nchery", StudentID: "2100456"},
+	})
+
+	choisies, err := depart.Movers([]string{"nchery", "2100456"})
+	if err != nil {
+		t.Fatalf("choix refusé : %v", err)
+	}
+	if len(choisies) != 1 || choisies[0].Username != "nchery" ||
+		choisies[0].FullName != "Naomi Chéry" {
+		t.Fatalf("personnes choisies : %+v", choisies)
+	}
+}
+
+// Ce que le groupe ne connaît pas refuse le déplacement entier, sans prêter
+// d'arobase à un matricule. Rien de désigné, rien à déplacer.
+func TestChoisirQuelquUnQuiNEstPasLaEstRefuse(t *testing.T) {
+	depart := groupe("a26", "5n6", "01", sansCompte())
+
+	_, err := depart.Movers([]string{"2100456", "2100999"})
+	if err == nil || err.Error() != "« 2100999 » n'est pas dans « Groupe 01 »." {
+		t.Errorf("refus attendu pour le matricule inconnu : %v", err)
+	}
+	if _, err := depart.Movers([]string{"", " "}); err == nil ||
+		err.Error() != "Aucune personne à déplacer." {
+		t.Errorf("refus attendu sans personne désignée : %v", err)
+	}
+}
+
+// Quitter une liste se fait par ce qui désigne : Naomi n'a aucun compte, et un
+// retrait par compte la laissait au départ — tout en l'inscrivant à
+// l'arrivée. Claire, qui n'en a pas non plus, reste où elle est.
+func TestRetirerQuiNAQueSonMatriculeNeRetireQuElle(t *testing.T) {
+	depart := groupe("a26", "5n6", "01", sansCompte())
+	naomi, _ := depart.Find("2100456")
+
+	if reste := depart.Without(naomi); nomsDe(reste.Students) != "Jean-Luc Picard, Claire Otis" {
+		t.Fatalf("liste de départ : %+v", reste.Students)
+	}
+}
+
+// Une personne part avec toutes ses lignes : celle de son compte, celle de son
+// autre compte, celle que son matricule porte encore. En laisser une la
+// laisserait inscrite au départ.
+func TestRetirerUnePersonneRetireToutesSesLignes(t *testing.T) {
+	depart := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{Username: "nchery", StudentID: "2100456"},
+		{FullName: "Émilie Côté", Username: "emilie-cote", Also: []string{"emilie-perso"}},
+		{Username: "emilie-perso"},
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+	})
+	naomi, _ := depart.Find("nchery")
+	emilie, _ := depart.Find("emilie-cote")
+
+	reste := depart.Without(naomi, emilie)
+	if len(reste.Students) != 1 || reste.Students[0].Username != "jlpicard" {
+		t.Fatalf("liste de départ : %+v", reste.Students)
+	}
+}
+
+// Retirer un compte ne retire que la ligne qu'il désigne. Une autre personne
+// qui le compte parmi les siens reste inscrite : c'est le refus de « Rename »
+// qui le dira, au lieu de la voir disparaître sans un mot.
+func TestRetirerUnCompteNeRetireQueSaLigne(t *testing.T) {
+	cours := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard", Also: []string{"nchery"}},
+		{Username: "nchery"},
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+	})
+
+	reste := cours.Without(roster.Person{Username: "NChery"})
+	if nomsDe(reste.Students) != "Jean-Luc Picard, Naomi Chéry" {
+		t.Fatalf("liste après retrait : %+v", reste.Students)
+	}
+}
+
+// Arriver dans un groupe ne confond pas deux personnes sans compte, et n'y
+// inscrit pas deux fois celle qui y figurait déjà par son matricule.
+func TestArriverSansCompteNInscritQuUneFois(t *testing.T) {
+	depart := groupe("a26", "5n6", "01", sansCompte())
+	naomi, _ := depart.Find("2100456")
+	arrivee := groupe("a26", "5n6", "02", []roster.Person{
+		{FullName: "Claire Otis", StudentID: "2100789"},
+	})
+
+	apres, err := arrivee.With(naomi).Validate()
+	if err != nil {
+		t.Fatalf("liste d'arrivée refusée : %v", err)
+	}
+	if nomsDe(apres.Students) != "Claire Otis, Naomi Chéry" {
+		t.Fatalf("liste d'arrivée : %+v", apres.Students)
+	}
+	encore, err := apres.With(naomi).Validate()
+	if err != nil {
+		t.Fatalf("liste d'arrivée refusée : %v", err)
+	}
+	if len(encore.Students) != 2 || len(encore.Identities()) != 2 {
+		t.Fatalf("Naomi doit y figurer une fois : %+v", encore.Students)
+	}
+}
+
 // nomsConnus tient lieu de registre : un fragment de dépôt, la personne qu'il
 // désigne.
 type nomsConnus map[string]roster.Person
@@ -443,6 +615,31 @@ func TestLesFichesSuiventLeTravailDeplace(t *testing.T) {
 	}
 	if len(quittent) != 1 || quittent[0].Username != "aminata-d" {
 		t.Fatalf("personnes qui quittent : %+v", quittent)
+	}
+}
+
+// Un travail déplacé n'emporte, parmi ceux qui n'ont pas de compte, que ceux
+// qui l'ont rendu. Le compte vide qu'ils partagent faisait suivre Claire, qui
+// n'a rendu que le travail suivant, et retenait Naomi, qui n'a plus rien au
+// départ.
+func TestUnTravailDeplaceNEmporteQueSesInscritsSansCompte(t *testing.T) {
+	inventaire := depots(
+		"a26.5n6.01.tp1.jean-luc-picard", "a26.5n6.01.tp1.naomi-chery",
+		"a26.5n6.01.tp2.claire-otis",
+	)
+	depart := groupe("a26", "5n6", "01", sansCompte())
+
+	lignes, err := classroom.PlanMoveAssignments(depart, groupe("a26", "5n6", "02", nil),
+		[]classroom.Relocation{{ID: "a26.5n6.01.tp1"}}, inventaire)
+	if err != nil {
+		t.Fatalf("plan refusé : %v", err)
+	}
+	suivent, quittent := classroom.Followers(depart, lignes, inventaire)
+	if nomsDe(suivent) != "Jean-Luc Picard, Naomi Chéry" {
+		t.Errorf("personnes qui suivent : %s", nomsDe(suivent))
+	}
+	if nomsDe(quittent) != "Jean-Luc Picard, Naomi Chéry" {
+		t.Errorf("personnes qui quittent : %s", nomsDe(quittent))
 	}
 }
 
