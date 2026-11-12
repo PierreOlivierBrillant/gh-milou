@@ -724,6 +724,23 @@ func (c Classroom) StudentOf(repoName string) (roster.Person, bool) {
 	return c.fragments().personne(parts.Student)
 }
 
+// NameOf rend le nom qu'un dépôt du groupe affiche : celui de son équipe pour un
+// travail d'équipe, celui de son étudiant sinon, et rien quand la liste ne le
+// connaît pas.
+//
+// Le dernier niveau du nom de dépôt n'en tient jamais lieu. C'est un slug, et le
+// lire comme un compte GitHub nommerait l'inconnu qui porte ce compte-là : une
+// ligne sans nom dit au moins qu'il manque quelqu'un à la liste.
+func (c Classroom) NameOf(repoName string, equipes []teams.Team) string {
+	if equipe, appartient := c.TeamOf(repoName, equipes); appartient {
+		return equipe.Label()
+	}
+	if student, inscrit := c.StudentOf(repoName); inscrit {
+		return student.FullName
+	}
+	return ""
+}
+
 // Fragment rend le dernier niveau d'un nom de dépôt du groupe : ce qui y
 // désigne une personne. Le booléen dit que le nom se lit ; il ne dit pas que
 // quelqu'un se cache derrière.
@@ -872,6 +889,23 @@ func AtScope(org, scope string, defauts Defaults) (Classroom, error) {
 		Session: niveaux[0], Course: niveaux[1], Group: niveaux[2],
 	}
 	return cours.Validate()
+}
+
+// Of retrouve, parmi des groupes, celui auquel un dépôt appartient : sa place
+// est écrite dans son nom. Un préfixe de cours ou de session réunit les dépôts
+// de plusieurs groupes, et chacun doit se nommer et se juger par le sien — sa
+// liste, ses équipes, les échéances de ses travaux.
+func Of(groupes []Classroom, repoName string) (Classroom, bool) {
+	parts, reconnu := naming.Parse(repoName)
+	if !reconnu {
+		return Classroom{}, false
+	}
+	for _, cours := range groupes {
+		if naming.Belongs(parts, cours.Session, cours.Course, cours.Group) {
+			return cours, true
+		}
+	}
+	return Classroom{}, false
 }
 
 // Places énumère les groupes que les dépôts dessinent d'eux-mêmes. Seule la

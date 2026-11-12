@@ -72,7 +72,7 @@ func TestDrapeauPushFileDeposeSansEcraser(t *testing.T) {
 	if got := h.State.Files("acme/a26.5n6.01.tp1.emilie-cote", "main")["NOTE.md"]; got != "ma version\n" {
 		t.Errorf("le fichier d'Émilie a été écrasé : %q", got)
 	}
-	h.contient("1 ajouté(s)", "1 conservé(s)", "--push-overwrite")
+	h.contient("1 ajouté", "1 conservé", "--push-overwrite")
 }
 
 func TestDrapeauPushFileRemplaceSurDemande(t *testing.T) {
@@ -105,7 +105,7 @@ func TestDrapeauPushFileSimule(t *testing.T) {
 func TestAssistantDeposeUnFichier(t *testing.T) {
 	h, fichier := groupeOuDeposer(t)
 	code, _ := h.script(
-		"fichier", fichier,
+		"depots", "fichier", fichier,
 		"docs/{compte}.md", // chemin dans le dépôt, lui aussi rempli
 		"",                 // message par défaut
 		"o",                // remplir les champs du contenu
@@ -115,7 +115,7 @@ func TestAssistantDeposeUnFichier(t *testing.T) {
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Aperçu pour", "Bonjour Émilie", "2 ajouté(s)")
+	h.contient("Aperçu pour", "Bonjour Émilie", "2 ajoutés")
 	if got := h.State.Files("acme/a26.5n6.01.tp1.jean-luc-picard", "main")["docs/jlpicard.md"]; got != "Bonjour Jean-Luc, 5n6 gr. 01\n" {
 		t.Errorf("Jean-Luc a reçu %q", got)
 	}
@@ -125,11 +125,11 @@ func TestAssistantDeposeUnFichier(t *testing.T) {
 // on le confirme — et la réponse proposée est non.
 func TestAssistantDemandeAvantDeRemplacer(t *testing.T) {
 	h, fichier := groupeOuDeposer(t)
-	code, _ := h.script("fichier", fichier, "", "", "", "", "", "quitter")
+	code, _ := h.script("depots", "fichier", fichier, "", "", "", "", "", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("différent, conservé", "1 ajouté(s)")
+	h.contient("différent, conservé", "1 ajouté")
 	if got := h.State.Files("acme/a26.5n6.01.tp1.emilie-cote", "main")["NOTE.md"]; got != "ma version\n" {
 		t.Errorf("le fichier d'Émilie a été écrasé : %q", got)
 	}

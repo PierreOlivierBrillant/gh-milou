@@ -6,6 +6,7 @@ import (
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/naming"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // Les noms accumulés poste par poste ne montent pas d'eux-mêmes au registre :
@@ -172,15 +173,15 @@ func (p Publication) Apply(local bool) Change {
 func (p Publication) message(local bool) string {
 	parties := make([]string, 0, 2)
 	if n := len(p.New); n > 0 {
-		parties = append(parties, plural(n, "%d étudiant", "%d étudiants"))
+		parties = append(parties, valid.Plural(n, "étudiant"))
 	}
 	if n := len(p.Renamed); n > 0 {
-		verbe := "%d nom conservé"
-		pluriel := "%d noms conservés"
+		verbe := "nom conservé"
+		pluriel := "noms conservés"
 		if local {
-			verbe, pluriel = "%d nom repris du poste", "%d noms repris du poste"
+			verbe, pluriel = "nom repris du poste", "noms repris du poste"
 		}
-		parties = append(parties, plural(n, verbe, pluriel))
+		parties = append(parties, valid.Plural(n, verbe, pluriel))
 	}
 	if len(parties) == 0 {
 		return "Publie le registre"

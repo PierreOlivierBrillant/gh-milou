@@ -62,8 +62,9 @@ func (s *Session) printTeaching(cours classroom.Classroom,
 	console.Printf("  %s %s", console.Dim(pad("Équipe GitHub", 18)), etat.Name)
 
 	if !etat.Cloistered() {
-		console.Warning("Ce groupe n'est pas cloisonné : ses %d dépôt(s) se lisent "+
-			"selon ce que l'organisation accorde d'office.", etat.Repos)
+		console.Warning("Ce groupe n'est pas cloisonné : %s selon ce que l'organisation "+
+			"accorde d'office.", valid.Agree(etat.Repos, "son dépôt se lit",
+			"ses "+itoa(etat.Repos)+" dépôts se lisent"))
 	} else {
 		rows := make([][]string, 0, len(etat.Teachers))
 		for _, personne := range etat.Teachers {
@@ -78,8 +79,8 @@ func (s *Session) printTeaching(cours classroom.Classroom,
 			rows = append(rows, []string{nom, "@" + personne.Username, etiquette})
 		}
 		console.Table([]string{"Enseignant", "Compte", ""}, rows, 40)
-		console.Printf("  %s %d dépôt(s) accordés en « %s »",
-			console.Dim(pad("Accès", 18)), etat.Repos, classroom.TeacherPermission)
+		console.Printf("  %s %s en « %s »", console.Dim(pad("Accès", 18)),
+			valid.Plural(etat.Repos, "dépôt accordé", "dépôts accordés"), classroom.TeacherPermission)
 	}
 
 	// L'équipe ouvre un accès ; elle n'en ferme aucun. Le taire laisserait
@@ -160,8 +161,8 @@ func (s *Session) applyTeaching(cours classroom.Classroom, infos []teams.Info,
 		return ExitOK, nil
 	}
 	if !s.Options.Yes {
-		valide, err := s.Prompt.Confirm("Appliquer ces "+
-			itoa(len(plan.Steps))+" écriture(s) ?", false)
+		valide, err := s.Prompt.Confirm(valid.Agree(len(plan.Steps), "Appliquer cette écriture ?",
+			"Appliquer ces "+itoa(len(plan.Steps))+" écritures ?"), false)
 		if err != nil || !valide {
 			return ExitAborted, err
 		}

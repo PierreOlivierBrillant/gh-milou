@@ -2,7 +2,6 @@ package web
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
@@ -231,7 +230,7 @@ func (s *Server) handlePlagiarismRun(writer http.ResponseWriter, request *http.R
 	client, dossier := s.deps.Client, s.reportDir()
 	anciens, index := s.priorReports(), s.indexes(cours.Org)
 	job := s.jobs.Start("plagiat",
-		strconv.Itoa(len(cibles))+" copie(s) de « "+cours.ShortName(id)+" »",
+		valid.Plural(len(cibles), "copie")+" de « "+cours.ShortName(id)+" »",
 		func(job *Job) (any, error) {
 			rapport, err := plagiarism.RunFrom(plagiarism.Sources{
 				Client: client, Indexes: index, Prior: anciens,

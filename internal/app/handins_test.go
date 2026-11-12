@@ -258,7 +258,7 @@ func TestDrapeauHandinNeGardeQuUnEtat(t *testing.T) {
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("a26.5n6.01.tp1.jean-luc-picard", "1 affiché(s)")
+	h.contient("a26.5n6.01.tp1.jean-luc-picard", "1 affiché")
 	if strings.Contains(h.texte(), "a26.5n6.01.tp1.emilie-cote  ") {
 		t.Errorf("le dépôt remis n'a pas été écarté :\n%s", h.texte())
 	}
@@ -268,5 +268,113 @@ func TestDrapeauHandinNeGardeQuUnEtat(t *testing.T) {
 func TestDrapeauHandinRefuseUnEtatInconnu(t *testing.T) {
 	if _, err := app.Parse([]string{"--handin", "presque remis"}, &bytes.Buffer{}); err == nil {
 		t.Error("« presque remis » est accepté")
+	}
+}
+
+// ligneDe rend la ligne du tableau qui porte ce dépôt.
+func ligneDe(h *harnais, depot string) string {
+	h.t.Helper()
+	for _, ligne := range strings.Split(h.texte(), "\n") {
+		if strings.Contains(ligne, depot+" ") {
+			return ligne
+		}
+	}
+	h.t.Fatalf("aucune ligne pour « %s » :\n%s", depot, h.texte())
+	return ""
+}
+
+// groupeDeDeuxTravaux monte un groupe où Émilie a remis tp1 et tp2 le 20 octobre,
+// fixe à chaque travail l'échéance donnée — aucune à celui qui n'y figure pas —,
+// et rend la session qui relève le groupe entier.
+func groupeDeDeuxTravaux(t *testing.T, echeances map[string]string) *harnais {
+	t.Helper()
+	state := fakegh.NewState()
+	for _, travail := range []string{"tp1", "tp2"} {
+		depot := state.AddRepo("acme", "a26.5n6.01."+travail+".emilie-cote", true)
+		depot.History = []fakegh.HistoryEntry{{At: "2026-10-20T14:00:00Z", Login: "emilie-cote"}}
+		state.AddContributors("acme/a26.5n6.01."+travail+".emilie-cote", "emilie-cote")
+	}
+	h := nouveau(t, state)
+	h.declarer(classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{{FullName: "Émilie Côté", Username: "emilie-cote"}},
+	})
+	h.Options.ManageRequested = true
+	for _, travail := range []string{"tp1", "tp2"} {
+		due, fixee := echeances[travail]
+		if !fixee {
+			continue
+		}
+		fixer := nouveauDansLeMemeDossier(t, h)
+		fixer.Options.Manage = "a26.5n6.01." + travail
+		fixer.Options.DueSet, fixer.Options.Due = true, due
+		if code := fixer.muet(); code != app.ExitOK {
+			t.Fatalf("échéance de %s : code = %d\n%s", travail, code, fixer.texte())
+		}
+	}
+	groupe := nouveauDansLeMemeDossier(t, h)
+	groupe.Options.Manage = "a26.5n6.01"
+	groupe.Options.Handins = true
+	return groupe
+}
+
+// Un groupe entier mêle ses travaux : chaque dépôt s'y juge sur la date cible
+// du sien, comme la page du travail le fait au navigateur. Sans cela, gérer le
+// groupe plutôt que le travail disait « remis » d'une copie en retard.
+func TestUnGroupeEntierJugeChaqueDepotSurLaDateDeSonTravail(t *testing.T) {
+	groupe := groupeDeDeuxTravaux(t, map[string]string{"tp1": "2026-10-01", "tp2": "2026-11-01"})
+	if code := groupe.muet(); code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, groupe.texte())
+	}
+	if ligne := ligneDe(groupe, "a26.5n6.01.tp1.emilie-cote"); !strings.Contains(ligne, "en retard") {
+		t.Errorf("tp1, remis après son échéance, n'est pas en retard :\n%s", ligne)
+	}
+	if ligne := ligneDe(groupe, "a26.5n6.01.tp2.emilie-cote"); strings.Contains(ligne, "en retard") ||
+		!strings.Contains(ligne, "remis") {
+		t.Errorf("tp2, remis avant son échéance, est mal jugé :\n%s", ligne)
+	}
+	// Le groupe dit sa place : le relevé n'a pas à prétendre le contraire, et
+	// chaque travail ayant sa date, il n'y a rien à en dire.
+	groupe.absent("ne dit pas à quel groupe il appartient", "Sans date cible")
+}
+
+// Un travail sans date cible n'a jamais de retard : une colonne qui n'en
+// montre aucun doit dire pourquoi, sans quoi « remis » se lirait « à l'heure ».
+func TestUnGroupeEntierNommeSesTravauxSansDateCible(t *testing.T) {
+	groupe := groupeDeDeuxTravaux(t, map[string]string{"tp1": "2026-10-01"})
+	if code := groupe.muet(); code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, groupe.texte())
+	}
+	groupe.contient("Sans date cible, rien n'est dit en retard dans : tp2.")
+	if ligne := ligneDe(groupe, "a26.5n6.01.tp1.emilie-cote"); !strings.Contains(ligne, "en retard") {
+		t.Errorf("tp1 garde son échéance :\n%s", ligne)
+	}
+}
+
+// Le nom complet d'un dépôt vient de la liste du groupe, comme au navigateur et
+// dans --students. Le dernier niveau d'un nom de dépôt est un slug : lu comme un
+// compte GitHub, il nommerait l'inconnu qui porte ce compte-là.
+func TestLeNomCompletVientDeLaListeDuGroupe(t *testing.T) {
+	h := groupeAvecHistoriques(t)
+	h.State.Users["jean-luc-picard"] = "Un Homonyme"
+	if code, _ := h.script("quitter"); code != app.ExitOK {
+		t.Fatalf("travail : code = %d\n%s", code, h.texte())
+	}
+	groupe := nouveauDansLeMemeDossier(t, h)
+	groupe.Options.Manage = "a26.5n6.01"
+	if code, _ := groupe.script("quitter"); code != app.ExitOK {
+		t.Fatalf("groupe : code = %d\n%s", code, groupe.texte())
+	}
+	for _, session := range []*harnais{h, groupe} {
+		if ligne := ligneDe(session, "a26.5n6.01.tp1.jean-luc-picard"); !strings.Contains(ligne, "Jean-Luc Picard") {
+			t.Errorf("« %s » ne nomme pas Jean-Luc Picard :\n%s", session.Options.Manage, ligne)
+		}
+		if ligne := ligneDe(session, "a26.5n6.01.tp1.emilie-cote"); !strings.Contains(ligne, "Émilie Côté") {
+			t.Errorf("« %s » ne nomme pas Émilie Côté :\n%s", session.Options.Manage, ligne)
+		}
+		session.absent("Un Homonyme")
+	}
+	if appels := h.State.CallCount("/users/jean-luc-picard"); appels != 0 {
+		t.Errorf("le profil du compte « jean-luc-picard » a été lu %d fois", appels)
 	}
 }

@@ -41,6 +41,35 @@ func gestion(t *testing.T, state *fakegh.State, prefixe string) *harnais {
 	return h
 }
 
+// Le menu de gestion se range en sections, celles du navigateur : un geste se
+// cherche au même endroit d'une interface à l'autre. Revenir d'une section
+// ramène au premier menu sans rien avoir fait, et la liste n'est pas redonnée.
+func TestLeMenuDeGestionSeRangeEnSections(t *testing.T) {
+	h := gestion(t, groupe(t), "tp1")
+	code, scripte := h.script("depots", "revenir", "quitter")
+	if code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	menu, trouve := scripte.MenuFor("Que faire")
+	if !trouve {
+		t.Fatal("aucun menu « Que faire ? »")
+	}
+	libelles := strings.Join(menu.Labels(), "\n")
+	for _, section := range []string{"Dépôts", "Accès et invitations", "Remises",
+		"Comparaisons", "Ce travail", "Groupe", "Liste"} {
+		if !strings.Contains(libelles, section+" — ") {
+			t.Errorf("le menu n'offre pas la section « %s » :\n%s", section, libelles)
+		}
+	}
+	depots, ouvert := scripte.MenuFor("Dépôts")
+	if !ouvert || depots.Default != "revenir" {
+		t.Errorf("la section « Dépôts » ne s'ouvre pas sur « Revenir » : %+v", depots)
+	}
+	if fois := strings.Count(h.texte(), "Groupe « tp1 »"); fois != 1 {
+		t.Errorf("la liste est montrée %d fois", fois)
+	}
+}
+
 func TestGestionAfficheLeGroupe(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	code, scripte := h.script("quitter")
@@ -50,7 +79,7 @@ func TestGestionAfficheLeGroupe(t *testing.T) {
 	if scripte.Remaining() != 0 {
 		t.Errorf("%d réponse(s) inutilisée(s)", scripte.Remaining())
 	}
-	h.contient("Groupe « tp1 » — 3 dépôt(s)", "tp1-emilie-cote", "Émilie Côté",
+	h.contient("Groupe « tp1 » — 3 dépôts", "tp1-emilie-cote", "Émilie Côté",
 		"Jean-Luc Picard", "privé")
 	// Le dernier envoi porte l'heure, et celle de la machine : une remise du
 	// soir se joue à la minute, et GitHub date tout en UTC.
@@ -78,7 +107,7 @@ func TestGestionListeFiltreeEtTriee(t *testing.T) {
 	if code, _ := h.script("quitter"); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("1 affiché(s)", "tp1-jlpicard", "envoi après le 2026-10-01")
+	h.contient("1 affiché", "tp1-jlpicard", "envoi après le 2026-10-01")
 	h.absent("tp1-emilie-cote")
 
 	// Les dépôts sans aucun envoi se retrouvent à part : une borne ne les
@@ -97,8 +126,8 @@ func TestGestionListeFiltreeEtTriee(t *testing.T) {
 func TestGestionFiltreDepuisLeMenu(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	code, scripte := h.script(
-		"filtrer", "chercher", "picard", "retour", // ne garder que Picard
-		"urls", "", "n", // les URL ne portent plus que sur lui
+		"liste", "filtrer", "chercher", "picard", "retour", // ne garder que Picard
+		"depots", "urls", "", "n", // les URL ne portent plus que sur lui
 		"quitter",
 	)
 	if code != app.ExitOK {
@@ -107,7 +136,7 @@ func TestGestionFiltreDepuisLeMenu(t *testing.T) {
 	if scripte.Remaining() != 0 {
 		t.Errorf("%d réponse(s) inutilisée(s)", scripte.Remaining())
 	}
-	h.contient("1 affiché(s)", "« picard »", "https://github.com/acme/tp1-jlpicard")
+	h.contient("1 affiché", "« picard »", "https://github.com/acme/tp1-jlpicard")
 	h.absent("https://github.com/acme/tp1-emilie-cote")
 }
 
@@ -117,7 +146,7 @@ func TestGestionDetecteLesGroupes(t *testing.T) {
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Groupes existants", "tp1", "3 dépôt(s)", "projet-final", "2 dépôt(s)")
+	h.contient("Groupes existants", "tp1", "3 dépôts", "projet-final", "2 dépôts")
 	h.absent("notes-du-cours")
 }
 
@@ -127,7 +156,7 @@ func TestGestionPrefixeSaisi(t *testing.T) {
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Groupe « projet-final » — 2 dépôt(s)")
+	h.contient("Groupe « projet-final » — 2 dépôts")
 }
 
 func TestGestionPrefixeInexistant(t *testing.T) {
@@ -160,8 +189,8 @@ func TestGestionAffichageDesAcces(t *testing.T) {
 
 	// Une invitation en attente est créée par l'ajout d'un collaborateur.
 	code, _ := h.script(
-		"collaborateurs", "tp1-jlpicard", "ajouter", "jlpicard", "push", "revenir",
-		"acces",
+		"acces", "collaborateurs", "tp1-jlpicard", "ajouter", "jlpicard", "push", "revenir",
+		"acces", "inspecter",
 		"quitter",
 	)
 	if code != app.ExitOK {
@@ -179,7 +208,7 @@ func TestGestionRetraitDUnCollaborateur(t *testing.T) {
 	h := gestion(t, state, "tp1")
 
 	code, _ := h.script(
-		"collaborateurs", "tp1-emilie-cote",
+		"acces", "collaborateurs", "tp1-emilie-cote",
 		"retirer", "collaborateur:emilie-cote", "oui",
 		"revenir",
 		"quitter",
@@ -196,7 +225,7 @@ func TestGestionRetraitDUnCollaborateur(t *testing.T) {
 func TestGestionAnnulationDUneInvitation(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	code, _ := h.script(
-		"collaborateurs", "tp1-jlpicard",
+		"acces", "collaborateurs", "tp1-jlpicard",
 		"ajouter", "jlpicard", "push",
 		"retirer", "1", "oui", // seule l'invitation en attente figure dans la liste
 		"revenir",
@@ -214,7 +243,7 @@ func TestGestionAnnulationDUneInvitation(t *testing.T) {
 func TestGestionCollaborateurInexistant(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	code, _ := h.script(
-		"collaborateurs", "tp1-jlpicard", "ajouter", "fantome",
+		"acces", "collaborateurs", "tp1-jlpicard", "ajouter", "fantome",
 		"revenir", "quitter",
 	)
 	if code != app.ExitOK {
@@ -232,7 +261,7 @@ func TestGestionAjoutDeDepots(t *testing.T) {
 	)
 
 	code, _ := h.script(
-		"ajouter",
+		"depots", "ajouter",
 		"",        // gabarit de nom, défaut
 		"fichier", // source de la liste
 		csv,       // chemin
@@ -243,7 +272,7 @@ func TestGestionAjoutDeDepots(t *testing.T) {
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Modèle réutilisé : acme/modele-tp", "1 personne(s) déjà présente(s)", "1 créé(s)")
+	h.contient("Modèle réutilisé : acme/modele-tp", "1 personne déjà présente", "1 créé")
 	if _, existe := state.Repos["acme/tp1-prof"]; !existe {
 		t.Fatalf("dépôts = %v", state.RepoNames("acme"))
 	}
@@ -256,7 +285,7 @@ func TestGestionAjoutSansPersonneNouvelle(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	csv := h.cohorteCSV("Émilie Côté,emilie-cote", "Jean-Luc Picard,jlpicard")
 
-	code, _ := h.script("ajouter", "", "fichier", csv, "oui", "quitter")
+	code, _ := h.script("depots", "ajouter", "", "fichier", csv, "oui", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -267,7 +296,7 @@ func TestGestionURLs(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	cible := filepath.Join(t.TempDir(), "urls.csv")
 
-	code, _ := h.script("urls", "1,2", "oui", cible, "quitter")
+	code, _ := h.script("depots", "urls", "1,2", "oui", cible, "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -289,7 +318,7 @@ func TestGestionSuppressionAnnuleeSiLeNomNeCorrespondPas(t *testing.T) {
 	state := groupe(t)
 	h := gestion(t, state, "tp1")
 
-	code, _ := h.script("supprimer", "tp1-jlpicard", "tp1-jlpicar", "quitter")
+	code, _ := h.script("depots", "supprimer", "tp1-jlpicard", "tp1-jlpicar", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -306,7 +335,7 @@ func TestGestionSuppressionConfirmee(t *testing.T) {
 	state := groupe(t)
 	h := gestion(t, state, "tp1")
 
-	code, _ := h.script("supprimer", "tp1-jlpicard", "tp1-jlpicard", "quitter")
+	code, _ := h.script("depots", "supprimer", "tp1-jlpicard", "tp1-jlpicard", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -315,7 +344,7 @@ func TestGestionSuppressionConfirmee(t *testing.T) {
 		t.Fatal("le dépôt aurait dû être supprimé")
 	}
 	// La liste rechargée ne montre plus que deux dépôts.
-	h.contient("Groupe « tp1 » — 2 dépôt(s)")
+	h.contient("Groupe « tp1 » — 2 dépôts")
 }
 
 // Refuser le renouvellement laisse tout en place : la suppression ne part même
@@ -325,7 +354,7 @@ func TestGestionSuppressionPorteeManquanteRefusee(t *testing.T) {
 	state.Scopes = "repo, read:org"
 	h := gestion(t, state, "tp1")
 
-	code, _ := h.script("supprimer", "tp1-jlpicard", "non", "quitter")
+	code, _ := h.script("depots", "supprimer", "tp1-jlpicard", "non", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -346,7 +375,7 @@ func TestGestionSuppressionApresRenouvellement(t *testing.T) {
 	h := gestion(t, state, "tp1")
 	h.Refresher = accordeLesPortees(state, nil)
 
-	code, _ := h.script("supprimer", "tp1-jlpicard", "oui", "tp1-jlpicard", "quitter")
+	code, _ := h.script("depots", "supprimer", "tp1-jlpicard", "oui", "tp1-jlpicard", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -370,7 +399,7 @@ func TestGestionSuppressionRepriseApresRefusDeGitHub(t *testing.T) {
 	// Le jeton renouvelé est celui que GitHub accepte : le refus disparaît.
 	h.Refresher = accordeLesPortees(state, func() { delete(state.FailOn, echec) })
 
-	code, _ := h.script("supprimer", "tp1-jlpicard", "tp1-jlpicard", "oui", "quitter")
+	code, _ := h.script("depots", "supprimer", "tp1-jlpicard", "tp1-jlpicard", "oui", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -430,7 +459,7 @@ func TestGestionCacheEvitelesAppels(t *testing.T) {
 func TestGestionRechargementForce(t *testing.T) {
 	state := groupe(t)
 	h := gestion(t, state, "tp1")
-	if code, _ := h.script("rafraichir", "quitter"); code != app.ExitOK {
+	if code, _ := h.script("liste", "rafraichir", "quitter"); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
 	if appels := state.CallCount("GET /orgs/acme/repos"); appels < 2 {
@@ -506,11 +535,11 @@ func TestGestionClonage(t *testing.T) {
 	h := gestion(t, state, "tp1")
 	destination := filepath.Join(t.TempDir(), "clones")
 
-	code, _ := h.script("cloner", "tous", destination, "oui", "quitter")
+	code, _ := h.script("depots", "cloner", "tous", destination, "oui", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("2 cloné(s)")
+	h.contient("2 clonés")
 	for _, nom := range []string{"tp1-emilie-cote", "tp1-jlpicard"} {
 		if _, err := os.Stat(filepath.Join(destination, nom, "README.md")); err != nil {
 			t.Errorf("%s non cloné : %v", nom, err)
@@ -537,7 +566,7 @@ func TestGestionClonageSelectionPartielle(t *testing.T) {
 	h := gestion(t, state, "tp1")
 	destination := filepath.Join(t.TempDir(), "clones")
 
-	code, _ := h.script("cloner", "1,3", destination, "oui", "quitter")
+	code, _ := h.script("depots", "cloner", "1,3", destination, "oui", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -562,20 +591,20 @@ func TestGestionMiseAJourDesClones(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "clones")
 
 	code, _ := h.script(
-		"cloner", "tous", destination, "oui",
-		"pull", destination, "tous", "oui",
+		"depots", "cloner", "tous", destination, "oui",
+		"depots", "pull", destination, "tous", "oui",
 		"quitter",
 	)
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("1 cloné(s)", "1 mis à jour")
+	h.contient("1 cloné", "1 mis à jour")
 }
 
 func TestGestionClonageAnnule(t *testing.T) {
 	state := groupe(t)
 	h := gestion(t, state, "tp1")
-	code, _ := h.script("cloner", "tous", "-", "quitter")
+	code, _ := h.script("depots", "cloner", "tous", "-", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -585,7 +614,7 @@ func TestGestionClonageAnnule(t *testing.T) {
 func TestGestionMiseAJourDossierSansClone(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	vide := t.TempDir()
-	code, _ := h.script("pull", vide, "-", "quitter")
+	code, _ := h.script("depots", "pull", vide, "-", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -602,7 +631,7 @@ func TestGestionAjoutSansModeleProposeUnDossierDeDepart(t *testing.T) {
 	depart := h.squelette()
 
 	code, _ := h.script(
-		"ajouter",
+		"depots", "ajouter",
 		"",        // gabarit par défaut
 		depart,    // dossier de fichiers de départ
 		"fichier", // source de la liste
@@ -614,7 +643,7 @@ func TestGestionAjoutSansModeleProposeUnDossierDeDepart(t *testing.T) {
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Aucun dépôt modèle détecté", "1 créé(s)")
+	h.contient("Aucun dépôt modèle détecté", "1 créé")
 	if fichiers := state.Files("acme/tp1-jlpicard", "main"); len(fichiers) != 2 {
 		t.Errorf("les fichiers de départ devaient être déposés : %+v", fichiers)
 	}
@@ -622,7 +651,7 @@ func TestGestionAjoutSansModeleProposeUnDossierDeDepart(t *testing.T) {
 
 func TestGestionURLsSelectionVide(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
-	code, _ := h.script("urls", "-", "quitter")
+	code, _ := h.script("depots", "urls", "-", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -632,7 +661,7 @@ func TestGestionURLsSelectionVide(t *testing.T) {
 func TestGestionSelectionInvalideSignalee(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
 	// Une sélection hors liste est signalée, sans quitter le mode gestion.
-	code, _ := h.script("urls", "42", "quitter")
+	code, _ := h.script("depots", "urls", "42", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -645,7 +674,7 @@ func TestGestionSelectionInvalideSignalee(t *testing.T) {
 // conservé tel quel. Le travail arrive quand même à sa place.
 func TestTravailDeplaceVersUneAutrePlace(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
-	code, _ := h.script("deplacer", "a26.5n6.01", "tp1", "oui", "revenir")
+	code, _ := h.script("travail", "deplacer", "a26.5n6.01", "tp1", "oui", "revenir")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -668,7 +697,7 @@ func TestTravailDeplaceVersUneAutrePlace(t *testing.T) {
 // Refuser en fin de course ne laisse rien derrière.
 func TestTravailNonDeplaceQuandOnRefuse(t *testing.T) {
 	h := gestion(t, groupe(t), "tp1")
-	code, _ := h.script("deplacer", "a26.5n6.01", "tp1", "non", "quitter")
+	code, _ := h.script("travail", "deplacer", "a26.5n6.01", "tp1", "non", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -728,7 +757,7 @@ func cohorteNommee(t *testing.T) *fakegh.State {
 // place : le préfixe suit, on reste dans le même travail.
 func TestTravailRenommeDansLAssistant(t *testing.T) {
 	h := gestion(t, cohorteNommee(t), "a26.5n6.01.tp1")
-	code, _ := h.script("renommer", "projet-final", "oui", "quitter")
+	code, _ := h.script("travail", "renommer", "projet-final", "oui", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
@@ -745,7 +774,7 @@ func TestTravailRenommeDansLAssistant(t *testing.T) {
 // Refuser en fin de course ne laisse rien derrière.
 func TestTravailNonRenommeQuandOnRefuse(t *testing.T) {
 	h := gestion(t, cohorteNommee(t), "a26.5n6.01.tp1")
-	code, _ := h.script("renommer", "projet-final", "non", "quitter")
+	code, _ := h.script("travail", "renommer", "projet-final", "non", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}

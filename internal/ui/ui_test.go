@@ -57,7 +57,7 @@ func TestTableAligneEtTronque(t *testing.T) {
 	if !strings.Contains(sortie, "tp1-emilie-cote") || strings.Contains(sortie, "tp1-aminata-d") {
 		t.Errorf("la limite n'est pas respectée : %q", sortie)
 	}
-	if !strings.Contains(sortie, "et 1 ligne(s) de plus") {
+	if !strings.Contains(sortie, "et 1 ligne de plus") {
 		t.Errorf("les lignes masquées doivent être annoncées : %q", sortie)
 	}
 }

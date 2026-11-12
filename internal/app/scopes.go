@@ -69,8 +69,9 @@ func (s *Session) refreshToken(wanted, remove []string) error {
 	}
 	granted, _ := s.grantedScopes()
 	if absent := scopes.Missing(granted, wanted); len(absent) > 0 {
-		s.Console.Warning("Toujours absente(s) : %s. GitHub n'accorde que ce qui lui a été "+
-			"accordé dans le navigateur.", strings.Join(absent, ", "))
+		s.Console.Warning("%s : %s. GitHub n'accorde que ce qui lui a été accordé dans le "+
+			"navigateur.", valid.Agree(len(absent), "Toujours absente", "Toujours absentes"),
+			strings.Join(absent, ", "))
 		return nil
 	}
 	s.Console.Success("Jeton renouvelé.")

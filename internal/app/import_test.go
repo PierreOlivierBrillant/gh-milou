@@ -281,7 +281,7 @@ func TestImportNamedOnlyAuDrapeau(t *testing.T) {
 	if !slices.Contains(h.depots(), "tp1-visiteur-anonyme-42") {
 		t.Fatalf("le dépôt inconnu a été repris : %v", h.depots())
 	}
-	h.contient("dépôt(s) sans étudiant connu", "laissés où ils sont")
+	h.contient("1 dépôt sans étudiant connu", "laissé où il est")
 }
 
 // Un travail ne se reprend pas toujours en entier : on choisit les dépôts, et

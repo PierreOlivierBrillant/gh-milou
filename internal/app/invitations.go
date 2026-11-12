@@ -131,8 +131,9 @@ func (m *manageSession) envoyerManquantes(group *groups.Group, demander bool) (i
 		func(done, _ int, repo string) { progression.Update(done, repo) })
 	progression.Clear()
 	if manquants := len(noms) - len(lus); manquants > 0 {
-		console.Warning("%d dépôt(s) n'ont pas pu être lus : leurs invitations restent "+
-			"inconnues.", manquants)
+		console.Warning("%s", valid.Plural(manquants,
+			"dépôt n'a pas pu être lu : ses invitations restent inconnues.",
+			"dépôts n'ont pas pu être lus : leurs invitations restent inconnues."))
 	}
 
 	cours, equipes, droit := m.pourInviter(group)
@@ -154,8 +155,8 @@ func (m *manageSession) envoyerManquantes(group *groups.Group, demander bool) (i
 	console.Table([]string{"Dépôt", "Compte", "Droit", "Envoi"}, rows, 40)
 
 	if m.session.Options.DryRun {
-		console.Note("Simulation : %d invitation(s) partiraient, rien n'est parti.",
-			len(envois))
+		console.Note("Simulation : %s, rien n'est parti.",
+			valid.Plural(len(envois), "invitation partirait", "invitations partiraient"))
 		return 0, nil
 	}
 	if demander {
@@ -164,7 +165,8 @@ func (m *manageSession) envoyerManquantes(group *groups.Group, demander bool) (i
 			"annulée — en reçoit une première, au droit du groupe. GitHub envoie un " +
 			"courriel à chacun.")
 		confirme, err := m.session.Prompt.Confirm(
-			"Envoyer ces "+itoa(len(envois))+" invitation(s) ?", true)
+			valid.Agree(len(envois), "Envoyer cette invitation ?",
+				"Envoyer ces "+itoa(len(envois))+" invitations ?"), true)
 		if err != nil || !confirme {
 			return 0, err
 		}
@@ -184,7 +186,8 @@ func (m *manageSession) envoyerManquantes(group *groups.Group, demander bool) (i
 		console.Success("%s : %s", fait.Repo, fait.Summary())
 	}
 	if echecs > 0 {
-		console.Warning("%d envoi(s) sur %d ont échoué.", echecs, len(faits))
+		console.Warning("%s sur %d %s.", valid.Plural(echecs, "envoi"), len(faits),
+			valid.Agree(echecs, "a échoué", "ont échoué"))
 	}
 	return echecs, nil
 }

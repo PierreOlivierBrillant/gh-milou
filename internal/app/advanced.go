@@ -7,6 +7,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/starter"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ui"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // starterLoad isole le chargement d'un dossier de départ, pour la lisibilité.
@@ -27,7 +28,7 @@ func (s *Session) locations() []location {
 	}
 	reports := "aucun bilan"
 	if matches, err := filepath.Glob(filepath.Join(reportDir, "*.json")); err == nil && len(matches) > 0 {
-		reports = itoa(len(matches)) + " bilan(s)"
+		reports = valid.Plural(len(matches), "bilan")
 	}
 	settingsState := "absent"
 	if info, err := os.Stat(s.ConfigFile); err == nil && !info.IsDir() {
@@ -96,7 +97,8 @@ func (s *Session) clearCache() error {
 		s.Console.Note("Le cache est déjà vide.")
 		return nil
 	}
-	confirmed, err := s.Prompt.Confirm(plural("Supprimer les %d entrée(s) du cache ?", count), true)
+	confirmed, err := s.Prompt.Confirm(valid.Agree(count, "Supprimer l'entrée du cache ?",
+		"Supprimer les "+itoa(count)+" entrées du cache ?"), true)
 	if err != nil {
 		return err
 	}
@@ -107,7 +109,7 @@ func (s *Session) clearCache() error {
 	removed := s.Cache.Clear()
 	// Le cache mémoire de la session doit disparaître avec le cache disque.
 	s.invalidateCaches()
-	s.Console.Success("%d entrée(s) supprimée(s).", removed)
+	s.Console.Success("%s.", valid.Plural(removed, "entrée supprimée", "entrées supprimées"))
 	return nil
 }
 

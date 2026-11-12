@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,33 +28,95 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
-// Menu du mode gestion.
-var manageMenu = ui.Options(
-	"ajouter", "Ajouter des dépôts au groupe",
-	"acces", "Afficher les accès de tous les dépôts",
-	"urls", "Afficher les URL des dépôts",
-	"collaborateurs", "Gérer les collaborateurs d'un dépôt",
-	"invitations", "Envoyer les invitations manquantes (expirées ou absentes)",
-	"fichier", "Déposer un fichier dans tous les dépôts",
-	"cloner", "Cloner des dépôts en local",
-	"pull", "Mettre à jour des clones existants",
-	"supprimer", "Supprimer un dépôt",
-	"remises", "Relever les commits et les remises",
-	"reunir", "Réunir à son étudiant un compte vu dans son dépôt",
-	"plagiat", "Comparer les copies entre elles",
-	"envoi", "Envoyer les copies anonymisées à un collègue",
-	"publier", "Publier l'index d'empreintes de ce travail",
-	"demandes", "Demander à voir une copie, ou répondre à une demande",
-	"echeance", "Fixer la date cible de ce travail",
-	"renommer", "Renommer ce travail",
-	"deplacer", "Déplacer ce travail vers un groupe",
-	"enseignants", "Régler l'équipe enseignante du groupe",
-	"etudiant", "Corriger un étudiant du groupe : son nom, son compte, ses dépôts",
-	"filtrer", "Filtrer ou trier la liste",
-	"rafraichir", "Recharger la liste",
-	"changer", "Changer de groupe",
-	"quitter", "Quitter",
-)
+// sectionDeGestion range des gestes du mode gestion sous un titre.
+type sectionDeGestion struct {
+	valeur, titre string
+	// contenu résume la section dans le premier menu : on y choisit une
+	// section sans l'ouvrir pour voir ce qu'elle range.
+	contenu string
+	gestes  []ui.Option
+}
+
+// sectionsDeGestion rangent les gestes du mode gestion. Vingt-deux entrées à
+// plat ne se lisaient plus, et chaque geste se cherche ici où le navigateur le
+// range, sous le même verbe : « Inspecter les accès », « Relever les remises ».
+var sectionsDeGestion = []sectionDeGestion{
+	{"depots", "Dépôts", "ajouter, déposer un fichier, cloner, exporter les URL, supprimer",
+		ui.Options(
+			"ajouter", "Ajouter des dépôts au groupe",
+			"fichier", "Déposer un fichier dans tous les dépôts",
+			"cloner", "Cloner des dépôts",
+			"pull", "Mettre à jour des clones",
+			"urls", "Afficher les URL, ou les exporter en CSV",
+			"supprimer", "Supprimer un dépôt",
+		)},
+	{"acces", "Accès et invitations", "inspecter, inviter, collaborateurs",
+		ui.Options(
+			"inspecter", "Inspecter les accès",
+			"invitations", "Envoyer les invitations manquantes",
+			"collaborateurs", "Gérer les collaborateurs d'un dépôt",
+		)},
+	{"remises", "Remises", "relever, réunir un compte à son étudiant",
+		ui.Options(
+			"relever", "Relever les remises",
+			"reunir", "Réunir à son étudiant un compte vu dans son dépôt",
+		)},
+	{"comparaisons", "Comparaisons", "comparer les copies, publier l'index, échanger avec un collègue",
+		ui.Options(
+			"plagiat", "Comparer les copies",
+			"envoi", "Envoyer ces copies à un collègue",
+			"publier", "Publier l'index de ce travail",
+			"demandes", "Demandes : en faire une, répondre à celles des collègues",
+		)},
+	{"travail", "Ce travail", "date cible, renommer, déplacer",
+		ui.Options(
+			"echeance", "Date cible",
+			"renommer", "Renommer",
+			"deplacer", "Déplacer vers un autre groupe",
+		)},
+	{"groupe", "Groupe", "équipe enseignante, corriger un étudiant",
+		ui.Options(
+			"enseignants", "Équipe enseignante",
+			"etudiant", "Corriger un étudiant : son nom, son compte, ses dépôts",
+		)},
+	{"liste", "Liste", "filtrer, trier, recharger",
+		ui.Options(
+			"filtrer", "Filtrer ou trier",
+			"rafraichir", "Recharger",
+		)},
+}
+
+// menuDeGestion est le premier menu : une entrée par section, puis de quoi
+// changer de groupe ou s'en aller.
+var menuDeGestion = func() []ui.Option {
+	options := make([]ui.Option, 0, len(sectionsDeGestion)+2)
+	for _, section := range sectionsDeGestion {
+		options = append(options, ui.Option{
+			Value: section.valeur, Label: section.titre + " — " + section.contenu,
+		})
+	}
+	return append(options,
+		ui.Option{Value: "changer", Label: "Changer de groupe"},
+		ui.Option{Value: "quitter", Label: "Quitter"})
+}()
+
+// choisirGeste demande une section, puis l'un de ses gestes. « Revenir » ramène
+// au premier menu sans rien avoir fait : la liste n'a pas à être redonnée.
+func (m *manageSession) choisirGeste() (string, error) {
+	choix, err := m.session.Prompt.Choose("Que faire ?", menuDeGestion, "quitter")
+	if err != nil {
+		return "", err
+	}
+	for _, section := range sectionsDeGestion {
+		if section.valeur != choix {
+			continue
+		}
+		gestes := append(slices.Clone(section.gestes),
+			ui.Option{Value: "revenir", Label: "Revenir"})
+		return m.session.Prompt.Choose(section.titre, gestes, "revenir")
+	}
+	return choix, nil
+}
 
 // manageSession pilote le mode « gérer un groupe existant ».
 type manageSession struct {
@@ -73,10 +136,10 @@ type manageSession struct {
 	// filtre des personnes : ce qu'il regarde n'est pas une ligne d'annuaire,
 	// c'est ce qu'un historique et des accès déjà lus disent d'un dépôt.
 	handin classroom.HandinState
-	// Les équipes du groupe, lues une fois : elles disent à qui un dépôt
-	// d'équipe est destiné, et la liste s'affiche trop souvent pour les
+	// Les équipes de l'organisation, lues une fois : elles disent à qui un
+	// dépôt d'équipe est destiné, et la liste s'affiche trop souvent pour les
 	// redemander à chaque fois.
-	equipes     []teams.Team
+	infos       []teams.Info
 	equipesLues bool
 	// prechargement va chercher d'avance les historiques et les accès des
 	// cours de la session la plus récente, pendant qu'on navigue dans le menu.
@@ -190,7 +253,7 @@ func (m *manageSession) chooseGroup() (*groups.Group, error) {
 	} else {
 		rows := make([][]string, 0, len(detected))
 		for index, item := range detected {
-			rows = append(rows, []string{itoa(index + 1), item.Prefix, itoa(item.Count) + " dépôt(s)"})
+			rows = append(rows, []string{itoa(index + 1), item.Prefix, valid.Plural(item.Count, "dépôt")})
 		}
 		console.Table([]string{"#", "Préfixe", "Taille"}, rows, 20)
 	}
@@ -200,7 +263,7 @@ func (m *manageSession) chooseGroup() (*groups.Group, error) {
 		for _, item := range detected {
 			options = append(options, ui.Option{
 				Value: "prefixe:" + item.Prefix,
-				Label: item.Prefix + "  (" + itoa(item.Count) + " dépôt(s))",
+				Label: item.Prefix + "  (" + valid.Plural(item.Count, "dépôt") + ")",
 			})
 		}
 		options = append(options,
@@ -251,21 +314,41 @@ func (m *manageSession) chooseGroup() (*groups.Group, error) {
 	}
 }
 
-// names retrouve le nom complet de chaque dépôt du groupe.
+// names retrouve le nom complet de chaque dépôt du groupe : par la liste de son
+// groupe et le registre, comme au navigateur et dans l'annuaire.
+//
+// Seuls les dépôts hors de toute place se nomment par le profil GitHub du
+// compte que leur suffixe désigne. C'est alors le seul indice, et il vaut :
+// GitHub Classroom nommait ses dépôts du compte de l'étudiant. Sous la
+// nomenclature courante, le suffixe est un slug, et le profil du compte qui
+// porterait ce slug serait celui d'un inconnu.
 func (m *manageSession) names(group *groups.Group) map[string]string {
-	pairs := make([]identity.Pair, 0, group.Len())
+	groupes := m.groupesDe(group)
+	names := make(map[string]string, group.Len())
+	pairs := make([]identity.Pair, 0)
 	for _, repo := range group.Repos {
+		if cours, place := classroom.Of(groupes, repo.Name); place {
+			names[repo.Name] = cours.NameOf(repo.Name, m.equipesDe(cours))
+			continue
+		}
 		pairs = append(pairs, identity.Pair{Repo: repo.Name, Login: repo.Suffix})
 	}
-	missing := m.resolver.Missing(pairs)
-	if len(missing) == 0 {
-		return m.resolver.Resolve(pairs, false, nil)
+	if len(pairs) == 0 {
+		return names
 	}
-	progress := ui.NewProgress(m.session.Console, "Noms complets", len(missing))
-	names := m.resolver.Resolve(pairs, true, func(done, total int, repo string) {
-		progress.Update(done, repo)
-	})
-	progress.Finish("")
+	var resolus map[string]string
+	if missing := m.resolver.Missing(pairs); len(missing) == 0 {
+		resolus = m.resolver.Resolve(pairs, false, nil)
+	} else {
+		progress := ui.NewProgress(m.session.Console, "Noms complets", len(missing))
+		resolus = m.resolver.Resolve(pairs, true, func(done, total int, repo string) {
+			progress.Update(done, repo)
+		})
+		progress.Finish("")
+	}
+	for repo, nom := range resolus {
+		names[repo] = nom
+	}
 	return names
 }
 
@@ -357,9 +440,9 @@ func (m *manageSession) show(group *groups.Group) {
 		}
 	}
 
-	titre := "Groupe « " + group.Prefix + " » — " + itoa(group.Len()) + " dépôt(s)"
+	titre := "Groupe « " + group.Prefix + " » — " + valid.Plural(group.Len(), "dépôt")
 	if len(visibles) != group.Len() {
-		titre += ", " + itoa(len(visibles)) + " affiché(s)"
+		titre += ", " + itoa(len(visibles)) + " " + valid.Agree(len(visibles), "affiché")
 	}
 	console.Heading(titre)
 
@@ -395,8 +478,8 @@ func (m *manageSession) show(group *groups.Group) {
 		console.Warning("Aucun dépôt ne répond aux critères.")
 	}
 	if aDebloquer > 0 {
-		console.Warning("%d dépôt(s) sans invitation valable — expirée ou absente : "+
-			"« Envoyer les invitations manquantes » y remédie.", aDebloquer)
+		console.Warning("%s — expirée ou absente : « Envoyer les invitations manquantes » y remédie.",
+			valid.Plural(aDebloquer, "dépôt sans invitation valable", "dépôts sans invitation valable"))
 	}
 	console.Note("%s", m.criteria())
 }
@@ -677,7 +760,8 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 		fresh = append(fresh, person)
 	}
 	if len(skipped) > 0 {
-		console.Warning("%d personne(s) déjà présente(s) dans le groupe :", len(skipped))
+		console.Warning("%s dans le groupe :",
+			valid.Plural(len(skipped), "personne déjà présente", "personnes déjà présentes"))
 		for index, person := range skipped {
 			if index == 10 {
 				break
@@ -701,7 +785,7 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 	console.Table([]string{"Dépôt", "Personne", "Compte"}, rows, 20)
 
 	confirmed, err := session.Prompt.Confirm(
-		plural("Créer %d dépôt(s) dans « "+m.org+" » ?", len(items)), false)
+		"Créer "+valid.Plural(len(items), "dépôt")+" dans « "+m.org+" » ?", false)
 	if err != nil {
 		return err
 	}
@@ -728,9 +812,10 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 	if err != nil {
 		return err
 	}
-	console.Printf("  %s créé(s) · %s déjà présent(s) · %s en échec",
-		console.OK(itoa(report.Count(runner.Created))),
-		console.Info(itoa(report.Count(runner.Existing))),
+	crees, presents := report.Count(runner.Created), report.Count(runner.Existing)
+	console.Printf("  %s %s · %s %s · %s en échec",
+		console.OK(itoa(crees)), valid.Agree(crees, "créé"),
+		console.Info(itoa(presents)), valid.Agree(presents, "déjà présent", "déjà présents"),
 		console.Err(itoa(len(report.Failures()))))
 
 	reportDir, err := roster.ExpandPath(session.Options.ReportDir)
@@ -818,10 +903,11 @@ func (m *manageSession) showAccess(group *groups.Group) error {
 	// Un dépôt illisible — un jeton sans droit dessus — n'est pas inspecté. Le
 	// taire ferait croire que personne n'y a accès.
 	if manquants := len(noms) - len(rows); manquants > 0 {
-		console.Warning("%d dépôt(s) n'ont pas pu être lus : leurs accès restent inconnus.",
-			manquants)
+		console.Warning("%s", valid.Plural(manquants,
+			"dépôt n'a pas pu être lu : ses accès restent inconnus.",
+			"dépôts n'ont pas pu être lus : leurs accès restent inconnus."))
 	}
-	console.Success("%d dépôt(s) inspecté(s).", len(rows))
+	console.Success("%s.", valid.Plural(len(rows), "dépôt inspecté", "dépôts inspectés"))
 	console.Table([]string{"Dépôt", "Collaborateurs", "En attente"}, rows, 40)
 	return nil
 }
@@ -1060,7 +1146,7 @@ func (m *manageSession) urls(group *groups.Group) error {
 		console.Failure("Enregistrement impossible : %v", err)
 		return nil
 	}
-	console.Success("%d URL enregistrée(s) dans %s", len(chosen), path)
+	console.Success("%s dans %s", valid.Plural(len(chosen), "URL enregistrée", "URL enregistrées"), path)
 	return nil
 }
 
@@ -1099,7 +1185,7 @@ func (m *manageSession) cloneRepos(group *groups.Group) error {
 		return err
 	}
 
-	console.Printf("  %s dépôt(s) vers %s%s", console.Bold(itoa(len(chosen))),
+	console.Printf("  %s %s vers %s%s", console.Bold(itoa(len(chosen))), valid.Agree(len(chosen), "dépôt"),
 		console.Info(destination), console.Dim(" · "+itoa(session.Options.Jobs)+" en parallèle"))
 	confirmed, err := session.Prompt.Confirm("Lancer le clonage ?", true)
 	if err != nil {
@@ -1128,9 +1214,11 @@ func (m *manageSession) cloneRepos(group *groups.Group) error {
 	for _, result := range results {
 		counts[result.Status]++
 	}
-	console.Printf("  %s cloné(s) · %s mis à jour · %s ignoré(s) · %s en échec",
-		console.OK(itoa(counts[clone.Cloned])), console.Info(itoa(counts[clone.Updated])),
-		console.Dim(itoa(counts[clone.Skipped])), console.Err(itoa(counts[clone.Failed])))
+	console.Printf("  %s %s · %s mis à jour · %s %s · %s en échec",
+		console.OK(itoa(counts[clone.Cloned])), valid.Agree(counts[clone.Cloned], "cloné"),
+		console.Info(itoa(counts[clone.Updated])),
+		console.Dim(itoa(counts[clone.Skipped])), valid.Agree(counts[clone.Skipped], "ignoré"),
+		console.Err(itoa(counts[clone.Failed])))
 	for _, result := range results {
 		if result.Status == clone.Failed || result.Status == clone.Skipped {
 			icon := console.Warn("·")
@@ -1148,7 +1236,7 @@ func (m *manageSession) cloneRepos(group *groups.Group) error {
 // pullClones met à jour des clones existants, sans jamais écraser un travail local.
 func (m *manageSession) pullClones(group *groups.Group) error {
 	session, console := m.session, m.session.Console
-	console.Heading("Mettre à jour des clones existants")
+	console.Heading("Mettre à jour des clones")
 
 	parent := session.Settings.CloneDir
 	if parent == "" {
@@ -1207,7 +1295,7 @@ func (m *manageSession) pullClones(group *groups.Group) error {
 		console.Warning("Aucun clone sélectionné.")
 		return nil
 	}
-	confirmed, err := session.Prompt.Confirm(plural("Mettre à jour %d clone(s) ?", len(chosen)), true)
+	confirmed, err := session.Prompt.Confirm("Mettre à jour "+valid.Plural(len(chosen), "clone")+" ?", true)
 	if err != nil || !confirmed {
 		if err == nil {
 			console.Warning("Annulé.")
@@ -1360,15 +1448,18 @@ func (m *manageSession) relocateTo(group *groups.Group, place, name string) (int
 	console.Heading("« " + group.Prefix + " » vers " + arrivee.Scope())
 	console.Note("Le dernier niveau est conservé tel quel : l'assistant ne tient pas de " +
 		"liste d'étudiants. L'interface web y met le nom complet quand elle le connaît.")
-	return m.appliquerRenommage(lignes,
-		"%d dépôt(s) déplacé(s) vers « "+arrivee.Scope()+" ».")
+	return m.appliquerRenommage(lignes, func(faits int) string {
+		return valid.Plural(faits, "dépôt déplacé", "dépôts déplacés") +
+			" vers « " + arrivee.Scope() + " »."
+	})
 }
 
 // appliquerRenommage montre le plan, le fait confirmer, puis renomme. Déplacer
 // un travail et le renommer aboutissent tous deux ici : c'est la même écriture,
 // et elle ne doit se raconter que d'une façon. Seule la phrase de succès
-// distingue les deux — elle porte un « %d » pour le nombre de dépôts.
-func (m *manageSession) appliquerRenommage(lignes []classroom.Move, succes string) (int, error) {
+// distingue les deux ; elle reçoit le nombre de dépôts renommés, qui l'accorde.
+func (m *manageSession) appliquerRenommage(lignes []classroom.Move,
+	succes func(faits int) string) (int, error) {
 	suivis, code, err := m.session.renommerDepots(m.org, lignes, succes)
 	m.suivre(func(repos []groups.RepoInfo) []groups.RepoInfo {
 		return groups.WithRenamed(repos, suivis)
@@ -1378,7 +1469,7 @@ func (m *manageSession) appliquerRenommage(lignes []classroom.Move, succes strin
 
 // renommerDepots est cette écriture-là, sans l'inventaire que la gestion tient
 // à jour : déplacer une équipe la fait aussi, et depuis un autre écran.
-func (s *Session) renommerDepots(org string, lignes []classroom.Move, succes string) (
+func (s *Session) renommerDepots(org string, lignes []classroom.Move, succes func(int) string) (
 	[]groups.Renamed, int, error) {
 	console := s.Console
 	s.montrerRenommages(lignes)
@@ -1387,8 +1478,8 @@ func (s *Session) renommerDepots(org string, lignes []classroom.Move, succes str
 		return nil, ExitOK, nil
 	}
 	if !s.Options.Yes {
-		suite, err := s.Prompt.Confirm(
-			"Renommer ces "+itoa(len(lignes))+" dépôt(s) ?", false)
+		suite, err := s.Prompt.Confirm(valid.Agree(len(lignes), "Renommer ce dépôt ?",
+			"Renommer ces "+itoa(len(lignes))+" dépôts ?"), false)
 		if err != nil || !suite {
 			console.Warning("Annulé : rien n'a été renommé.")
 			return nil, ExitOK, err
@@ -1409,7 +1500,7 @@ func (s *Session) montrerRenommages(lignes []classroom.Move) {
 
 // executerRenommages renomme, sans rien demander : le plan a déjà été montré et
 // accepté. Elle rend ce qui a été renommé, pour que l'inventaire le suive.
-func (s *Session) executerRenommages(org string, lignes []classroom.Move, succes string) (
+func (s *Session) executerRenommages(org string, lignes []classroom.Move, succes func(int) string) (
 	[]groups.Renamed, int, error) {
 	console := s.Console
 	progress := ui.NewProgress(console, "Renommage", len(lignes))
@@ -1430,11 +1521,17 @@ func (s *Session) executerRenommages(org string, lignes []classroom.Move, succes
 	progress.Finish("")
 
 	if echecs > 0 {
-		console.Warning("%d dépôt(s) renommé(s), %d en échec.", renommes, echecs)
+		console.Warning("%s, %d en échec.",
+			valid.Plural(renommes, "dépôt renommé", "dépôts renommés"), echecs)
 		return suivis, ExitFailure, nil
 	}
-	console.Success(succes, renommes)
+	console.Success("%s", succes(renommes))
 	return suivis, ExitOK, nil
+}
+
+// depotsRenommes dit combien de dépôts ont pris leur nouveau nom.
+func depotsRenommes(faits int) string {
+	return valid.Plural(faits, "dépôt renommé", "dépôts renommés") + "."
 }
 
 // ------------------------------------------------------ renommer le travail
@@ -1490,7 +1587,7 @@ func (m *manageSession) renameTo(group *groups.Group, name string) (int, error) 
 	}
 
 	m.session.Console.Heading("« " + group.Prefix + " » vers « " + fragment + " »")
-	code, err := m.appliquerRenommage(lignes, "%d dépôt(s) renommé(s).")
+	code, err := m.appliquerRenommage(lignes, depotsRenommes)
 	if err != nil || code != ExitOK {
 		return code, err
 	}
@@ -1639,7 +1736,7 @@ func (m *manageSession) run() (int, error) {
 			if showList {
 				m.show(group)
 			}
-			action, err := m.session.Prompt.Choose("Que faire ?", manageMenu, "quitter")
+			action, err := m.choisirGeste()
 			if err != nil {
 				return ExitOK, err
 			}
@@ -1648,6 +1745,10 @@ func (m *manageSession) run() (int, error) {
 			}
 			if action == "changer" {
 				break
+			}
+			if action == "revenir" {
+				showList = false
+				continue
 			}
 
 			if err := m.dispatch(action, group); err != nil {
@@ -1685,7 +1786,7 @@ func (m *manageSession) dispatch(action string, group *groups.Group) error {
 	switch action {
 	case "ajouter":
 		return m.addRepos(group)
-	case "acces":
+	case "inspecter":
 		return m.showAccess(group)
 	case "collaborateurs":
 		return m.manageCollaborators(group)
@@ -1702,7 +1803,7 @@ func (m *manageSession) dispatch(action string, group *groups.Group) error {
 		return m.pullClones(group)
 	case "supprimer":
 		return m.deleteRepo(group)
-	case "remises":
+	case "relever":
 		return m.remises(group)
 	case "reunir":
 		return m.reunirEtranger(group)

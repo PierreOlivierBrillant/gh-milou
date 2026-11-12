@@ -286,8 +286,10 @@ func (d *desk) transfer(short, place string) error {
 		console.Note("Suivent aussi : %s", strings.Join(noms, ", "))
 	}
 	if len(lignes) > 0 {
-		suivis, _, err := d.session.renommerDepots(d.cours.Org, lignes,
-			"%d dépôt(s) déplacé(s) vers « "+arrivee.Scope()+" ».")
+		suivis, _, err := d.session.renommerDepots(d.cours.Org, lignes, func(faits int) string {
+			return valid.Plural(faits, "dépôt déplacé", "dépôts déplacés") +
+				" vers « " + arrivee.Scope() + " »."
+		})
 		if err != nil {
 			return err
 		}
@@ -323,8 +325,8 @@ func (d *desk) transfer(short, place string) error {
 			return err
 		}
 	}
-	console.Success("« %s » est maintenant « %s », avec %d étudiant(s).",
-		equipe.Name, nom, len(membres))
+	console.Success("« %s » est maintenant « %s », avec %s.",
+		equipe.Name, nom, valid.Plural(len(membres), "étudiant"))
 	return d.reload()
 }
 
@@ -403,7 +405,7 @@ func (d *desk) drop(short string, avecDepots bool) error {
 		return err
 	}
 	if len(depots) > 0 {
-		console.Success("« %s » supprimée, avec %s dépôt(s).", equipe.Name, itoa(len(depots)))
+		console.Success("« %s » supprimée, avec %s.", equipe.Name, valid.Plural(len(depots), "dépôt"))
 	} else {
 		console.Success(
 			"« %s » supprimée. Ses dépôts restent ; seul l'accès qu'elle donnait a disparu.",
@@ -424,8 +426,8 @@ func (d *desk) confirmeLaSuppression(equipe teams.Team, depots []string) (bool, 
 			"Supprimer « "+equipe.Name+" » ? Ses dépôts resteront sur GitHub.", false)
 	}
 	console := d.session.Console
-	console.Print("  " + console.Err("⚠ Suppression définitive de "+itoa(len(depots))+
-		" dépôt(s) de "+d.cours.Org))
+	console.Print("  " + console.Err("⚠ Suppression définitive de "+
+		valid.Plural(len(depots), "dépôt")+" de "+d.cours.Org))
 	for _, depot := range depots {
 		console.Note("   %s", depot)
 	}
@@ -834,8 +836,8 @@ func (s *Session) createTeams() (int, error) {
 
 	if !s.Options.Yes && !s.Options.DryRun {
 		confirmed, err := s.Prompt.Confirm(
-			plural("Confirmer et créer %d dépôt(s) d'équipe dans « "+s.Settings.Org+" » ?",
-				len(items)), false)
+			"Confirmer et créer "+valid.Plural(len(items), "dépôt d'équipe", "dépôts d'équipe")+
+				" dans « "+s.Settings.Org+" » ?", false)
 		if err != nil {
 			return ExitOK, err
 		}
@@ -894,7 +896,8 @@ func (s *Session) shareTeamRepos(bureau *desk, travail string) (int, error) {
 	if echecs > 0 {
 		return ExitFailure, nil
 	}
-	s.Console.Success("%d dépôt(s) partagé(s) avec leur équipe.", faits)
+	s.Console.Success("%s", valid.Plural(faits, "dépôt partagé avec son équipe.",
+		"dépôts partagés avec leur équipe."))
 	return ExitOK, nil
 }
 

@@ -1158,34 +1158,24 @@ func (c Change) message() string {
 	}
 	var parties []string
 	if n := len(c.Learn); n > 0 {
-		parties = append(parties, plural(n, "%d étudiant", "%d étudiants"))
+		parties = append(parties, valid.Plural(n, "étudiant"))
 	}
 	if n := len(c.Forget); n > 0 {
-		parties = append(parties, plural(n, "retire %d compte", "retire %d comptes"))
+		parties = append(parties, "retire "+valid.Plural(n, "compte"))
 	}
 	// Une échéance se lit dans l'historique comme le reste : c'est souvent la
 	// seule trace de la date qu'un travail avait avant qu'on ne la déplace.
 	if n := len(c.Deadlines); n > 0 {
 		if len(parties) == 0 {
-			return "Fixe " + plural(n, "la date de remise de %d travail",
-				"la date de remise de %d travaux")
+			return "Fixe la date de remise de " + valid.Plural(n, "travail", "travaux")
 		}
-		parties = append(parties, plural(n, "date de remise de %d travail",
-			"dates de remise de %d travaux"))
+		parties = append(parties, valid.Agree(n, "date", "dates")+" de remise de "+
+			valid.Plural(n, "travail", "travaux"))
 	}
 	if len(parties) == 0 {
 		return "Met le registre à jour"
 	}
 	return "Inscrit au registre : " + strings.Join(parties, ", ")
-}
-
-// plural accorde un décompte. Les messages de commit se lisent : « 1 étudiants »
-// se remarque, et rien ne justifie de l'écrire.
-func plural(count int, singulier, pluriel string) string {
-	if count == 1 {
-		return fmt.Sprintf(singulier, count)
-	}
-	return fmt.Sprintf(pluriel, count)
 }
 
 // -------------------------------------------------------------- lecture/écriture
@@ -1291,9 +1281,9 @@ func Decode(content []byte) (*Set, []string) {
 		}
 	}
 	if doublons > 0 {
-		soucis = append(soucis, plural(doublons,
-			"%d fiche en double réunie à la sienne",
-			"%d fiches en double réunies aux leurs")+
+		soucis = append(soucis, valid.Plural(doublons,
+			"fiche en double réunie à la sienne",
+			"fiches en double réunies aux leurs")+
 			" : le fichier gagnerait à être nettoyé.")
 	}
 	return newSet(fiches, nil, rules.Rules{}, exchange.Catalog{}, signature.Book{},

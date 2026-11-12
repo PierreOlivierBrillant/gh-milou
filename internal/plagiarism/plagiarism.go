@@ -91,8 +91,10 @@ func (r Request) Validate() error {
 	if len(r.Targets)+len(r.Archives)+len(r.Indexes) < 2 {
 		return valid.Errorf(
 			"Détection de plagiat : il faut au moins deux copies à comparer "+
-				"(%d dépôt(s), %d archive(s) et %d index fournis).",
-			len(r.Targets), len(r.Archives), len(r.Indexes))
+				"(%s, %s et %s %s).",
+			valid.Plural(len(r.Targets), "dépôt"), valid.Plural(len(r.Archives), "archive"),
+			valid.Plural(len(r.Indexes), "index", "index"),
+			valid.Agree(len(r.Targets)+len(r.Archives)+len(r.Indexes), "fourni"))
 	}
 	return r.ValidateSettings()
 }

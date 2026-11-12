@@ -72,7 +72,7 @@ func (b *Bundle) IsLarge() bool {
 
 // Describe résume le contenu en une ligne.
 func (b *Bundle) Describe() string {
-	return fmt.Sprintf("%d fichier(s), %s", len(b.Files), HumanSize(b.TotalBytes()))
+	return valid.Plural(len(b.Files), "fichier") + ", " + HumanSize(b.TotalBytes())
 }
 
 // HumanSize met une taille en octets sous une forme lisible.

@@ -14,50 +14,81 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
-// La date cible et les remises, au terminal. L'assistant gère un préfixe, et un
-// préfixe de la nomenclature courante est un travail : « a26.5n6.01.tp1 » dit à
-// la fois le groupe et le travail, et c'est tout ce qu'il faut pour retrouver
-// l'échéance retenue et confronter les historiques à elle.
+// La date cible et les remises, au terminal. L'assistant gère un préfixe : un
+// travail — « a26.5n6.01.tp1 » —, mais aussi un groupe entier, un cours ou une
+// session, qui en réunissent plusieurs. Chaque dépôt porte sa place dans son
+// nom, et c'est par elle qu'il retrouve son groupe : sa liste, ses équipes, et
+// l'échéance de son propre travail.
 //
 // Un préfixe hérité — « tp1-jlpicard » et ses semblables — ne dit pas à quel
 // groupe il appartient : les commits s'y comptent quand même, mais rien ne s'y
 // rapporte à une date cible. Le déplacer vers une place lui donne le reste.
 
 // travail résout le groupe et le nom du travail que le préfixe géré désigne.
-// Le second retour vaut faux pour un préfixe qui ne dit pas sa place.
+// Le dernier retour vaut faux pour un préfixe qui ne désigne pas un travail : un
+// préfixe hérité, ou un groupe entier qui en réunit plusieurs.
 func (m *manageSession) travail(group *groups.Group) (classroom.Classroom, string, bool) {
 	place, nom, reconnu := naming.SplitAssignment(group.Prefix)
 	if !reconnu {
 		return classroom.Classroom{}, "", false
 	}
-	cours, err := classroom.AtScope(m.org, place, classroom.DefaultsFrom(m.session.Settings))
-	if err != nil {
+	groupes := m.composer(place)
+	if len(groupes) == 0 {
 		return classroom.Classroom{}, "", false
 	}
-	if connu, existe := m.session.groupStore().Find(cours.Org, cours.Scope()); existe {
-		cours = connu
-	}
-	set, _ := m.session.names(cours.Org)
-	// Le registre répond aux trois questions qu'un groupe lui pose : qui se
-	// cache derrière un nom de dépôt, quand chaque travail est attendu, et qui
-	// enseigne — sans quoi un commit d'enseignant daterait la remise.
-	return cours.Scheduling(set).Staffing(set).Enrich(set, m.repos), nom, true
+	return groupes[0], nom, true
 }
 
-// equipesDe lit les équipes du groupe, une fois pour la séance. Leur absence
-// n'empêche rien : le travail est alors individuel, et c'est déjà ce que la
-// liste vide dit.
-func (m *manageSession) equipesDe(cours classroom.Classroom) []teams.Team {
-	if m.equipesLues {
-		return m.equipes
+// groupesDe compose les groupes auxquels appartiennent les dépôts listés. Un
+// travail n'en touche qu'un, mais un cours ou une session en réunissent
+// plusieurs : chaque dépôt se nomme et se juge ensuite par le sien, que
+// « classroom.Of » retrouve. Un dépôt hors nomenclature n'appartient à aucun.
+func (m *manageSession) groupesDe(group *groups.Group) []classroom.Classroom {
+	infos := make([]groups.RepoInfo, 0, group.Len())
+	for _, repo := range group.Repos {
+		infos = append(infos, groups.RepoInfo{Name: repo.Name})
 	}
-	m.equipesLues = true
-	infos, err := m.session.Client.LoadOrgTeams(cours.Org, m.session.Options.Jobs)
-	if err != nil {
+	return m.composer(classroom.Places(infos)...)
+}
+
+// composer compose les groupes qui occupent ces places, comme le navigateur le
+// fait : ce que ce poste en a déclaré, puis ce que le registre en sait. Le
+// registre répond aux trois questions qu'un groupe lui pose : qui se cache
+// derrière un nom de dépôt, quand chaque travail est attendu, et qui enseigne —
+// sans quoi un commit d'enseignant daterait la remise. Il n'est lu qu'une fois
+// pour toutes les places : une session en compte une dizaine.
+func (m *manageSession) composer(places ...string) []classroom.Classroom {
+	if len(places) == 0 {
 		return nil
 	}
-	m.equipes = cours.Teams(infos)
-	return m.equipes
+	store := m.session.groupStore()
+	set, _ := m.session.names(m.org)
+	defauts := classroom.DefaultsFrom(m.session.Settings)
+	trouves := make([]classroom.Classroom, 0, len(places))
+	for _, place := range places {
+		cours, err := classroom.AtScope(m.org, place, defauts)
+		if err != nil {
+			continue
+		}
+		if connu, existe := store.Find(cours.Org, cours.Scope()); existe {
+			cours = connu
+		}
+		trouves = append(trouves, cours.Scheduling(set).Staffing(set).Enrich(set, m.repos))
+	}
+	return trouves
+}
+
+// equipesDe rend les équipes d'un groupe. Celles de l'organisation sont lues une
+// fois pour la séance : un cours en demande pour chacun de ses groupes, et la
+// liste s'affiche trop souvent pour les redemander. Leur absence n'empêche
+// rien : le travail est alors individuel, et c'est déjà ce que la liste vide
+// dit.
+func (m *manageSession) equipesDe(cours classroom.Classroom) []teams.Team {
+	if !m.equipesLues {
+		m.equipesLues = true
+		m.infos, _ = m.session.Client.LoadOrgTeams(cours.Org, m.session.Options.Jobs)
+	}
+	return cours.Teams(m.infos)
 }
 
 // bilans confronte les dépôts affichés à ce qu'on sait déjà de leurs
@@ -65,6 +96,10 @@ func (m *manageSession) equipesDe(cours classroom.Classroom) []teams.Team {
 // et la liste ne montre que ce qui a déjà été relevé — et qu'aucun envoi n'a
 // dépassé depuis. C'est l'inventaire qui le dit, pas l'âge du relevé : la même
 // règle qu'au navigateur, décidée au même endroit.
+//
+// Chaque dépôt se juge sur l'échéance de son propre travail. Un groupe entier
+// en mêle plusieurs, et une seule date — ou aucune — y dirait « remis » d'une
+// copie que la page de son travail dit en retard.
 func (m *manageSession) bilans(group *groups.Group) map[string]classroom.Review {
 	noms := make([]string, 0, group.Len())
 	for _, repo := range group.Repos {
@@ -74,26 +109,22 @@ func (m *manageSession) bilans(group *groups.Group) map[string]classroom.Review 
 	if len(remises) == 0 {
 		return nil
 	}
-	cours, nom, reconnu := m.travail(group)
+	groupes := m.groupesDe(group)
+	set, _ := m.session.names(m.org)
 	trouves := make(map[string]classroom.Review, len(remises))
-	if !reconnu {
+	for repo, remise := range remises {
+		if cours, place := classroom.Of(groupes, repo); place {
+			trouves[repo] = cours.ReviewOf(repo, remise, m.equipesDe(cours))
+			continue
+		}
 		// Sans place, les commits se comptent mais rien ne se juge : il n'y a
 		// ni date cible ni liste d'étudiants à confronter. La remise se date
 		// quand même hors des commits d'enseignants : le registre de
 		// l'organisation dit qui enseigne, même sous un préfixe hérité.
-		set, _ := m.session.names(m.org)
-		for repo, remise := range remises {
-			trouves[repo] = classroom.Review{
-				Repo: repo, Commits: remise.CommitsBut(set.Teaches),
-				Last: remise.LastBut(set.Teaches),
-			}
+		trouves[repo] = classroom.Review{
+			Repo: repo, Commits: remise.CommitsBut(set.Teaches),
+			Last: remise.LastBut(set.Teaches),
 		}
-		return trouves
-	}
-	due, _ := valid.ParseDue(cours.DueOf(nom))
-	equipes := m.equipesDe(cours)
-	for repo, remise := range remises {
-		trouves[repo] = cours.Review(repo, remise, due, equipes)
 	}
 	return trouves
 }
@@ -111,18 +142,17 @@ func (m *manageSession) etats(group *groups.Group) map[string]classroom.HandinSt
 		noms = append(noms, repo.Name)
 	}
 	acces := m.resolver.Accesses(m.org, noms, identity.Cached, nil)
-	cours, _, reconnu := m.travail(group)
-	var equipes []teams.Team
-	if reconnu {
-		equipes = m.equipesDe(cours)
-	}
+	groupes := m.groupesDe(group)
 
 	etats := make(map[string]classroom.HandinState, len(noms))
 	for _, nom := range noms {
 		bilan, releve := bilans[nom]
 		// Sans place reconnue, rien ne dit qui le dépôt vise : une invitation
 		// en attente ne s'y rapporte alors à personne.
-		attend := reconnu && cours.Awaiting(nom, equipes, acces[nom].Pending())
+		attend := false
+		if cours, place := classroom.Of(groupes, nom); place {
+			attend = cours.Awaiting(nom, m.equipesDe(cours), acces[nom].Pending())
+		}
 		etats[nom] = classroom.StateOf(bilan, releve, attend)
 	}
 	return etats
@@ -145,25 +175,59 @@ func (m *manageSession) remises(group *groups.Group) error {
 		func(done, _ int, repo string) { progression.Update(done, repo) })
 	progression.Clear()
 	if manquants := len(noms) - len(remises); manquants > 0 {
-		console.Warning("%d dépôt(s) n'ont pas pu être lus : leur historique reste inconnu.",
-			manquants)
+		console.Warning("%s", valid.Plural(manquants,
+			"dépôt n'a pas pu être lu : son historique reste inconnu.",
+			"dépôts n'ont pas pu être lus : leur historique reste inconnu."))
 	}
 
-	cours, nom, reconnu := m.travail(group)
-	if !reconnu {
+	groupes := m.groupesDe(group)
+	if len(groupes) == 0 {
 		console.Note("« %s » ne dit pas à quel groupe il appartient : les commits se "+
 			"comptent, mais aucune date cible ne s'y rapporte.", group.Prefix)
 		m.show(group)
 		return nil
 	}
-	m.pourquoiRien(cours, remises)
-	if due := cours.DueOf(nom); due != "" {
-		console.Note("Date cible de « %s » : %s.", nom, due)
-	} else {
-		console.Note("« %s » n'a pas de date cible : rien n'y sera dit en retard.", nom)
+	m.pourquoiRien(groupes, remises)
+	if cours, nom, travail := m.travail(group); travail {
+		if due := cours.DueOf(nom); due != "" {
+			console.Note("Date cible de « %s » : %s.", nom, due)
+		} else {
+			console.Note("« %s » n'a pas de date cible : rien n'y sera dit en retard.", nom)
+		}
+	} else if sans := travauxSansEcheance(groupes, group); len(sans) > 0 {
+		// Plusieurs travaux : chacun a sa date, que la colonne applique. Seuls
+		// ceux qui n'en ont pas méritent un mot — rien n'y sera jamais en retard,
+		// et une colonne sans retard ne dit pas pourquoi.
+		console.Note("Sans date cible, rien n'est dit en retard dans : %s.",
+			strings.Join(sans, ", "))
 	}
 	m.show(group)
 	return nil
+}
+
+// travauxSansEcheance nomme les travaux de la liste qui n'ont pas de date
+// cible : par leur nom court quand la liste ne couvre qu'un groupe, par leur
+// identifiant complet quand elle en couvre plusieurs — deux groupes ont souvent
+// un « tp1 » chacun.
+func travauxSansEcheance(groupes []classroom.Classroom, group *groups.Group) []string {
+	infos := make([]groups.RepoInfo, 0, group.Len())
+	for _, repo := range group.Repos {
+		infos = append(infos, groups.RepoInfo{Name: repo.Name})
+	}
+	sans := make([]string, 0)
+	for _, cours := range groupes {
+		for _, travail := range cours.Assignments(infos, nil) {
+			if travail.Due != "" {
+				continue
+			}
+			if len(groupes) > 1 {
+				sans = append(sans, travail.ID)
+			} else {
+				sans = append(sans, travail.Name)
+			}
+		}
+	}
+	return sans
 }
 
 // pourquoiRien va chercher les accès des dépôts qui n'ont rien reçu.
@@ -173,11 +237,11 @@ func (m *manageSession) remises(group *groups.Group) error {
 // silence qu'elle n'a pas choisi. Ceux qui ont reçu quelque chose n'en ont pas
 // besoin — la question ne se pose plus — et leurs accès coûteraient deux
 // requêtes pour rien.
-func (m *manageSession) pourquoiRien(cours classroom.Classroom,
+func (m *manageSession) pourquoiRien(groupes []classroom.Classroom,
 	remises map[string]groups.Handin) {
 	muets := make([]string, 0, len(remises))
 	for repo, remise := range remises {
-		if cours.HandedIn(remise) == "" {
+		if cours, place := classroom.Of(groupes, repo); place && cours.HandedIn(remise) == "" {
 			muets = append(muets, repo)
 		}
 	}
@@ -296,8 +360,8 @@ func etrangers(console *ui.Console, bilan classroom.Review) string {
 // la décision reste celle de qui enseigne, et elle s'écrit au registre.
 func (m *manageSession) reunirEtranger(group *groups.Group) error {
 	console := m.session.Console
-	cours, _, reconnu := m.travail(group)
-	if !reconnu {
+	groupes := m.groupesDe(group)
+	if len(groupes) == 0 {
 		console.Note("« %s » ne dit pas à quel groupe il appartient : rien ne dit qui "+
 			"chaque dépôt vise.", group.Prefix)
 		return nil
@@ -307,16 +371,19 @@ func (m *manageSession) reunirEtranger(group *groups.Group) error {
 		personne       roster.Person
 	}
 	bilans := m.bilans(group)
-	equipes := m.equipesDe(cours)
 	paires := make([]paire, 0)
 	for _, repo := range group.Repos {
 		bilan, releve := bilans[repo.Name]
 		if !releve || len(bilan.Strangers) == 0 {
 			continue
 		}
+		cours, place := classroom.Of(groupes, repo.Name)
+		if !place {
+			continue
+		}
 		// Seul un dépôt qui vise une personne dit à qui réunir le compte :
 		// dans un dépôt d'équipe, rien ne dit lequel des membres c'est.
-		cibles := cours.Targets(repo.Name, equipes)
+		cibles := cours.Targets(repo.Name, m.equipesDe(cours))
 		if len(cibles) != 1 {
 			continue
 		}
@@ -326,7 +393,7 @@ func (m *manageSession) reunirEtranger(group *groups.Group) error {
 	}
 	if len(paires) == 0 {
 		console.Note("Aucun compte inattendu dans les historiques relevés de « %s ». "+
-			"« Relever les commits et les remises » les lit.", group.Prefix)
+			"« Relever les remises » les lit.", group.Prefix)
 		return nil
 	}
 

@@ -204,7 +204,7 @@ func TestTerminalSupprimeUneEquipeAvecSesDepots(t *testing.T) {
 	if !contientLe(restants, "a26.5n6.01.projet.eq2") {
 		t.Fatalf("le dépôt d'eq2 devait rester : %v", restants)
 	}
-	h.contient("2 dépôt(s)")
+	h.contient("2 dépôts")
 }
 
 func contientLe(noms []string, cherche string) bool {
@@ -298,7 +298,7 @@ func TestTerminalRepartageUnTravailAdopte(t *testing.T) {
 	if depots := h.State.TeamRepoNames("acme", fakegh.TeamSlug("a26.5n6.01.eq1")); len(depots) != 1 {
 		t.Fatalf("le dépôt devrait être partagé avec eq1 : %v", depots)
 	}
-	h.contient("1 dépôt(s) partagé(s)")
+	h.contient("1 dépôt partagé avec son équipe")
 }
 
 // Une équipe appartient à un groupe : un préfixe qui n'en désigne pas un est

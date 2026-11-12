@@ -451,7 +451,7 @@ func TestLAssistantRefuseUneDemandeRecue(t *testing.T) {
 	prof.Options.PublishIndex = false
 	prof.Options.Manage = "a26.5n6.01.tp1"
 	prof.Options.ManageRequested = true
-	code, _ := prof.script("demandes", "refuser", demande,
+	code, _ := prof.script("comparaisons", "demandes", "refuser", demande,
 		"le dossier est déjà entre les mains de la direction", "retour", "quitter")
 	if code != app.ExitOK {
 		t.Fatalf("assistant : code = %d\n%s", code, prof.texte())
@@ -532,7 +532,7 @@ func TestSansTravailNommeLesIndexManquantsSontRattrapes(t *testing.T) {
 	if code := passe.muet(); code != app.ExitOK {
 		t.Fatalf("rattrapage : code = %d\n%s", code, passe.texte())
 	}
-	passe.contient("Index manquants", "a26.5n6.01.tp1", "1 index publié(s)")
+	passe.contient("Index manquants", "a26.5n6.01.tp1", "1 index publié")
 
 	// Et il ne manque plus rien : la passe est idempotente, ce qui est toute
 	// la raison de la laisser tourner chaque semaine.

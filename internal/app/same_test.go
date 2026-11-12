@@ -109,7 +109,7 @@ func TestReunirDepuisLAnnuaire(t *testing.T) {
 		t.Fatalf("registre : %s\n%s", comptes, h.texte())
 	}
 	// L'annuaire redressé n'a plus qu'une ligne.
-	h.contient("1 personne(s)")
+	h.contient("— 1 personne")
 }
 
 // Les drapeaux qui ne peuvent rien vouloir dire seuls sont refusés.

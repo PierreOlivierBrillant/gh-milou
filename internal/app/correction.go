@@ -135,7 +135,7 @@ func (s *Session) correctStudent(cours classroom.Classroom, repos []groups.RepoI
 	if len(correction.Moves) == 0 {
 		return nil, ExitOK, nil
 	}
-	return s.executerRenommages(cours.Org, correction.Moves, "%d dépôt(s) renommé(s).")
+	return s.executerRenommages(cours.Org, correction.Moves, depotsRenommes)
 }
 
 // ecrireCorrection écrit la fiche corrigée : au registre d'abord, puis dans la
@@ -164,11 +164,13 @@ func questionDeCorrection(correction classroom.Correction) string {
 	qui := "@" + correction.Before.Username
 	switch {
 	case correction.Changed() && depots > 0:
-		return "Corriger la fiche de " + qui + " et renommer ses " + itoa(depots) + " dépôt(s) ?"
+		return "Corriger la fiche de " + qui + " et renommer " +
+			valid.Agree(depots, "son dépôt", "ses "+itoa(depots)+" dépôts") + " ?"
 	case correction.Changed():
 		return "Corriger la fiche de " + qui + " ?"
 	default:
-		return "Renommer les " + itoa(depots) + " dépôt(s) de " + qui + " ?"
+		return "Renommer " + valid.Agree(depots, "le dépôt", "les "+itoa(depots)+" dépôts") +
+			" de " + qui + " ?"
 	}
 }
 

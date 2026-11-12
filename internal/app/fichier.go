@@ -42,14 +42,17 @@ func (m *manageSession) avertirDuPlan(plan *broadcast.Plan) {
 		console.Note("Contenu déposé tel quel : seuls le chemin et le message reçoivent le gabarit.")
 	}
 	if len(plan.Unknown) > 0 {
-		console.Warning("Champ(s) inconnu(s), laissé(s) tel(s) quel(s) : {%s}. Champs disponibles : %s.",
+		console.Warning("%s : {%s}. Champs disponibles : %s.",
+			valid.Agree(len(plan.Unknown), "Champ inconnu, laissé tel quel",
+				"Champs inconnus, laissés tels quels"),
 			strings.Join(plan.Unknown, "}, {"), broadcast.FieldList())
 	}
 	if incomplets := plan.Incomplete(); incomplets > 0 {
 		for _, item := range plan.Items {
 			if len(item.Empty) > 0 {
-				console.Warning("%d dépôt(s) laissent un champ vide — par exemple %s : {%s}.",
-					incomplets, item.Repo, strings.Join(item.Empty, "}, {"))
+				console.Warning("%s un champ vide — par exemple %s : {%s}.",
+					valid.Plural(incomplets, "dépôt laisse", "dépôts laissent"),
+					item.Repo, strings.Join(item.Empty, "}, {"))
 				break
 			}
 		}
@@ -67,7 +70,8 @@ func (m *manageSession) montrerApercu(plan *broadcast.Plan) {
 	lignes := strings.Split(strings.TrimRight(string(premier.Content), "\n"), "\n")
 	for index, ligne := range lignes {
 		if index == lignesDApercu {
-			console.Printf("    %s", console.Dim("… "+itoa(len(lignes)-lignesDApercu)+" ligne(s) de plus"))
+			console.Printf("    %s",
+				console.Dim("… "+valid.Plural(len(lignes)-lignesDApercu, "ligne")+" de plus"))
 			break
 		}
 		console.Printf("    %s %s", console.Dim("│"), ligne)
@@ -144,10 +148,12 @@ func (m *manageSession) deposerFichier(group *groups.Group) error {
 
 	remplacer := false
 	if compte[broadcast.Kept] > 0 {
-		console.Note("Un fichier différent porte déjà ce nom dans %d dépôt(s) : c'est peut-être "+
-			"celui que l'étudiant a modifié.", compte[broadcast.Kept])
-		if remplacer, err = session.Prompt.Confirm(
-			"Le remplacer dans ces "+itoa(compte[broadcast.Kept])+" dépôt(s) ?", false); err != nil {
+		conserves := compte[broadcast.Kept]
+		console.Note("Un fichier différent porte déjà ce nom dans %s : c'est peut-être "+
+			"celui que l'étudiant a modifié.", valid.Plural(conserves, "dépôt"))
+		if remplacer, err = session.Prompt.Confirm(valid.Agree(conserves,
+			"Le remplacer dans ce dépôt ?",
+			"Le remplacer dans ces "+itoa(conserves)+" dépôts ?"), false); err != nil {
 			return err
 		}
 	}
@@ -159,7 +165,8 @@ func (m *manageSession) deposerFichier(group *groups.Group) error {
 		console.Success("Rien à déposer : chaque dépôt est à jour ou garde son fichier.")
 		return nil
 	}
-	confirme, err := session.Prompt.Confirm(plural("Déposer le fichier dans %d dépôt(s) ?", aFaire), true)
+	confirme, err := session.Prompt.Confirm(
+		"Déposer le fichier dans "+valid.Plural(aFaire, "dépôt")+" ?", true)
 	if err != nil || !confirme {
 		return err
 	}
@@ -216,7 +223,8 @@ func (m *manageSession) deposerDepuisDrapeaux(group *groups.Group) (int, error) 
 	m.bilanDeDepot(faits)
 	m.relireApresDepot(faits)
 	if kept := broadcast.Counts(faits)[broadcast.Kept]; kept > 0 {
-		console.Note("« --push-overwrite » remplacerait les %d fichier(s) conservé(s).", kept)
+		console.Note("« --push-overwrite » remplacerait %s.", valid.Agree(kept,
+			"le fichier conservé", "les "+itoa(kept)+" fichiers conservés"))
 	}
 	return broadcast.Counts(faits)[broadcast.Failed], nil
 }
@@ -252,9 +260,12 @@ func (m *manageSession) bilanDeDepot(resultats []broadcast.Result) {
 		}
 	}
 	compte := broadcast.Counts(resultats)
-	console.Printf("  %s ajouté(s) · %s remplacé(s) · %s déjà à jour · %s conservé(s) · %s en échec",
-		console.OK(itoa(compte[broadcast.Added])), console.OK(itoa(compte[broadcast.Replaced])),
-		console.Info(itoa(compte[broadcast.UpToDate])), console.Warn(itoa(compte[broadcast.Kept])),
+	console.Printf("  %s %s · %s %s · %s déjà à jour · %s %s · %s en échec",
+		console.OK(itoa(compte[broadcast.Added])), valid.Agree(compte[broadcast.Added], "ajouté"),
+		console.OK(itoa(compte[broadcast.Replaced])),
+		valid.Agree(compte[broadcast.Replaced], "remplacé"),
+		console.Info(itoa(compte[broadcast.UpToDate])),
+		console.Warn(itoa(compte[broadcast.Kept])), valid.Agree(compte[broadcast.Kept], "conservé"),
 		console.Err(itoa(compte[broadcast.Failed])))
 }
 

@@ -113,10 +113,10 @@ func TestDrapeauSendInvitationsSimule(t *testing.T) {
 func TestAssistantMontreEtEnvoieLesInvitationsManquantes(t *testing.T) {
 	h := groupeAuxQuatreInvitations(t)
 	code, _ := h.script(
-		"acces",      // relit les accès : l'état des invitations devient connu
-		"rafraichir", // et la liste remontrée le porte
-		"collaborateurs", "a26.5n6.01.tp1.bruno-tanguay", "envoyer", "revenir",
-		"collaborateurs", "a26.5n6.01.tp1.aminata-diallo", "envoyer", "revenir",
+		"acces", "inspecter", // relit les accès : l'état des invitations devient connu
+		"liste", "rafraichir", // et la liste remontrée le porte
+		"acces", "collaborateurs", "a26.5n6.01.tp1.bruno-tanguay", "envoyer", "revenir",
+		"acces", "collaborateurs", "a26.5n6.01.tp1.aminata-diallo", "envoyer", "revenir",
 		"quitter",
 	)
 	if code != app.ExitOK {
@@ -125,7 +125,7 @@ func TestAssistantMontreEtEnvoieLesInvitationsManquantes(t *testing.T) {
 	h.contient(
 		"aminata-d (expirée)",
 		"Invitation", "acceptée", "en attente", "expirée", "sans invitation",
-		"2 dépôt(s) sans invitation valable",
+		"2 dépôts sans invitation valable",
 		"Invitation expirée : @aminata-d",
 		"Invitation envoyée à @btanguay (push)",
 		"Nouvelle invitation envoyée à @aminata-d (pull)",
@@ -139,7 +139,7 @@ func TestAssistantMontreEtEnvoieLesInvitationsManquantes(t *testing.T) {
 	suivant.Options.ManageRequested = true
 	suivant.Options.Manage = "a26.5n6.01.tp1"
 	code, _ = suivant.script(
-		"collaborateurs", "a26.5n6.01.tp1.jean-luc-picard", "revenir",
+		"acces", "collaborateurs", "a26.5n6.01.tp1.jean-luc-picard", "revenir",
 		"quitter",
 	)
 	if code != app.ExitOK {

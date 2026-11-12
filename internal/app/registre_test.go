@@ -143,7 +143,7 @@ func TestPublicationVerseLesNomsDuPoste(t *testing.T) {
 			t.Fatalf("« %s » manque au registre :\n%s", attendu, contenu)
 		}
 	}
-	h.contient("2 fiche(s) publiée(s)")
+	h.contient("2 fiches publiées")
 }
 
 // La simulation montre tout et n'écrit rien.
@@ -339,7 +339,7 @@ func TestPublierAllegeLeFichierLocal(t *testing.T) {
 	if !strings.Contains(local, "emilie-cote") || !strings.Contains(local, "jlpicard") {
 		t.Fatalf("les inscriptions ont disparu :\n%s", local)
 	}
-	h.contient("2 nom(s) retiré(s)", "avant-registre")
+	h.contient("2 noms retirés", "avant-registre")
 
 	// La sauvegarde, elle, porte encore les noms.
 	sauvegarde, err := os.ReadFile(classroom.PathNextTo(h.Reglages) + ".avant-registre")

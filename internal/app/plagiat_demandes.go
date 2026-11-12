@@ -502,8 +502,8 @@ func (s *Session) demandesMode() (int, error) {
 	}
 	montrerDemandes(s.Console, set, demandes.For(s.Viewer), demandes.By(s.Viewer))
 	if attente := len(demandes.Waiting(s.Viewer)); attente > 0 {
-		s.Console.Note("%d demande(s) attendent votre décision : « --grant ID "+
-			"--export-zip envoi.zip », ou « --deny ID --reason \"…\" ».", attente)
+		s.Console.Note("%s votre décision : « --grant ID --export-zip envoi.zip », ou "+
+			"« --deny ID --reason \"…\" ».", valid.Plural(attente, "demande attend", "demandes attendent"))
 	}
 	return ExitOK, nil
 }

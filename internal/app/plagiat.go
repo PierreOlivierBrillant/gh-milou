@@ -66,8 +66,8 @@ func (m *manageSession) plagiat(group *groups.Group) error {
 
 	console.Heading("Détection de plagiat — " + nom)
 	console.Note("%s", plagiarism.Disclaimer)
-	console.Printf("Portée : %s — %d copie(s), %s.",
-		corpus.ReachLabels[portee], len(cibles), placesDites(cibles))
+	console.Printf("Portée : %s — %s, %s.",
+		corpus.ReachLabels[portee], valid.Plural(len(cibles), "copie"), placesDites(cibles))
 	if archives := liste(m.session.Options.ImportZip); len(archives) > 0 {
 		console.Printf("Archives reçues : %s.", strings.Join(archives, ", "))
 	}
@@ -89,7 +89,7 @@ func (m *manageSession) plagiat(group *groups.Group) error {
 	}
 	if !m.session.Options.Yes {
 		suite, err := m.session.Prompt.Confirm(
-			fmt.Sprintf("Analyser %d copie(s) ?", len(cibles)), apercu.Estimate.Fits)
+			"Analyser "+valid.Plural(len(cibles), "copie")+" ?", apercu.Estimate.Fits)
 		if err != nil || !suite {
 			return err
 		}
@@ -123,17 +123,22 @@ func (m *manageSession) plagiat(group *groups.Group) error {
 	}
 
 	if rapport.Screened > 0 {
-		console.Note("%d copie(s) dépistées contre un index publié : on en a mesuré "+
-			"les ressemblances sans en lire une ligne.", rapport.Screened)
+		console.Note("%s contre un index publié : on en a mesuré les ressemblances sans "+
+			"en lire une ligne.", valid.Plural(rapport.Screened, "copie dépistée", "copies dépistées"))
 	}
 	if rapport.Received > 0 {
-		console.Note("%d copie(s) venues d'une archive : elles n'ont ni dépôt ni "+
-			"nom, et seul leur expéditeur sait qui elles sont.", rapport.Received)
+		console.Note("%s", valid.Plural(rapport.Received,
+			"copie venue d'une archive : elle n'a ni dépôt ni nom, et seul son expéditeur "+
+				"sait qui elle est.",
+			"copies venues d'une archive : elles n'ont ni dépôt ni nom, et seul leur "+
+				"expéditeur sait qui elles sont."))
 	}
 	if rapport.Reused > 0 {
-		console.Note("%d copie(s) reprise(s) d'une analyse antérieure : leurs "+
-			"dépôts n'ont rien reçu depuis, il n'y avait rien à retélécharger.",
-			rapport.Reused)
+		console.Note("%s", valid.Plural(rapport.Reused,
+			"copie reprise d'une analyse antérieure : son dépôt n'a rien reçu depuis, il "+
+				"n'y avait rien à retélécharger.",
+			"copies reprises d'une analyse antérieure : leurs dépôts n'ont rien reçu "+
+				"depuis, il n'y avait rien à retélécharger."))
 	}
 	registre, _ := m.session.names(m.org)
 	montrerRapport(console, rapport, registre.Marks())
@@ -289,16 +294,18 @@ func montrerApercu(console *ui.Console, profil inspect.Profile, apercu corpus.Pr
 			console.Warning("%s : %s", echantillon.Repo, echantillon.Problem.Reason)
 			continue
 		}
-		console.Printf("  %s — %d fichier(s) retenu(s), %d écarté(s)%s",
-			echantillon.Repo, len(echantillon.Kept), len(echantillon.Skipped),
+		console.Printf("  %s — %s, %d %s%s", echantillon.Repo,
+			valid.Plural(len(echantillon.Kept), "fichier retenu", "fichiers retenus"),
+			len(echantillon.Skipped), valid.Agree(len(echantillon.Skipped), "écarté"),
 			racineDite(echantillon.Root))
 	}
 
 	estimation := apercu.Estimate
 	console.Blank()
-	console.Printf("Estimation sur %d copie(s) mesurée(s) : %d copies, %d paires, "+
+	console.Printf("Estimation sur %s : %s, %s, "+
 		"%s à télécharger, %s de code retenu, %s de mémoire, environ %s.",
-		estimation.Sampled, estimation.Repos, estimation.Pairs,
+		valid.Plural(estimation.Sampled, "copie mesurée", "copies mesurées"),
+		valid.Plural(estimation.Repos, "copie"), valid.Plural(estimation.Pairs, "paire"),
 		corpus.Bytes(estimation.Download), corpus.Bytes(estimation.Bytes),
 		corpus.Bytes(estimation.Memory), corpus.Duration(estimation.Seconds))
 	for _, avertissement := range estimation.Warnings {
@@ -324,9 +331,11 @@ func montrerRapport(console *ui.Console, rapport *plagiarism.Report,
 	marques signature.Book) {
 	console.Blank()
 	if écartées := rapport.Result.IgnoredBaseline + rapport.Result.IgnoredCommon; écartées > 0 {
-		console.Note("%d empreinte(s) écartée(s) : %d venant du gabarit distribué, "+
-			"%d présentes chez trop de copies pour vouloir dire quelque chose.",
-			écartées, rapport.Result.IgnoredBaseline, rapport.Result.IgnoredCommon)
+		console.Note("%s : %d venant du gabarit distribué, "+
+			"%d %s chez trop de copies pour vouloir dire quelque chose.",
+			valid.Plural(écartées, "empreinte écartée", "empreintes écartées"),
+			rapport.Result.IgnoredBaseline, rapport.Result.IgnoredCommon,
+			valid.Agree(rapport.Result.IgnoredCommon, "présente"))
 	}
 
 	if rapport.Analyzed() < 2 {
@@ -336,8 +345,8 @@ func montrerRapport(console *ui.Console, rapport *plagiarism.Report,
 		return
 	}
 	if len(rapport.Result.Matches) == 0 {
-		console.Success("Aucune paire au-dessus du seuil : rien ne ressort de ces %d copie(s).",
-			rapport.Analyzed())
+		console.Success("Aucune paire au-dessus du seuil : rien ne ressort de ces %s.",
+			valid.Plural(rapport.Analyzed(), "copie"))
 	} else {
 		lignes := make([][]string, 0, len(rapport.Result.Matches))
 		for _, match := range rapport.Result.Matches {
@@ -456,8 +465,8 @@ func montrerSoucis(console *ui.Console, rapport *plagiarism.Report) {
 	if len(rapport.Problems) == 0 {
 		return
 	}
-	console.Heading(fmt.Sprintf("%d dépôt(s) n'ont pas pu être analysés",
-		len(rapport.Problems)))
+	console.Heading(valid.Plural(len(rapport.Problems), "dépôt n'a pas pu être analysé",
+		"dépôts n'ont pas pu être analysés"))
 	lignes := make([][]string, 0, len(rapport.Problems))
 	for _, souci := range rapport.Problems {
 		lignes = append(lignes, []string{souci.Repo, souci.Reason, abrege(souci.Detail)})

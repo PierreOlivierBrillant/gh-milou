@@ -11,6 +11,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
+
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // Console écrit les messages de l'outil.
@@ -147,7 +149,7 @@ func (c *Console) Table(headers []string, rows [][]string, limit int) {
 		c.Print("  " + joinCells(row, widths))
 	}
 	if hidden > 0 {
-		c.Note("… et %d ligne(s) de plus.", hidden)
+		c.Note("… et %s de plus.", valid.Plural(hidden, "ligne"))
 	}
 }
 
