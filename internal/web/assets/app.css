@@ -42,6 +42,51 @@ a:hover { text-decoration: underline; }
 .barre-globale .version { font-weight: 400; opacity: .6; margin-left: .35rem; }
 .barre-globale .compte { opacity: .75; }
 
+/* Les trois destinations de l'organisation. Celle où l'on se trouve se
+   souligne : la barre dit où l'on est, pas seulement où l'on peut aller. */
+.barre-sections { display: flex; flex-wrap: wrap; gap: .15rem; margin-left: .75rem; }
+.barre-sections button {
+  border: 0;
+  border-radius: var(--rayon);
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: .3rem .6rem;
+  cursor: pointer;
+  opacity: .8;
+}
+.barre-sections button:hover { opacity: 1; background: var(--sombre-survol); }
+.barre-sections button[aria-current="page"] {
+  opacity: 1;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: .4rem;
+}
+
+/* Une demande de collègue attend une décision : elle se voit de partout. */
+.pastille-demandes {
+  display: inline-block;
+  min-width: 1.25rem;
+  margin-left: .3rem;
+  padding: 0 .35rem;
+  border-radius: 999px;
+  background: var(--orange);
+  color: var(--sombre);
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+/* À la largeur d'un téléphone, la barre passe à la ligne plutôt que de
+   déborder, et le compte connecté, qui se lit ailleurs, cède sa place. */
+.barre-globale { flex-wrap: wrap; }
+@media (max-width: 40rem) {
+  .barre-globale .compte { display: none; }
+  .barre-sections { margin-left: 0; }
+}
+
 /* ---------------------------------------------------------- en-tête de page */
 
 /* Le même bandeau sur toutes les vues : passer d'une session à un groupe,
@@ -189,6 +234,8 @@ main { padding: 1.5rem; }
    faites et la nouvelle. Il ne porte aucune action : celles de la page sont
    dans l'en-tête. */
 h2.intertitre { margin: 2rem 0 .75rem; font-size: 1rem; }
+h2.intertitre:first-child { margin-top: 0; }
+h2.intertitre .lien { font: inherit; }
 
 /* Les gestes lourds d'une page — renommer tous les dépôts d'un groupe,
    l'oublier — viennent à la fin, sous leur propre intitulé, dans des boîtes
@@ -196,6 +243,38 @@ h2.intertitre { margin: 2rem 0 .75rem; font-size: 1rem; }
 h2.intertitre.sensible { color: var(--erreur); }
 .boite.sensible { border-color: var(--erreur); }
 .boite-corps .nomenclature { margin: 0; }
+
+/* ------------------------------------------------------------------- accueil */
+
+/* L'accueil montre la session en cours en cartes : un groupe par carte, avec
+   ce qu'il attend — son prochain travail, et ce qui y manque. Les sessions
+   passées viennent dessous, repliées. */
+.cartes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.carte-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  padding: .9rem 1rem;
+  border: var(--contour);
+  border-radius: var(--rayon-boite);
+  background: var(--fond);
+  box-shadow: var(--ombre-boite);
+  color: var(--texte);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.carte-groupe:hover { background: var(--fond-doux); }
+.carte-groupe .titre { font-size: 1.05rem; font-weight: 700; color: var(--lien); }
+.carte-groupe .detail { font-size: .875rem; color: var(--texte-doux); }
+.carte-groupe .jetons { margin-top: .2rem; }
 
 /* --------------------------------------------------------- liste de travaux */
 

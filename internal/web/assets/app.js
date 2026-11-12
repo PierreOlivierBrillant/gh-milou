@@ -768,6 +768,7 @@ function cheminDeLaVue(nom) {
       return `/g/${groupe}/travaux/${encode(etat.travail ? etat.travail.name : '')}`;
     case 'plagiat':
       return `/g/${groupe}/travaux/${encode(etat.travail ? etat.travail.name : '')}/plagiat`;
+    case 'comparaisons': return '/comparaisons';
     case 'plagiat-regles': return '/plagiat/regles';
     case 'plagiat-rapport': return `/plagiat/${encode(etat.plagiat.rapport || '')}`;
     case 'plagiat-paire':
@@ -812,6 +813,8 @@ function lireAdresse() {
       };
     case 'utilisateurs':
       return { vue: 'annuaire' };
+    case 'comparaisons':
+      return { vue: 'comparaisons' };
     case 'u':
       return { vue: 'fiche', compte: morceaux[1] || '' };
     case 'reprise':
@@ -928,6 +931,12 @@ function afficherVue(nom, sansHistorique) {
   document.body.classList.toggle('pleine-largeur', vuesPleineLargeur.has(nom));
   $('ouvrir-reglages').hidden = !etat.organisation;
   $('accueil').disabled = !etat.organisation;
+  $('barre-sections').hidden = !etat.organisation;
+  const section = sectionDeLaVue(nom);
+  for (const bouton of $('barre-sections').querySelectorAll('button')) {
+    if (bouton.dataset.section === section) bouton.setAttribute('aria-current', 'page');
+    else bouton.removeAttribute('aria-current');
+  }
   for (const bouton of document.querySelectorAll('#entete-page .onglets button')) {
     bouton.classList.toggle('actif', bouton.dataset.vue === onglet);
   }
@@ -943,6 +952,7 @@ function afficherVue(nom, sansHistorique) {
   if (nom === 'parcours') chargerGroupes();
   if (nom === 'reglages') rafraichirEmplacements();
   if (nom === 'annuaire') chargerAnnuaire();
+  if (nom === 'comparaisons') chargerComparaisons();
   if (nom === 'fiche') chargerFiche();
   if (nom === 'etudiants') chargerEtudiants();
   if (nom === 'equipes') chargerEquipes();
@@ -1002,18 +1012,15 @@ $('page-recharger').setAttribute('aria-label', 'Recharger la page');
 
 // ficheDeLEntete dit ce que l'en-tête montre pour la vue courante.
 function ficheDeLEntete(nom) {
-  const racine = {
-    texte: 'Sessions',
-    action: () => { etat.parcours = { session: '', cours: '' }; afficherVue('parcours'); },
-  };
+  const racine = { texte: 'Groupes', action: allerAuxGroupes };
   const { session, cours } = etat.parcours;
 
   if (nom === 'parcours') {
     const recharger = () => chargerGroupes(true);
     if (!session) {
       return {
-        fil: [{ texte: 'Sessions' }], titre: 'Sessions', recharger,
-        sousTitre: `Organisation ${etat.organisation} · session, cours, groupe, travail`,
+        fil: [{ texte: 'Groupes' }], titre: 'Groupes', recharger,
+        sousTitre: `Organisation ${etat.organisation}`,
       };
     }
     if (!cours) {
@@ -1032,7 +1039,7 @@ function ficheDeLEntete(nom) {
 
   if (nom === 'annuaire') {
     return {
-      fil: [racine, { texte: 'Utilisateurs' }], titre: 'Utilisateurs',
+      fil: [{ texte: 'Utilisateurs' }], titre: 'Utilisateurs',
       sousTitre: `Organisation ${etat.organisation} · une personne, les cours qu'elle a suivis`,
       recharger: () => chargerAnnuaire(true),
     };
@@ -1041,9 +1048,7 @@ function ficheDeLEntete(nom) {
     const personne = etat.fiche.donnees ? etat.fiche.donnees.user : null;
     const titre = (personne && personne.full_name) || '@' + etat.fiche.compte;
     return {
-      fil: [racine,
-        { texte: 'Utilisateurs', action: () => afficherVue('annuaire') },
-        { texte: titre }],
+      fil: [{ texte: 'Utilisateurs', action: () => afficherVue('annuaire') }, { texte: titre }],
       titre,
       sousTitre: personne
         ? `${personne.role} · ${etat.organisation}`
@@ -1060,8 +1065,16 @@ function ficheDeLEntete(nom) {
     return { fil: [racine, { texte: 'Nouveau groupe' }], titre: 'Nouveau groupe',
       sousTitre: 'Des étudiants, une place dans la hiérarchie.' };
   }
+  if (nom === 'comparaisons') {
+    return {
+      fil: [{ texte: 'Comparaisons' }], titre: 'Comparaisons',
+      sousTitre: `Organisation ${etat.organisation} · ce que l'équipe partage, et ce que ` +
+        'ce poste a comparé',
+      recharger: () => chargerComparaisons(),
+    };
+  }
   if (nom === 'reglages') {
-    return { fil: [racine, { texte: 'Réglages' }], titre: 'Réglages',
+    return { fil: [{ texte: 'Réglages' }], titre: 'Réglages',
       sousTitre: "Ce que l'outil retient d'une session à l'autre, et où il l'écrit." };
   }
 
@@ -1203,33 +1216,46 @@ function avisDuGroupe(groupe) {
     'peut plus lui distribuer de travail : renommez-les depuis « Réglages du groupe ».';
 }
 
-$('accueil').addEventListener('click', () => {
+function allerAuxGroupes() {
   etat.parcours = { session: '', cours: '' };
   afficherVue('parcours');
-});
+}
 
-// La hiérarchie mène aux étudiants d'un groupe ; l'annuaire les prend dans
-// l'autre sens, et n'appartient donc à aucun niveau du parcours. Il porte les
-// deux rôles : un enseignant n'est dans aucun groupe.
-$('parcours-annuaire').addEventListener('click', () => afficherVue('annuaire'));
+$('accueil').addEventListener('click', allerAuxGroupes);
+
+// Les trois destinations de l'organisation. L'annuaire prend les étudiants à
+// l'envers de la hiérarchie, et porte aussi les enseignants, qui ne sont dans
+// aucun groupe ; les comparaisons partagées valent pour toute l'équipe. Ni
+// l'un ni l'autre n'appartient à un niveau du parcours.
+const allerALaSection = {
+  groupes: allerAuxGroupes,
+  utilisateurs: () => afficherVue('annuaire'),
+  comparaisons: () => afficherVue('comparaisons'),
+};
+for (const bouton of $('barre-sections').querySelectorAll('button')) {
+  bouton.addEventListener('click', () => allerALaSection[bouton.dataset.section]());
+}
+
+// sectionDeLaVue dit quelle destination de la barre une vue habite. Un
+// rapport de comparaison vit sous son travail, donc parmi les groupes.
+function sectionDeLaVue(nom) {
+  if (nom === 'annuaire' || nom === 'fiche') return 'utilisateurs';
+  if (nom === 'comparaisons' || nom === 'plagiat-regles') return 'comparaisons';
+  if (nom === 'reglages' || nom === 'organisation') return '';
+  return 'groupes';
+}
+
 $('parcours-reprise').addEventListener('click', () => ouvrirImport());
 $('parcours-nouveau').addEventListener('click', () => ouvrirNouveauGroupe());
 $('ouvrir-reglages').addEventListener('click', () => afficherVue('reglages'));
 
 // enteteDeComparaison compose le fil d'Ariane des écrans de comparaison.
 function enteteDeComparaison(nom, racine) {
+  // Ce qui vaut pour toute l'organisation remonte à sa page des comparaisons.
+  const auxComparaisons = { texte: 'Comparaisons', action: () => afficherVue('comparaisons') };
   if (nom === 'plagiat-regles') {
-    // Les règles appartiennent à l'organisation, pas à un travail. Ouvertes
-    // depuis la préparation d'une comparaison, elles y ramènent pourtant par
-    // le fil : c'est le chemin qu'on vient de prendre, et il n'y a pas d'autre
-    // retour.
-    const depuis = etat.plagiat.reglesDepuisLaPreparation && etat.travail && etat.groupe
-      ? [...filDuGroupe(etat.groupe, racine),
-        { texte: etat.travail.name, action: () => afficherVue('travail') },
-        { texte: 'Comparaisons', action: () => afficherVue('plagiat') }]
-      : [racine];
     return {
-      fil: [...depuis, { texte: 'Règles de comparaison' }],
+      fil: [auxComparaisons, { texte: 'Règles de comparaison' }],
       titre: 'Règles de comparaison',
       sousTitre: 'Ce que le département sait et que l’outil ne peut pas deviner.',
     };
@@ -1248,7 +1274,7 @@ function enteteDeComparaison(nom, racine) {
     ? [...filDuGroupe(place.groupe, racine),
       { texte: travail, action: () => rejoindre(adresseDuTravail) },
       { texte: 'Comparaisons', action: () => rejoindre(`${adresseDuTravail}/plagiat`) }]
-    : [racine];
+    : [auxComparaisons];
   const etapeRapport = place && rapport
     ? `Comparaison du ${dateLisible(rapport.created_at, { heure: false, semaine: false })}`
     : travail;
@@ -1389,12 +1415,14 @@ function dessinerParcours() {
   vider(conteneur);
 
   if (!session) {
-    dessinerSessions(conteneur);
-  } else if (!cours) {
-    dessinerCours(conteneur, session);
-  } else {
-    dessinerGroupesDuCours(conteneur, session, cours);
+    dessinerAccueil(conteneur);
+    return;
   }
+  // Une session ou un cours se lisent en liste, dans une seule boîte.
+  const boite = el('div', { classe: 'boite' });
+  conteneur.append(boite);
+  if (!cours) dessinerCours(boite, session);
+  else dessinerGroupesDuCours(boite, session, cours);
 }
 
 // herites rassemble les groupes qui n'ont pas encore de place dans la
@@ -1404,7 +1432,9 @@ function herites() {
   return etat.groupes.filter((groupe) => !groupe.session);
 }
 
-function dessinerSessions(conteneur) {
+// sessionsDesGroupes range les groupes par session, de la plus récente à la
+// plus ancienne.
+function sessionsDesGroupes() {
   const parSession = new Map();
   for (const groupe of etat.groupes) {
     if (!groupe.session) continue;
@@ -1412,32 +1442,100 @@ function dessinerSessions(conteneur) {
     if (!parSession.has(cle)) parSession.set(cle, { court: groupe.session, groupes: [] });
     parSession.get(cle).groupes.push(groupe);
   }
+  return [...parSession.values()].sort((a, b) =>
+    rangDeSession(a.court) - rangDeSession(b.court) || a.court.localeCompare(b.court));
+}
 
-  if (parSession.size === 0 && herites().length === 0) {
-    conteneur.append(el('div', { classe: 'boite-vide' },
+// sessionEnCours nomme la session la plus récente : c'est elle qu'on vient
+// voir, et celle où un nouveau groupe a toutes les chances d'aller.
+function sessionEnCours() {
+  const [enCours] = sessionsDesGroupes();
+  return enCours ? enCours.court : '';
+}
+
+// dessinerAccueil ouvre l'outil sur ce qu'on vient y faire : les groupes de la
+// session en cours, en cartes, un clic de chacun. Trois niveaux de listes
+// d'un seul élément séparaient sinon l'accueil du premier groupe. Les sessions
+// passées suivent, repliées, et les groupes à renommer se signalent à part.
+function dessinerAccueil(conteneur) {
+  const [enCours, ...passees] = sessionsDesGroupes();
+  if (!enCours && herites().length === 0) {
+    conteneur.append(el('div', { classe: 'boite' }, el('div', { classe: 'boite-vide' },
       milou('roi', 'milou-vide'),
       el('p', { texte: 'Aucun groupe déclaré pour le moment.' }),
       el('p', { classe: 'note',
         texte: 'Déclarez-en un de toutes pièces, ou reprenez des dépôts qu\'une autre ' +
-          'convention a nommés.' })));
+          'convention a nommés.' }))));
+    return;
   }
 
-  const triees = [...parSession.values()].sort((a, b) =>
-    rangDeSession(a.court) - rangDeSession(b.court) || a.court.localeCompare(b.court));
-  for (const session of triees) {
-    const cours = new Set(session.groupes.map((groupe) => groupe.course.toLowerCase()));
-    conteneur.append(ligneParcours(
-      nomDeSession(session.court),
-      `${cours.size} cours · ${pluriel(session.groupes.length, 'groupe')}`,
-      [],
-      () => { etat.parcours = { session: session.court, cours: '' }; afficherVue('parcours'); }));
+  const ouvrirLaSession = (court) => () => {
+    etat.parcours = { session: court, cours: '' };
+    afficherVue('parcours');
+  };
+  if (enCours) {
+    conteneur.append(el('h2', { classe: 'intertitre' }, el('button', {
+      type: 'button', classe: 'lien', texte: nomDeSession(enCours.court),
+      title: 'Voir les cours de la session', onclick: ouvrirLaSession(enCours.court),
+    })));
+    const groupes = [...enCours.groupes].sort((a, b) =>
+      a.course.localeCompare(b.course) || a.group.localeCompare(b.group));
+    conteneur.append(el('div', { classe: 'cartes' }, groupes.map(carteDeGroupe)));
   }
 
-  for (const groupe of herites()) {
-    conteneur.append(ligneParcours(groupe.label, 'nomenclature dépassée — à renommer',
-      [el('span', { classe: 'jeton non', texte: nomenclatureDuGroupe(groupe) })],
-      () => ouvrirGroupe(groupe.scope)));
+  if (passees.length) {
+    const lignes = passees.map((session) => {
+      const cours = new Set(session.groupes.map((groupe) => groupe.course.toLowerCase()));
+      return ligneParcours(nomDeSession(session.court),
+        `${cours.size} cours · ${pluriel(session.groupes.length, 'groupe')}`, [],
+        ouvrirLaSession(session.court));
+    });
+    conteneur.append(el('details', { classe: 'boite' },
+      el('summary', { texte: `Sessions passées (${passees.length})` }), lignes));
   }
+
+  if (herites().length) {
+    conteneur.append(el('div', { classe: 'boite' },
+      el('div', { classe: 'boite-entete' }, el('strong', { texte: 'Groupes à renommer' })),
+      herites().map((groupe) => ligneParcours(groupe.label, 'nomenclature dépassée',
+        [el('span', { classe: 'jeton non', texte: nomenclatureDuGroupe(groupe) })],
+        () => ouvrirGroupe(groupe.scope)))));
+  }
+}
+
+// carteDeGroupe dit d'un groupe ce qu'on vient vérifier : qui il compte, son
+// prochain travail, et ce qui y manque. Le reste est un clic plus loin.
+function carteDeGroupe(groupe) {
+  const sesTravaux = groupe.assignments || [];
+  const prochain = prochainTravail(sesTravaux);
+  return el('button', {
+    type: 'button', classe: 'carte-groupe', onclick: () => ouvrirGroupe(groupe.scope),
+  },
+    el('span', { classe: 'titre', texte: titreDuGroupe(groupe) }),
+    el('span', { classe: 'detail',
+      texte: `${effectifDuGroupe(groupe)} · ${pluriel(sesTravaux.length, 'travail', 'travaux')}` }),
+    el('span', { classe: 'detail', texte: !prochain ? 'Aucun travail pour le moment.'
+      : prochain.name + (prochain.due
+        ? ` · à remettre ${dateLisible(prochain.due, { relatif: true })}` : '') }),
+    prochain ? el('span', { classe: 'jetons' }, ...pastillesDeRemise(prochain)) : null);
+}
+
+// prochainTravail désigne le travail qu'on regarde d'abord : la prochaine
+// échéance, sinon la plus récente passée, sinon le travail qui a bougé en
+// dernier. Une échéance sans heure court jusqu'au soir.
+function prochainTravail(travaux) {
+  const maintenant = Date.now();
+  const dates = travaux.map((travail) => {
+    const lue = travail.due ? lireDate(travail.due) : null;
+    if (!lue) return { travail, fin: null };
+    return { travail, fin: lue.moment.getTime() + (lue.avecHeure ? 0 : 86400000) };
+  });
+  const aVenir = dates.filter((item) => item.fin !== null && item.fin >= maintenant)
+    .sort((a, b) => a.fin - b.fin);
+  if (aVenir.length) return aVenir[0].travail;
+  const passees = dates.filter((item) => item.fin !== null).sort((a, b) => b.fin - a.fin);
+  if (passees.length) return passees[0].travail;
+  return travaux[0] || null;
 }
 
 function dessinerCours(conteneur, session) {
@@ -1584,6 +1682,7 @@ $('org-valider').addEventListener('click', async () => {
 // retenirOrganisation fixe l'organisation de la session et la mémorise.
 async function retenirOrganisation(org) {
   etat.organisation = org;
+  compterLesDemandes();
   if (etat.reglages.org !== org) {
     etat.reglages.org = org;
     await api('PUT', '/api/settings', etat.reglages).catch(() => {});
@@ -1605,7 +1704,9 @@ function ouvrirNouveauGroupe() {
 
 function preparerNouveauGroupe() {
   etat.nouveau = { etudiants: [], rejets: [], source: '' };
-  $('nouveau-session').value = etat.parcours.session || '';
+  // Depuis l'accueil, un nouveau groupe va le plus souvent dans la session en
+  // cours ; depuis une session ou un cours, dans celui-là.
+  $('nouveau-session').value = etat.parcours.session || sessionEnCours();
   $('nouveau-cours').value = etat.parcours.cours || '';
   $('nouveau-section').value = '';
   // Un nouveau groupe a une nouvelle liste : montrer celle de la dernière fois
@@ -1733,8 +1834,7 @@ $('nouveau-creer').addEventListener('click', async () => {
 // signaler », jamais « on n'a pas regardé ».
 function pastillesDeRemise(travail) {
   if (!travail.seen) return [];
-  const jetons = [el('span', { classe: 'jeton',
-    texte: pluriel(travail.commits, 'commit') })];
+  const jetons = [];
   if (travail.late > 0) {
     jetons.push(el('span', {
       classe: 'jeton non', title: 'Un commit suit la date cible',
@@ -5468,16 +5568,27 @@ async function changerOrganisation(org) {
   message(`Organisation : ${details.name}.`);
 }
 
-$('reglages-enregistrer').addEventListener('click', async () => {
+// Les deux boîtes — ce qui se distribue, ce qui ne vaut que pour ce poste —
+// enregistrent le même fichier : l'une ou l'autre écrit le tout, et les deux
+// disent où.
+async function enregistrerReglages() {
   etat.reglages.delay_seconds = Number($('reglage-delay').value) || 0;
   etat.reglages.clone_dir = $('reglage-clone-dir').value.trim();
   etat.reglages.no_sign = !$('reglage-signature').checked;
   const bilan = await tenter(() => api('PUT', '/api/settings', etat.reglages), 'Réglages');
   if (!bilan) return;
-  $('reglages-etat').textContent = bilan.saved
+  direEnregistrement(bilan.saved
     ? `Enregistrés dans ${bilan.path}`
-    : 'Enregistrement désactivé (--no-save-config)';
-});
+    : 'Enregistrement désactivé (--no-save-config)');
+}
+
+function direEnregistrement(texte) {
+  $('reglages-etat').textContent = texte;
+  $('reglages-poste-etat').textContent = texte;
+}
+
+$('reglages-enregistrer').addEventListener('click', enregistrerReglages);
+$('reglages-enregistrer-poste').addEventListener('click', enregistrerReglages);
 
 $('cache-vider').addEventListener('click', async () => {
   const bilan = await tenter(() => api('POST', '/api/cache/clear'), 'Cache');
@@ -7375,6 +7486,7 @@ async function demarrer() {
     return;
   }
   etat.organisation = etat.reglages.org;
+  compterLesDemandes();
   demarrageDit(`Lecture des groupes de ${etat.organisation}…`);
   // L'adresse dit où reprendre : recharger la page ou coller un lien ramène au
   // même endroit qu'avant.
@@ -7400,9 +7512,7 @@ function ecrireReglagesGeneraux() {
     ? `Cliquer un chemin ouvre la fenêtre du système (${contexte.native_picker}).`
     : "Cette machine n'a pas de fenêtre de sélection : cliquer un chemin ouvre " +
       "l'explorateur de l'interface.";
-  if (!contexte.save_config) {
-    $('reglages-etat').textContent = 'Enregistrement désactivé (--no-save-config)';
-  }
+  if (!contexte.save_config) direEnregistrement('Enregistrement désactivé (--no-save-config)');
 }
 
 demarrer();
@@ -7476,7 +7586,6 @@ async function preparerPlagiat(sansHistorique) {
   vider($('pl-envoi-resultat'));
   afficherVue('plagiat', sansHistorique);
   dessinerAnalysesPassees();
-  dessinerDemandes();
 }
 
 // dessinerAnalysesPassees liste, en tête de l'onglet, les comparaisons déjà
@@ -7488,41 +7597,39 @@ async function dessinerAnalysesPassees() {
   const zone = $('pl-analyses');
   vider(zone);
   const liste = await api('GET', '/api/plagiat/reports').catch(() => null);
-  const rapports = (liste && liste.reports) || [];
   const id = ((etat.travail && etat.travail.id) || '').toLowerCase();
-  const siens = rapports.filter((rapport) => (rapport.assignment || '').toLowerCase() === id);
-  const autres = rapports.filter((rapport) => !siens.includes(rapport));
-
-  const ligne = (rapport) => (rapport.error
-    ? el('p', { classe: 'note', texte: `${rapport.name} — ${rapport.error}` })
-    : el('div', {},
-      el('button', {
-        type: 'button', classe: 'lien',
-        // Les siennes se reconnaissent à leur date ; les autres, à leur travail.
-        texte: siens.includes(rapport)
-          ? `Comparaison du ${dateLisible(rapport.created_at, { semaine: false })}`
-          : `${rapport.assignment || rapport.name} — ${dateLisible(rapport.created_at)}`,
-        onclick: () => tenter(() => ouvrirRapportPlagiat(rapport.name), 'Rapport'),
-      }),
-      el('span', {
-        classe: 'note',
-        texte: ` — ${pluriel(rapport.works, 'copie')}, ${pluriel(rapport.matches, 'paire')}`
-          + (rapport.problems
-            ? `, ${pluriel(rapport.problems, 'dépôt non analysé', 'dépôts non analysés')}` : ''),
-      })));
-
+  const siens = ((liste && liste.reports) || [])
+    .filter((rapport) => (rapport.assignment || '').toLowerCase() === id);
   zone.append(el('div', { classe: 'boite' },
     el('div', { classe: 'boite-entete' },
       el('strong', { texte: 'Comparaisons de ce travail' })),
     siens.length
-      ? el('div', { classe: 'boite-corps' }, siens.map(ligne))
+      ? el('div', { classe: 'boite-corps' },
+        siens.map((rapport) => ligneDeComparaison(rapport, false)))
       : el('div', { classe: 'boite-vide',
         texte: 'Aucune comparaison de ce travail sur ce poste : « Analyser » en lance une.' })));
-  if (autres.length) {
-    zone.append(el('details', { classe: 'boite' },
-      el('summary', { texte: `Autres comparaisons de ce poste (${autres.length})` }),
-      el('div', { classe: 'boite-corps' }, autres.map(ligne))));
+}
+
+// ligneDeComparaison mène à un rapport. Sous son travail, il se reconnaît à sa
+// date ; parmi tous ceux du poste, à son travail d'abord.
+function ligneDeComparaison(rapport, avecLeTravail) {
+  if (rapport.error) {
+    return el('p', { classe: 'note', texte: `${rapport.name} — ${rapport.error}` });
   }
+  return el('div', {},
+    el('button', {
+      type: 'button', classe: 'lien',
+      texte: avecLeTravail
+        ? `${rapport.assignment || rapport.name} — ${dateLisible(rapport.created_at)}`
+        : `Comparaison du ${dateLisible(rapport.created_at, { semaine: false })}`,
+      onclick: () => tenter(() => ouvrirRapportPlagiat(rapport.name), 'Rapport'),
+    }),
+    el('span', {
+      classe: 'note',
+      texte: ` — ${pluriel(rapport.works, 'copie')}, ${pluriel(rapport.matches, 'paire')}`
+        + (rapport.problems
+          ? `, ${pluriel(rapport.problems, 'dépôt non analysé', 'dépôts non analysés')}` : ''),
+    }));
 }
 
 // resumeExclusions dit en une ligne ce qui ne sera jamais comparé. Le détail
@@ -8461,11 +8568,7 @@ $('pl-fichier-precedent').addEventListener('click',
 // allerAuPlagiat ouvre un rapport, une paire ou deux fichiers depuis l'adresse.
 // Un lien collé doit mener exactement où il dit.
 async function allerAuPlagiat(route) {
-  if (route.vue === 'plagiat-regles') {
-    etat.plagiat.reglesDepuisLaPreparation = false;
-    await ouvrirReglesPlagiat(true);
-    return;
-  }
+  if (route.vue === 'plagiat-regles') { await ouvrirReglesPlagiat(true); return; }
   if (!route.rapport) { afficherVue('parcours', true); return; }
   // Arriver droit sur un rapport par son adresse ne charge pas les groupes :
   // sans eux, son fil d'Ariane ne saurait pas remonter jusqu'au travail.
@@ -8650,11 +8753,8 @@ $('pl-recevoir').addEventListener('click', () => {
   menuEchange.deplier(false);
   ajouterArchive();
 });
-$('pl-regles-ouvrir').addEventListener('click', () => {
-  menuEchange.deplier(false);
-  etat.plagiat.reglesDepuisLaPreparation = true;
-  tenter(() => ouvrirReglesPlagiat(), 'Règles de comparaison');
-});
+$('cmp-regles').addEventListener('click',
+  () => tenter(() => ouvrirReglesPlagiat(), 'Règles de comparaison'));
 
 // demanderEnvoi demande où écrire l'archive, puis la produit.
 async function demanderEnvoi() {
@@ -8931,17 +9031,25 @@ function dessinerCollegues() {
 // l'organisation à la vue de toute l'équipe, et rien ne part dans son dos.
 
 async function dessinerDemandes() {
-  const zone = $('pl-demandes');
+  const zone = $('cmp-demandes');
   vider(zone);
   if (!etat.organisation) return;
   const reponse = await api('GET', `/api/orgs/${encode(etat.organisation)}/asks`)
     .catch(() => null);
   if (!reponse) return;
   etat.plagiat.demandes = reponse;
+  compterLesDemandes(reponse);
 
   const recues = reponse.received || [];
   const faites = reponse.sent || [];
-  if (!recues.length && !faites.length) return;
+  if (!recues.length && !faites.length) {
+    zone.append(el('div', { classe: 'boite' },
+      el('div', { classe: 'boite-entete' }, el('strong', { texte: 'Demandes de copies' })),
+      el('div', { classe: 'boite-vide',
+        texte: 'Aucune demande, ni reçue ni faite. Un collègue en dépose une depuis un ' +
+          'rapport, quand une copie de votre index ressemble à l’une des siennes.' })));
+    return;
+  }
   const attente = recues.filter((item) => item.state === 'en attente');
 
   const corps = el('div', { classe: 'boite-corps' });
@@ -9007,6 +9115,82 @@ function ligneDeDemandeFaite(demande) {
           + `de ${demande.assignment} : ${demande.state}.`,
       }),
       el('span', { classe: 'aide', texte: suite })));
+}
+
+// compterLesDemandes dit dans la barre combien de demandes reçues attendent une
+// décision : une demande de collègue doit se voir sans ouvrir de comparaison.
+// Sans réponse fournie, elle va la chercher ; une lecture qui échoue ne dit
+// rien plutôt qu'un zéro qu'elle ne sait pas.
+async function compterLesDemandes(reponse) {
+  if (!etat.organisation) return;
+  const lues = reponse || await api('GET', `/api/orgs/${encode(etat.organisation)}/asks`)
+    .catch(() => null);
+  const pastille = $('demandes-pastille');
+  const attente = ((lues && lues.received) || [])
+    .filter((item) => item.state === 'en attente').length;
+  pastille.hidden = attente === 0;
+  pastille.textContent = String(attente);
+  pastille.title = `${pluriel(attente, 'demande')} ${accord(attente, 'attend', 'attendent')} ` +
+    'votre décision';
+}
+
+// chargerComparaisons remplit la page de l'organisation : les demandes, les
+// index qu'elle attend, les comparaisons que ce poste a faites.
+function chargerComparaisons() {
+  return Promise.all([
+    dessinerDemandes(), dessinerIndexAPublier(), dessinerToutesLesComparaisons(),
+  ]);
+}
+
+// dessinerIndexAPublier dit quels travaux annoncés au catalogue n'ont pas
+// d'index : un collègue voit qu'ils existent sans pouvoir rien y comparer.
+async function dessinerIndexAPublier() {
+  const zone = $('cmp-index');
+  const catalogue = await api('GET', `/api/orgs/${encode(etat.organisation)}/catalog`)
+    .catch(() => null);
+  vider(zone);
+  if (!catalogue) return;
+  const manquants = catalogue.unindexed || [];
+  const boite = el('div', { classe: 'boite' },
+    el('div', { classe: 'boite-entete' }, el('strong', { texte: 'Index à publier' })));
+  if (!manquants.length) {
+    boite.append(el('div', { classe: 'boite-vide',
+      texte: 'Tous les travaux que vous avez annoncés ont leur index.' }));
+  } else {
+    boite.append(
+      el('div', { classe: 'boite-corps' },
+        el('p', { classe: 'note', texte: 'Ces travaux sont annoncés sans index : vos ' +
+          'collègues voient qu’ils existent sans pouvoir y comparer quoi que ce soit.' }),
+        el('div', { classe: 'liste-choix' },
+          manquants.map((id) => el('code', { texte: id })))),
+      el('div', { classe: 'boite-pied' },
+        el('span', { classe: 'espace' }),
+        el('button', {
+          type: 'button', classe: 'bouton vert',
+          texte: `Publier ${pluriel(manquants.length, 'index', 'index')}…`,
+          onclick: () => tenter(() => rattraperLesIndex(), 'Index manquants'),
+        })));
+  }
+  zone.append(boite);
+}
+
+// dessinerToutesLesComparaisons liste les comparaisons faites sur ce poste,
+// tous travaux confondus : celles d'un groupe retiré depuis n'ont pas d'autre
+// porte.
+async function dessinerToutesLesComparaisons() {
+  const zone = $('cmp-analyses');
+  const liste = await api('GET', '/api/plagiat/reports').catch(() => null);
+  vider(zone);
+  const rapports = (liste && liste.reports) || [];
+  zone.append(el('div', { classe: 'boite' },
+    el('div', { classe: 'boite-entete' },
+      el('strong', { texte: 'Comparaisons faites sur ce poste' })),
+    rapports.length
+      ? el('div', { classe: 'boite-corps' },
+        rapports.map((rapport) => ligneDeComparaison(rapport, true)))
+      : el('div', { classe: 'boite-vide',
+        texte: 'Aucune comparaison sur ce poste : l’onglet « Comparaisons » d’un ' +
+          'travail en lance une.' })));
 }
 
 // demanderUneCopie dépose une demande pour une copie qu'on a mesurée sans
@@ -9104,11 +9288,6 @@ async function refuserDemande(demande) {
 // Ce qui est « manquant » vient du serveur, qui le tient du catalogue : le
 // terminal et la passe automatisée en ont la même idée, au travail près.
 
-$('pl-rattraper').addEventListener('click', () => {
-  menuEchange.deplier(false);
-  tenter(() => rattraperLesIndex(), 'Index manquants');
-});
-
 async function rattraperLesIndex() {
   const catalogue = await api('GET', `/api/orgs/${encode(etat.organisation)}/catalog`);
   const manquants = catalogue.unindexed || [];
@@ -9148,6 +9327,8 @@ async function rattraperLesIndex() {
       echecs.push(`${id} — ${erreur.message || erreur}`);
     }
   }
+  // La page dit ensuite ce qui reste à publier, rien de moins.
+  if (etat.vue === 'comparaisons') dessinerIndexAPublier();
   if (echecs.length) {
     message(`${pluriel(publies, 'index publié', 'index publiés')} ; ${echecs.length} en échec : `
       + echecs.join(' ; '), 'erreur');

@@ -555,3 +555,37 @@ func TestLaSyntheseDUnTravailIgnoreLeFiltre(t *testing.T) {
 		t.Errorf("seen_at = %q, attendu l'instant du relevé : %v", detail.Repos[0].SeenAt, err)
 	}
 }
+
+// L'accueil montre les groupes de la session en cours avec ce qui manque à
+// leurs travaux : la liste des groupes porte ce que les historiques relevés en
+// disent, sans rien redemander à GitHub.
+func TestLaListeDesGroupesPorteLesRemisesDeLaSessionEnCours(t *testing.T) {
+	h := travailAvecHistoriques(t)
+	h.json(http.MethodPut, "/api/classrooms/a26.5n6.01/assignments/tp1/deadline",
+		map[string]any{"due": "2026-10-01"}, nil)
+	h.travail(http.MethodPost, "/api/classrooms/a26.5n6.01/assignments/tp1/handins", nil)
+	lectures := h.State.CallCount("/contributors")
+
+	var liste struct {
+		Classrooms []struct {
+			Scope       string `json:"scope"`
+			Assignments []struct {
+				Name   string `json:"name"`
+				Seen   int    `json:"seen"`
+				Late   int    `json:"late"`
+				Silent int    `json:"silent"`
+			} `json:"assignments"`
+		} `json:"classrooms"`
+	}
+	h.json(http.MethodGet, "/api/classrooms?fresh=1", nil, &liste)
+	if len(liste.Classrooms) != 1 || len(liste.Classrooms[0].Assignments) != 1 {
+		t.Fatalf("groupes : %+v", liste.Classrooms)
+	}
+	travail := liste.Classrooms[0].Assignments[0]
+	if travail.Seen != 2 || travail.Late != 1 || travail.Silent != 1 {
+		t.Errorf("tp1 = %+v, attendu deux dépôts relevés, un en retard, un sans remise", travail)
+	}
+	if encore := h.State.CallCount("/contributors"); encore != lectures {
+		t.Errorf("%d historique(s) relus pour dresser la liste des groupes", encore-lectures)
+	}
+}
