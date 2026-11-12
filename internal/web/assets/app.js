@@ -7544,7 +7544,6 @@ async function preparerPlagiat(sansHistorique) {
   const travail = etat.travail;
   if (!travail) return;
 
-  $('pl-avertissement').textContent = options.disclaimer;
 
   const profil = $('pl-profil');
   if (!profil.options.length) {
@@ -8202,11 +8201,38 @@ function dessinerSoucisPlagiat() {
 }
 
 // dessinerSignauxPlagiat rapporte ce que la mesure de similarité ne voit pas.
+//
+// Les signaux se lisent par paire de copies, comme la mesure : deux cents
+// coïncidences à plat, nommées par dépôt, dont la plupart concernent la même
+// paire, se parcouraient sans rien apprendre. Une paire se résume en une ligne
+// — qui, combien, de quelle nature — et se déplie au besoin. Ce que trois
+// copies ou plus partagent vient sans doute de ce qui leur a été fourni :
+// cela se range à part. Les marques invisibles, elles, n'ont pas d'explication
+// innocente, et restent en tête, dépliées.
 function dessinerSignauxPlagiat() {
-  const signaux = etat.plagiat.donnees.result.signals || [];
+  const donnees = etat.plagiat.donnees;
+  const signaux = donnees.result.signals || [];
   const zone = $('pl-signaux');
   vider(zone);
   if (!signaux.length) return;
+
+  const copies = new Map((donnees.works || []).map((copie) => [copie.id, copie]));
+  const nom = (id) => nomDeCopie(copies.get(id) || { id });
+  const marques = [];
+  const parPaire = new Map();
+  const partages = [];
+  for (const signal of signaux) {
+    if (signal.kind === 'signature') {
+      marques.push(signal);
+    } else if (signal.works.length === 2) {
+      const [gauche, droite] = [...signal.works].sort();
+      const cle = `${gauche}\u0000${droite}`;
+      if (!parPaire.has(cle)) parPaire.set(cle, { gauche, droite, signaux: [] });
+      parPaire.get(cle).signaux.push(signal);
+    } else {
+      partages.push(signal);
+    }
+  }
 
   const corps = el('div', { classe: 'boite-corps' });
   corps.append(el('p', {
@@ -8216,41 +8242,91 @@ function dessinerSignauxPlagiat() {
       + 'd’explication innocente ; l’absence de marque, elle, ne prouve rien — '
       + 'un formateur l’efface sans le savoir.',
   }));
-  const porteurs = etat.plagiat.donnees.marks || {};
-  for (const signal of signaux) {
-    if (signal.kind !== 'signature') {
-      // La mesure réduit toutes les chaînes à « STR » pour que deux copies ne
-      // différant que par une constante restent appariées. Ce qu'elle jette là
-      // se retrouve ici, à part.
-      const quoi = signal.kind === 'chaîne'
-        ? 'Même phrase affichée : ' : 'Commentaire identique : ';
-      corps.append(el('p', {},
-        el('strong', { texte: quoi }),
-        el('span', { texte: signal.works.join(', ') }),
-        el('span', { classe: 'note', texte: ` — « ${signal.detail} »` })));
-      continue;
-    }
-    // La marque seule ne dit rien : c'est le registre qui répond à « de qui
-    // est-elle ». Un collègue qui ne l'a pas voit la coïncidence sans le nom.
-    const porteur = porteurs[signal.detail];
-    corps.append(el('p', {},
-      el('strong', { texte: 'Même marque invisible : ' }),
-      el('span', { texte: signal.works.join(', ') }),
-      porteur
-        ? el('span', {
-          classe: 'note',
-          texte: ` — délivrée à ${porteur.full_name || '@' + porteur.username}`
-            + ` pour « ${porteur.assignment} ».`,
-        })
-        : el('span', {
-          classe: 'note',
-          texte: ' — le registre ne dit pas à qui elle a été délivrée : elle '
-            + 'vient d’ailleurs, et seul son expéditeur peut le dire.',
-        })));
+  for (const signal of marques) corps.append(ligneDeMarque(signal, nom));
+  const paires = [...parPaire.values()].sort((a, b) => b.signaux.length - a.signaux.length);
+  for (const paire of paires) corps.append(blocDeSignauxDUnePaire(paire, nom, copies));
+  if (partages.length) {
+    corps.append(el('details', { classe: 'pl-signaux-groupe' },
+      el('summary', {},
+        el('strong', { texte: 'Partagés par trois copies ou plus' }),
+        el('span', { classe: 'note', texte: ` — ${pluriel(partages.length, 'signal', 'signaux')}, `
+          + 'sans doute venus de ce qui leur a été fourni' })),
+      el('div', { classe: 'pl-signaux-liste' }, partages.map((signal) =>
+        ligneDeSignal(signal, signal.works.map(nom).join(', '))))));
   }
   zone.append(el('div', { classe: 'boite' },
     el('div', { classe: 'boite-entete' },
-      el('strong', { texte: 'Signaux relevés hors de la mesure' })), corps));
+      el('strong', { texte: 'Signaux relevés hors de la mesure' }),
+      el('span', { classe: 'espace' }),
+      el('span', { classe: 'note', texte: pluriel(signaux.length, 'signal', 'signaux') })),
+    corps));
+}
+
+// Les natures d'un signal, comme on les compte.
+const naturesDeSignal = {
+  'chaîne': { un: 'phrase', plusieurs: 'phrases', libelle: 'Même phrase affichée' },
+  commentaire: { un: 'commentaire', plusieurs: 'commentaires', libelle: 'Commentaire identique' },
+};
+
+// blocDeSignauxDUnePaire résume ce que deux copies partagent hors de la mesure
+// — « Émilie Côté ↔ Jean-Luc Picard — 181 signaux : 28 phrases, 153 commentaires »
+// — et le détaille une fois déplié. Deux copies d'ici s'ouvrent côte à côte ;
+// une copie venue d'un index ne s'ouvre pas.
+function blocDeSignauxDUnePaire(paire, nom, copies) {
+  const comptes = {};
+  for (const signal of paire.signaux) comptes[signal.kind] = (comptes[signal.kind] || 0) + 1;
+  const natures = Object.entries(comptes).map(([nature, nombre]) => {
+    const { un, plusieurs } = naturesDeSignal[nature] || { un: nature, plusieurs: nature };
+    return pluriel(nombre, un, plusieurs);
+  });
+  const ouvrable = ![paire.gauche, paire.droite]
+    .some((id) => (copies.get(id) || {}).screened);
+  return el('details', { classe: 'pl-signaux-groupe' },
+    el('summary', {},
+      el('strong', { texte: `${nom(paire.gauche)} ↔ ${nom(paire.droite)}` }),
+      el('span', { classe: 'note', texte:
+        ` — ${pluriel(paire.signaux.length, 'signal', 'signaux')} : ${natures.join(', ')}` }),
+      ouvrable ? el('button', {
+        type: 'button', classe: 'lien', texte: 'Voir la paire',
+        // Le clic ouvre la paire sans replier ni déplier le bloc.
+        onclick: (evenement) => {
+          evenement.preventDefault();
+          ouvrirPairePlagiat(paire.gauche, paire.droite);
+        },
+      }) : null),
+    el('div', { classe: 'pl-signaux-liste' },
+      paire.signaux.map((signal) => ligneDeSignal(signal, ''))));
+}
+
+// ligneDeSignal dit une coïncidence : sa nature, son texte, et ceux qui la
+// portent quand le bloc ne le dit pas déjà.
+function ligneDeSignal(signal, porteurs) {
+  const libelle = (naturesDeSignal[signal.kind] || { libelle: signal.kind }).libelle;
+  return el('p', {},
+    el('strong', { texte: `${libelle} : ` }),
+    el('span', { texte: `« ${signal.detail} »` }),
+    porteurs ? el('span', { classe: 'note', texte: ` — ${porteurs}` }) : null);
+}
+
+// ligneDeMarque dit qui porte une même marque invisible. La marque seule ne dit
+// rien : c'est le registre qui répond à « de qui est-elle ». Un collègue qui ne
+// l'a pas voit la coïncidence sans le nom.
+function ligneDeMarque(signal, nom) {
+  const porteur = (etat.plagiat.donnees.marks || {})[signal.detail];
+  return el('p', {},
+    el('strong', { texte: 'Même marque invisible : ' }),
+    el('span', { texte: signal.works.map(nom).join(', ') }),
+    porteur
+      ? el('span', {
+        classe: 'note',
+        texte: ` — délivrée à ${porteur.full_name || '@' + porteur.username}`
+          + ` pour « ${porteur.assignment} ».`,
+      })
+      : el('span', {
+        classe: 'note',
+        texte: ' — le registre ne dit pas à qui elle a été délivrée : elle '
+          + 'vient d’ailleurs, et seul son expéditeur peut le dire.',
+      }));
 }
 
 // dessinerEcarte dit ce qui n'a pas été comparé, et pourquoi.
@@ -8306,7 +8382,6 @@ function dessinerPairePlagiat() {
     + `${Math.round(match.right_coverage * 100)} % — plus long passage commun : `
     + `${match.longest_fragment} jetons. Commits comparés : `
     + `${(projet.left.commit || '').slice(0, 7)} et ${(projet.right.commit || '').slice(0, 7)}.`;
-  $('pl-paire-avertissement').textContent = vue.disclaimer;
   dessinerChronologie(vue.chronology);
 
   const liens = $('pl-paire-liens');

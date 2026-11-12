@@ -1465,9 +1465,12 @@ dialog .corps-dialogue > * + * { margin-top: .75rem; }
 }
 /* Ce qui est commun se surligne ; ce qui ne l'est pas se fane. Les deux
    lectures existent parce qu'elles ne répondent pas à la même question :
-   « qu'est-ce qui se ressemble » et « qu'est-ce qui a été changé ». */
+   « qu'est-ce qui se ressemble » et « qu'est-ce qui a été changé ». Le passage
+   visé se distingue par un fond plus soutenu, pas par un contour : un passage
+   court sur des dizaines de lignes, et un contour par ligne en faisait une
+   grille qu'on ne lisait plus. */
 .pl-commun { background: var(--alerte-fond); border-radius: 3px; }
-.pl-commun.vise { background: var(--orange-fond); outline: 2px solid var(--orange); }
+.pl-commun.vise { background: var(--orange-fond); }
 .pl-fane { opacity: .35; }
 .pl-jetons-flux { display: flex; flex-wrap: wrap; gap: .15rem; white-space: normal; }
 .pl-jeton-brut {
@@ -1476,6 +1479,22 @@ dialog .corps-dialogue > * + * { margin-top: .75rem; }
 }
 .pl-jeton-brut.identifiant { background: var(--fond-doux); color: var(--texte-doux); }
 .pl-jeton-brut.mot-cle { background: var(--fond-creux); font-weight: 600; }
+
+/* Les signaux d'un rapport se lisent par paire : une ligne qui résume, et le
+   détail qui se déplie. Une paire peut en porter des centaines : le détail
+   défile chez lui plutôt que d'allonger la page. */
+.pl-signaux-groupe summary {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem; list-style: none;
+}
+/* Un résumé en ligne perd le triangle du navigateur : il porte le sien. */
+.pl-signaux-groupe summary::-webkit-details-marker { display: none; }
+.pl-signaux-groupe summary::before {
+  content: '▸'; color: var(--texte-doux); transition: transform .12s;
+}
+.pl-signaux-groupe[open] > summary::before { transform: rotate(90deg); }
+.pl-signaux-groupe summary .lien { margin-left: auto; font-size: .8125rem; }
+.pl-signaux-liste { max-height: 24rem; overflow-y: auto; padding: 0 .8rem .6rem; }
+.pl-signaux-liste p { margin: .35rem 0; font-size: .875rem; overflow-wrap: anywhere; }
 
 /* Une règle tient sur une ligne : un nom, ses équivalents, son libellé. */
 .pl-regle { align-items: flex-end; margin-bottom: .6rem; }
