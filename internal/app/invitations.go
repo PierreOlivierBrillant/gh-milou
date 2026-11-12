@@ -25,7 +25,7 @@ import (
 func (m *manageSession) invitations(group *groups.Group) (map[string]identity.InvitationState, int) {
 	noms := nomsDuGroupe(group)
 	acces := m.resolver.Accesses(m.org, noms, identity.Cached, nil)
-	cours, equipes, droit := m.pourInviter(group)
+	groupes := m.groupesDe(group)
 
 	etats := make(map[string]identity.InvitationState, len(noms))
 	for _, nom := range noms {
@@ -33,28 +33,31 @@ func (m *manageSession) invitations(group *groups.Group) (map[string]identity.In
 		if connu, inspecte := acces[nom]; inspecte {
 			lus = &connu
 		}
+		// Hors de toute place, le groupe vide ne vise personne : tous ceux qui
+		// ont accès au dépôt comptent alors pour dire où il en est.
+		cours, place := classroom.Of(groupes, nom)
+		var equipes []teams.Team
+		if place {
+			equipes = m.equipesDe(cours)
+		}
 		etats[nom], _ = cours.InvitationOf(nom, equipes, lus)
 	}
 	depots := map[string]bool{}
-	for _, envoi := range cours.ToInvite(noms, equipes, acces, droit) {
+	for _, envoi := range m.aInviter(groupes, noms, acces) {
 		depots[envoi.Repo] = true
 	}
 	return etats, len(depots)
 }
 
-// pourInviter rassemble ce que le domaine demande pour décider des invitations
-// du groupe : qui chaque dépôt vise, et le droit d'une première invitation.
-//
-// Un préfixe hérité ne dit pas à quel groupe il appartient : le groupe rendu
-// est alors vide et ne vise personne. Tous ceux qui ont accès à un dépôt
-// comptent pour dire où il en est, et seules les invitations expirées — qui
-// nomment déjà quelqu'un — peuvent se renvoyer.
-func (m *manageSession) pourInviter(group *groups.Group) (classroom.Classroom, []teams.Team, string) {
-	cours, nom, reconnu := m.travail(group)
-	if !reconnu {
-		return classroom.Classroom{}, nil, m.session.Settings.Permission
-	}
-	return cours, m.equipesDe(cours), cours.Settings(nom).Permission
+// aInviter décide des invitations à envoyer pour ces dépôts : chacun au nom de
+// son groupe, qui dit qui il vise et à quel droit l'inviter — un groupe entier
+// ou un cours en réunissent plusieurs. Un dépôt hors nomenclature ne vise
+// personne : seules ses invitations expirées, qui nomment déjà quelqu'un, se
+// renvoient, au droit des réglages.
+func (m *manageSession) aInviter(groupes []classroom.Classroom, noms []string,
+	acces map[string]identity.Access) []identity.Dispatch {
+	return classroom.ToInviteAmong(groupes, m.equipesDe, noms, acces,
+		m.session.Settings.Permission)
 }
 
 // motDInvitation colore l'état d'une invitation comme le navigateur le fait :
@@ -75,9 +78,8 @@ func motDInvitation(console *ui.Console, etat identity.InvitationState) string {
 // qu'il vise, d'après des accès qu'on vient de relire.
 func (m *manageSession) envoisDuDepot(group *groups.Group, repo groups.Repo,
 	acces identity.Access) []identity.Dispatch {
-	cours, equipes, droit := m.pourInviter(group)
-	return cours.ToInvite([]string{repo.Name}, equipes,
-		map[string]identity.Access{repo.Name: acces}, droit)
+	return m.aInviter(m.groupesDe(group), []string{repo.Name},
+		map[string]identity.Access{repo.Name: acces})
 }
 
 // gesteDEnvoi nomme dans un menu ce qu'un envoi fera.
@@ -136,8 +138,7 @@ func (m *manageSession) envoyerManquantes(group *groups.Group, demander bool) (i
 			"dépôts n'ont pas pu être lus : leurs invitations restent inconnues."))
 	}
 
-	cours, equipes, droit := m.pourInviter(group)
-	envois := cours.ToInvite(noms, equipes, lus, droit)
+	envois := m.aInviter(m.groupesDe(group), noms, lus)
 	if len(envois) == 0 {
 		console.Success("Aucune invitation ne manque.")
 		return 0, nil

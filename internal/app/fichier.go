@@ -11,27 +11,26 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
-// Déposer un fichier dans tous les dépôts d'un travail, au terminal. Ce qui
-// décide — les champs du gabarit, le chemin acceptable, le sort d'un fichier
-// déjà présent — vit dans « broadcast » ; ce fichier ne fait que demander et
-// montrer.
+// Déposer un fichier dans tous les dépôts d'un travail, ou d'un groupe entier,
+// au terminal. Ce qui décide — les champs du gabarit, le chemin acceptable, le
+// sort d'un fichier déjà présent — vit dans « broadcast » ; ce fichier ne fait
+// que demander et montrer.
 
 // Lignes de l'aperçu : assez pour voir que les champs se remplissent, pas au
 // point de chasser la liste des dépôts de l'écran.
 const lignesDApercu = 12
 
-// planDeDepot remplit le gabarit pour chaque dépôt du groupe.
+// planDeDepot remplit le gabarit pour chaque dépôt du groupe. Chacun reçoit les
+// champs de son propre travail : un groupe entier en mêle plusieurs, et
+// « {travail} » ou « {echeance} » n'y ont pas une seule valeur.
 func (m *manageSession) planDeDepot(group *groups.Group, demande broadcast.Request) (
 	*broadcast.Plan, error) {
 	if group.Len() == 0 {
 		return nil, valid.Errorf("Aucun dépôt dans « %s ».", group.Prefix)
 	}
-	contexte, destinataires := broadcast.ForPrefix(group.Prefix, group.Repos, m.session.Now())
-	if cours, nom, reconnu := m.travail(group); reconnu {
-		contexte, destinataires = broadcast.ForClassroom(cours, cours.AssignmentID(nom),
-			m.equipesDe(cours), group.Repos, m.session.Now())
-	}
-	return broadcast.Prepare(demande, contexte, destinataires)
+	lots := broadcast.ForRepos(group.Prefix, m.groupesDe(group), m.equipesDe, group.Repos,
+		m.session.Now())
+	return broadcast.PrepareAll(demande, lots)
 }
 
 // avertirDuPlan dit ce que le gabarit risque de mal faire : un champ inconnu
