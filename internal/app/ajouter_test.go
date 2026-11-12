@@ -116,6 +116,38 @@ func TestAjouterInscritLesNomsAuRegistreUneFoisConfirme(t *testing.T) {
 	}
 }
 
+// Une simulation s'arrête au plan, comme les autres gestes du mode gestion.
+// « ajouter » ignorait « --dry-run » : il demandait de confirmer, puis créait
+// les dépôts pour de vrai, avec leurs noms au registre et l'accès de l'équipe
+// enseignante.
+func TestAjouterEnSimulationNeCreeRien(t *testing.T) {
+	state := travailDeLaNomenclature()
+	state.AddTeam("acme", "a26.5n6.01.enseignants", "prof")
+	h := gestion(t, state, "a26.5n6.01.tp1")
+	h.Options.DryRun = true
+	liste := h.cohorteCSV("Jean-Luc Picard,jlpicard")
+
+	code, scripte := h.script("depots", "ajouter", "", "fichier", liste, "oui", "quitter")
+	for _, question := range scripte.Asked {
+		if strings.HasPrefix(question, "Créer ") {
+			t.Errorf("la simulation demande « %s » : elle allait créer pour de vrai", question)
+		}
+	}
+	if code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	h.contient("a26.5n6.01.tp1.jean-luc-picard", "Simulation : aucun dépôt n'a été créé.")
+	if noms := strings.Join(h.depots(), ","); noms != "a26.5n6.01.tp1.emilie-cote" {
+		t.Errorf("une simulation a créé des dépôts : %s", noms)
+	}
+	if _, cree := state.Repos["acme/"+registry.RepoName]; cree {
+		t.Error("une simulation n'écrit rien, le registre compris")
+	}
+	if partages := state.TeamRepos["acme/"+fakegh.TeamSlug("a26.5n6.01.enseignants")]; len(partages) != 0 {
+		t.Errorf("une simulation n'accorde rien à l'équipe enseignante : %v", partages)
+	}
+}
+
 // Qui a déjà son dépôt du travail est reconnu sous la nomenclature aussi : le
 // dernier niveau de ce dépôt est son nom, « jean-luc-picard », et non son
 // compte. Le tri le comparait à « jlpicard », tenait Jean-Luc pour neuf et lui

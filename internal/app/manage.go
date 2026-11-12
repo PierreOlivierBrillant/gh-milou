@@ -786,6 +786,14 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 	}
 	console.Table([]string{"Dépôt", "Personne", "Compte"}, rows, 20)
 
+	// Une simulation s'arrête au plan, comme les autres gestes de la gestion :
+	// il n'y a rien à confirmer, puisque rien ne sera écrit — ni dépôt, ni nom
+	// au registre, ni accès.
+	if session.Options.DryRun {
+		console.Warning("Simulation : aucun dépôt n'a été créé.")
+		return nil
+	}
+
 	confirmed, err := session.Prompt.Confirm(
 		"Créer "+valid.Plural(len(items), "dépôt")+" dans « "+m.org+" » ?", false)
 	if err != nil {
