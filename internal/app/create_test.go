@@ -110,7 +110,22 @@ func TestUneCohorteSansCompteRecoitSesDepots(t *testing.T) {
 		noms != "tp1-naomi-chery,tp1-aminata-diallo" {
 		t.Fatalf("dépôts = %s\n%s", noms, h.texte())
 	}
-	h.contient("à rattacher")
+	// Le récapitulatif et la progression le disent comme la liste : un « @ »
+	// tout seul se lirait comme un oubli d'affichage.
+	h.contient("créé · compte à rattacher")
+	h.absent("@ ", "@\n")
+	recapitulee := false
+	for _, ligne := range strings.Split(h.texte(), "\n") {
+		if strings.Contains(ligne, "tp1-naomi-chery") && strings.Contains(ligne, "Naomi Chéry") {
+			recapitulee = true
+			if !strings.HasSuffix(strings.TrimSpace(ligne), "à rattacher") {
+				t.Errorf("son compte reste à rattacher : %q", ligne)
+			}
+		}
+	}
+	if !recapitulee {
+		t.Errorf("le récapitulatif ne la montre pas :\n%s", h.texte())
+	}
 }
 
 // Le gabarit par défaut nomme par le compte : il le dit, et ne crée rien,

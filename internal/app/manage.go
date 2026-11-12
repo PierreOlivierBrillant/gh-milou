@@ -780,7 +780,8 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 	}
 	rows := make([][]string, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, []string{item.Name, item.Person.FullName, "@" + item.Person.Username})
+		rows = append(rows, []string{item.Name, item.Person.FullName,
+			colonneCompte(console, item.Person.Username)})
 	}
 	console.Table([]string{"Dépôt", "Personne", "Compte"}, rows, 20)
 

@@ -3847,8 +3847,10 @@ async function renommerEtudiant(ligne) {
     'Renommer');
   if (!confirme) return;
 
+  // Sans compte, c'est le matricule qui la désigne, comme partout ailleurs :
+  // c'est ainsi qu'on lui rattache ici son premier compte.
   const corps = {
-    username: ligne.username,
+    username: ligne.username || ligne.student_id || '',
     full_name: nom.value.trim(),
     new_username: compte.value.trim(),
     repos: depots > 0 && avecDepots.checked,

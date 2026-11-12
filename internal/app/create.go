@@ -208,13 +208,10 @@ func (s *Session) reviewRoster(list roster.Roster, source string) ([]roster.Pers
 	rows := make([][]string, 0, len(lues))
 	sansCompte := 0
 	for _, person := range lues {
-		compte := "@" + person.Username
-		// Une case vide se lit comme un oubli d'affichage ; ici c'est un fait,
-		// et c'est celui dont dépend l'invitation au dépôt.
-		if person.Username == "" {
-			compte, sansCompte = s.Console.Dim("à rattacher"), sansCompte+1
+		if strings.TrimSpace(person.Username) == "" {
+			sansCompte++
 		}
-		rows = append(rows, []string{person.FullName, compte})
+		rows = append(rows, []string{person.FullName, colonneCompte(s.Console, person.Username)})
 	}
 	s.Console.Table([]string{"Nom complet", "Compte GitHub"}, rows, 15)
 	if sansCompte > 0 {
@@ -698,7 +695,8 @@ func (s *Session) summarize(items []plan.PlannedRepo) {
 	s.summarizeCommon(items, "Dépôts à traiter")
 	preview := make([][]string, 0, len(items))
 	for _, item := range items {
-		preview = append(preview, []string{item.Name, item.Person.FullName, "@" + item.Person.Username})
+		preview = append(preview, []string{item.Name, item.Person.FullName,
+			colonneCompte(s.Console, item.Person.Username)})
 	}
 	s.Console.Table([]string{"Dépôt", "Personne", "Compte"}, preview, 20)
 }
@@ -833,7 +831,13 @@ func (s *Session) printProgress(index, total int, result runner.Result, width in
 		line += s.Console.Dim(" · " + result.Starter)
 	}
 	if s.Settings.AddCollaborator && result.Collaborator != runner.CollaboratorNo && result.Collaborator != "" {
-		line += s.Console.Dim(" · @" + result.Username + " : " + result.Collaborator)
+		// Sans compte, l'état se suffit — « compte à rattacher » : un « @ » tout
+		// seul devant lui ne désignerait personne.
+		qui := arobase(result.Username)
+		if qui != "" {
+			qui += " : "
+		}
+		line += s.Console.Dim(" · " + qui + result.Collaborator)
 	}
 	s.Console.Print(line)
 	if result.Error != "" {

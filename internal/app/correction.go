@@ -89,11 +89,11 @@ func (s *Session) correctStudent(cours classroom.Classroom, repos []groups.RepoI
 	}
 	avant, apres := correction.Before, correction.After
 
-	console.Heading("Fiche de @" + avant.Username + " dans « " + cours.Scope() + " »")
+	console.Heading("Fiche de " + designer(avant) + " dans « " + cours.Scope() + " »")
 	console.Printf("  %s %s", console.Dim(pad("Nom complet", 18)),
 		changement(console, avant.FullName, apres.FullName, "sans nom"))
 	console.Printf("  %s %s", console.Dim(pad("Compte GitHub", 18)),
-		changement(console, "@"+avant.Username, "@"+apres.Username, ""))
+		changement(console, arobase(avant.Username), arobase(apres.Username), "à rattacher"))
 	switch {
 	case len(correction.Moves) > 0:
 		s.montrerRenommages(correction.Moves)
@@ -161,7 +161,7 @@ func (s *Session) ecrireCorrection(org string, correction classroom.Correction) 
 // questionDeCorrection dit ce que la confirmation engage, et rien de plus.
 func questionDeCorrection(correction classroom.Correction) string {
 	depots := len(correction.Moves)
-	qui := "@" + correction.Before.Username
+	qui := designer(correction.Before)
 	switch {
 	case correction.Changed() && depots > 0:
 		return "Corriger la fiche de " + qui + " et renommer " +
@@ -228,12 +228,13 @@ func (m *manageSession) corriger(group *groups.Group) error {
 	options := make([]ui.Option, 0, len(cours.Students))
 	for _, identite := range cours.Identities() {
 		personne := identite.Person()
-		// Sans compte, personne ne se désigne ici : c'est la liste du collège
-		// qui l'a inscrite, et c'est son compte qu'il faut d'abord lui donner.
-		if personne.Username == "" {
+		// Sans compte, c'est son matricule qui la désigne : c'est ici qu'on lui
+		// rattache son premier compte.
+		designee := classroom.Handle(personne)
+		if designee == "" {
 			continue
 		}
-		options = append(options, ui.Option{Value: personne.Username, Label: nommer(personne)})
+		options = append(options, ui.Option{Value: designee, Label: nommer(personne)})
 	}
 	if len(options) == 0 {
 		return valid.Errorf("« %s » n'a aucun étudiant à corriger.", cours.Label())

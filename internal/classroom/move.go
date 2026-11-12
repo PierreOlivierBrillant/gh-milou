@@ -47,7 +47,7 @@ func PlanMove(depart, arrivee Classroom, personnes []roster.Person,
 	repos []groups.RepoInfo) ([]Move, error) {
 	fragments := map[string]string{}
 	for _, personne := range personnes {
-		fragments[strings.ToLower(personne.Username)] = fragmentDe(personne)
+		fragments[designation(personne)] = fragmentDe(personne)
 	}
 	return planRenames(depart, arrivee, fragments, repos)
 }
@@ -56,12 +56,13 @@ func PlanMove(depart, arrivee Classroom, personnes []roster.Person,
 // complet change. Le nom de l'étudiant est le dernier niveau du nom d'un dépôt :
 // corriger sa fiche ne suffit pas, les dépôts déjà créés portent l'ancien.
 //
-// La personne est désignée par le compte qu'elle avait : c'est lui qui la
-// retrouve dans le groupe tel qu'il est encore.
+// La personne est désignée par ce qui la désignait — le compte qu'elle avait, à
+// défaut son matricule : c'est ce qui la retrouve dans le groupe tel qu'il est
+// encore.
 func PlanRenameStudent(cours Classroom, avant, apres roster.Person,
 	repos []groups.RepoInfo) ([]Move, error) {
 	return planRenames(cours, cours,
-		map[string]string{strings.ToLower(avant.Username): fragmentDe(apres)}, repos)
+		map[string]string{designation(avant): fragmentDe(apres)}, repos)
 }
 
 // Correction est la fiche corrigée d'une personne du groupe : ce qu'elle était,
@@ -112,11 +113,15 @@ func PlanCorrection(cours Classroom, username string, wanted roster.Person,
 	if compte := strings.TrimSpace(wanted.Username); compte != "" {
 		apres.Username = compte
 	}
-	modifie, err := cours.Rename(avant.Username, apres)
+	// Qui n'a pas encore de compte — toute une cohorte importée du collège —
+	// n'est désigné que par son matricule : c'est lui qui retrouve sa ligne, et
+	// c'est ainsi qu'on lui rattache son premier compte. Son compte vide, lui,
+	// ne désignerait personne.
+	modifie, err := cours.Rename(Handle(avant), apres)
 	if err != nil {
 		return Correction{}, err
 	}
-	apres, _ = modifie.Find(apres.Username)
+	apres, _ = modifie.Find(Handle(apres))
 	correction := Correction{Before: avant, After: apres, Classroom: modifie}
 	if withRepos {
 		if correction.Moves, err = PlanRenameStudent(cours, avant, apres, repos); err != nil {
@@ -148,9 +153,13 @@ func fragmentDe(personne roster.Person) string {
 }
 
 // planRenames compose les nouveaux noms : chaque dépôt du groupe de départ dont
-// l'étudiant figure dans « fragments » rejoint la place d'arrivée sous le
-// fragment qui lui est associé. Départ et arrivée peuvent être le même groupe —
-// c'est le cas quand seul le nom de la personne change.
+// l'étudiant figure dans « fragments », sous sa désignation, rejoint la place
+// d'arrivée sous le fragment qui lui est associé. Départ et arrivée peuvent
+// être le même groupe — c'est le cas quand seul le nom de la personne change.
+//
+// La désignation, et non le compte seul : deux personnes sans compte n'ont en
+// commun qu'un compte vide, et l'une emporterait les dépôts de l'autre — sous
+// son propre nom.
 func planRenames(depart, arrivee Classroom, fragments map[string]string,
 	repos []groups.RepoInfo) ([]Move, error) {
 	pris := nouvellesCibles(repos)
@@ -169,8 +178,9 @@ func planRenames(depart, arrivee Classroom, fragments map[string]string,
 			if !inscrit {
 				continue
 			}
-			fragment, concerne := fragments[strings.ToLower(student.Username)]
-			if !concerne {
+			cle := designation(student)
+			fragment, concerne := fragments[cle]
+			if cle == "" || !concerne {
 				continue
 			}
 			ligne, err := pris.viser(arrivee, nom, repo, fragment, student.Username)

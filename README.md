@@ -271,7 +271,6 @@ restent pourtant propres au navigateur, faute d'équivalent au terminal.
 | Geste | Web | Assistant | Ligne de commande |
 | --- | :-: | :-: | :-: |
 | Déclarer un groupe, tenir sa liste, déplacer une personne | ✓ | lecture seule | lecture seule |
-| Rattacher un compte à un étudiant inscrit sans compte | ✓ | — | — |
 | Renommer ou déplacer un groupe entier | ✓ | — | — |
 | Retenir les réglages par défaut d'un groupe | ✓ | — | pour un lancement |
 | Lire deux copies, puis deux fichiers, côte à côte | ✓ | — | — |

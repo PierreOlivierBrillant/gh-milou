@@ -349,7 +349,8 @@ Drapeaux :
   --full-name NOM          donner son nom complet au compte de --user (ne renomme aucun
                            dépôt), ou corriger celui de l'étudiant de --student
   --student COMPTE         corriger la fiche d'un étudiant du groupe de --manage :
-                           son nom (--full-name), son compte (--student-account)
+                           son nom (--full-name), son compte (--student-account) ;
+                           sans compte encore, son matricule le désigne
   --student-account COMPTE nouveau compte GitHub de l'étudiant de --student
   --rename-repos           renommer aussi les dépôts de l'étudiant de --student pour
                            qu'ils portent son nom (aperçu avec --dry-run)

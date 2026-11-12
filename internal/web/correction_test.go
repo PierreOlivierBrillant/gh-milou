@@ -8,6 +8,7 @@ import (
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/fakegh"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 )
 
@@ -75,6 +76,53 @@ func TestRenommerLesDepotsApresUneCorrectionDepuisLaFiche(t *testing.T) {
 	if reponse.StatusCode != http.StatusBadRequest ||
 		!strings.Contains(string(contenu), "Rien à corriger") {
 		t.Fatalf("statut %d — %s", reponse.StatusCode, contenu)
+	}
+}
+
+// Le « Renommer… » de la liste rattache aussi un premier compte à qui n'a que
+// son matricule : sa ligne le porte, et c'est lui qui la désigne. Elle n'avait
+// rien d'autre qu'un compte vide à renvoyer, et la correction répondait
+// « @ n'est pas dans « Groupe 01 ». ». Le registre apprend le matricule avec
+// le compte, comme au terminal.
+func TestRenommerRattacheUnPremierCompteParLeMatricule(t *testing.T) {
+	state := fakegh.NewState()
+	state.Users["nchery"] = "Naomi Chéry"
+	h := nouveau(t, state)
+	place := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
+	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
+		inscritParMatricule("Naomi Chéry", "2100456"))
+
+	var liste struct {
+		Students []struct {
+			FullName  string `json:"full_name"`
+			Username  string `json:"username"`
+			StudentID string `json:"student_id"`
+		} `json:"students"`
+	}
+	h.json(http.MethodGet, "/api/classrooms/"+place+"/students", nil, &liste)
+	designee := ""
+	for _, ligne := range liste.Students {
+		if ligne.FullName == "Naomi Chéry" {
+			designee = ligne.Username
+			if designee == "" {
+				designee = ligne.StudentID
+			}
+		}
+	}
+	if designee != "2100456" {
+		t.Fatalf("la ligne de Naomi doit porter son matricule : %+v", liste.Students)
+	}
+
+	reponse, contenu := h.requete(http.MethodPost, "/api/classrooms/"+place+"/students/rename",
+		map[string]any{"username": designee, "full_name": "Naomi Chéry", "new_username": "nchery"})
+	if reponse.StatusCode != http.StatusOK {
+		t.Fatalf("statut %d — %s", reponse.StatusCode, contenu)
+	}
+	set, _ := registry.Decode([]byte(
+		h.State.Files("acme/"+registry.RepoName, registry.Branch)[registry.UsersFile]))
+	if fiche, connue := set.PersonOf("nchery"); !connue || fiche.StudentID != "2100456" ||
+		fiche.FullName != "Naomi Chéry" {
+		t.Fatalf("le registre doit apprendre le matricule avec le compte : %+v", fiche)
 	}
 }
 

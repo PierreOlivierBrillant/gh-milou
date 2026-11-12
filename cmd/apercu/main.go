@@ -41,6 +41,9 @@ func main() {
 	}
 	garnirPourLaComparaison(state)
 	garnirLesInvitations(state)
+	// Naomi Chéry n'est inscrite que par son matricule, mais son compte existe
+	// sur GitHub : c'est ce qui permet de le lui rattacher depuis la liste.
+	state.Users["nchery"] = "Naomi Chéry"
 	faux := fakegh.New(state)
 	defer faux.Close()
 
