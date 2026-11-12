@@ -289,6 +289,10 @@ type studentRow struct {
 	// Accounts porte tous les comptes de la personne ; le premier est celui
 	// qui la désigne.
 	Accounts []string `json:"accounts,omitempty"`
+	// StudentID est son matricule. Sans compte, c'est lui qui la désigne : la
+	// ligne d'une inscrite que seule la liste du collège connaît n'aurait sinon
+	// rien à renvoyer pour qu'on lui rattache le sien.
+	StudentID string `json:"student_id,omitempty"`
 	// Team nomme l'équipe de la personne dans ce groupe ; vide si elle n'en a
 	// aucune.
 	Team        string              `json:"team,omitempty"`
@@ -393,7 +397,7 @@ func (s *Server) handleClassroomStudents(writer http.ResponseWriter, request *ht
 		}
 		lignes = append(lignes, studentRow{
 			FullName: ligne.FullName, Username: ligne.Username,
-			Accounts: ligne.Accounts, Team: equipe,
+			Accounts: ligne.Accounts, StudentID: ligne.StudentID, Team: equipe,
 			Assignments: travaux, PushedAt: ligne.PushedAt,
 		})
 	}

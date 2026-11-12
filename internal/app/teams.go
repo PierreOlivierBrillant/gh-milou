@@ -107,7 +107,7 @@ func (d *desk) show() {
 	if orphelins := d.cours.Unassigned(d.list); len(orphelins) > 0 {
 		noms := make([]string, 0, len(orphelins))
 		for _, personne := range orphelins {
-			noms = append(noms, "@"+personne.Username)
+			noms = append(noms, designer(personne))
 		}
 		console.Note("Sans équipe : %s", strings.Join(noms, ", "))
 	}
@@ -115,11 +115,52 @@ func (d *desk) show() {
 
 // nommer dit une personne par son nom quand on le connaît, et par son compte
 // sinon : c'est le nom qu'on cherche à l'écran, et le compte qui l'identifie.
+// Sans compte, c'est son matricule qui l'identifie, comme au navigateur.
 func nommer(personne roster.Person) string {
-	if nom := strings.TrimSpace(personne.FullName); nom != "" {
-		return nom + " (@" + personne.Username + ")"
+	identifie := arobase(personne.Username)
+	if identifie == "" {
+		identifie = strings.TrimSpace(personne.StudentID)
 	}
-	return "@" + personne.Username
+	nom := strings.TrimSpace(personne.FullName)
+	switch {
+	case nom == "":
+		return identifie
+	case identifie == "":
+		return nom
+	}
+	return nom + " (" + identifie + ")"
+}
+
+// designer dit une personne en un mot, là où une phrase n'en attend qu'un : son
+// compte, à défaut son nom. Une inscrite que seule la liste du collège connaît
+// n'a pas encore de compte, et « @ » tout seul ne désignerait personne.
+func designer(personne roster.Person) string {
+	if compte := arobase(personne.Username); compte != "" {
+		return compte
+	}
+	if nom := strings.TrimSpace(personne.FullName); nom != "" {
+		return nom
+	}
+	return "matricule " + strings.TrimSpace(personne.StudentID)
+}
+
+// arobase écrit un compte GitHub comme partout ailleurs, et rien du tout quand
+// il n'y en a pas.
+func arobase(compte string) string {
+	if compte = strings.TrimSpace(compte); compte == "" {
+		return ""
+	}
+	return "@" + compte
+}
+
+// colonneCompte remplit la case « Compte » d'un tableau. Une case vide, ou un
+// « @ » tout seul, se lirait comme un oubli d'affichage ; c'est un fait, et
+// celui dont dépend l'invitation au dépôt. Le navigateur dit le même mot.
+func colonneCompte(console *ui.Console, compte string) string {
+	if ecrit := arobase(compte); ecrit != "" {
+		return ecrit
+	}
+	return console.Dim("à rattacher")
 }
 
 // only rend l'unique équipe visée, et refuse une demande ambiguë.

@@ -59,6 +59,24 @@ func TestTerminalComposeUneEquipe(t *testing.T) {
 	h.contient("Équipes de", "eq1", "@emilie-cote")
 }
 
+// Qui n'a pas encore de compte n'est dans aucune équipe, puisqu'une équipe
+// réunit des comptes : la liste le dit par son nom, et non par un « @ » seul.
+func TestSansEquipeNommeQuiNAPasDeCompte(t *testing.T) {
+	h := nouveau(t, nil)
+	h.declarer(classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{
+			{FullName: "Émilie Côté", Username: "emilie-cote"},
+			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+			{FullName: "Naomi Chéry", StudentID: "2100456"},
+		},
+	})
+	if code := h.composer("a26.5n6.01", "eq1", "emilie-cote"); code != app.ExitOK {
+		t.Fatalf("code de retour %d :\n%s", code, h.texte())
+	}
+	h.contient("Sans équipe : @jlpicard, Naomi Chéry")
+}
+
 func TestTerminalDeplaceUnEtudiantDEquipe(t *testing.T) {
 	h := nouveau(t, nil)
 	h.composer("a26.5n6.01", "eq1", "emilie-cote", "jlpicard")

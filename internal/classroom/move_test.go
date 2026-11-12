@@ -241,6 +241,83 @@ func TestUneCorrectionQuiNeChangeRienEstRefusee(t *testing.T) {
 	}
 }
 
+// Une liste du collège ne donne que des matricules : c'est par lui qu'on
+// désigne la personne à qui l'on rattache son premier compte. Le matricule
+// reste sur la fiche à côté du compte, et la ligne n'est pas dédoublée.
+func TestUneCorrectionRattacheUnPremierCompteParLeMatricule(t *testing.T) {
+	cours := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+	})
+
+	correction, err := classroom.PlanCorrection(cours, "2100456",
+		roster.Person{Username: "nchery"}, false, nil)
+	if err != nil {
+		t.Fatalf("rattachement refusé : %v", err)
+	}
+	if correction.Before.Username != "" || correction.Before.StudentID != "2100456" {
+		t.Errorf("avant : %+v", correction.Before)
+	}
+	apres := correction.After
+	if apres.Username != "nchery" || apres.StudentID != "2100456" ||
+		apres.FullName != "Naomi Chéry" {
+		t.Fatalf("fiche corrigée : %+v", apres)
+	}
+	if !correction.Changed() {
+		t.Error("un compte rattaché change la fiche : la correction doit le dire")
+	}
+	if len(correction.Classroom.Students) != 2 {
+		t.Fatalf("liste corrigée : %+v", correction.Classroom.Students)
+	}
+	inscrite, trouvee := correction.Classroom.Find("nchery")
+	if !trouvee || inscrite.StudentID != "2100456" {
+		t.Errorf("Naomi n'est pas retrouvée sous son compte : %+v (%v)", inscrite, trouvee)
+	}
+}
+
+// Deux personnes sans compte n'ont en commun qu'un compte vide. C'est le
+// matricule, et lui seul, qui dit quels dépôts sont ceux de Naomi : celui de
+// Claire, qui n'a pas de compte non plus, ne prend pas son nom. Rien ne
+// l'aurait arrêté, puisque Naomi n'a pas de dépôt pour ce travail-là.
+func TestUneCorrectionParLeMatriculeNeRenommeQueSesDepots(t *testing.T) {
+	inventaire := depots("a26.5n6.01.tp1.naomi-chery", "a26.5n6.01.tp2.claire-otis")
+	cours := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Claire Otis", StudentID: "2100789"},
+	}).Enrich(nil, inventaire)
+
+	correction, err := classroom.PlanCorrection(cours, "2100456",
+		roster.Person{FullName: "Naomi Chéry-Dupont", Username: "nchery"}, true, inventaire)
+	if err != nil {
+		t.Fatalf("correction refusée : %v", err)
+	}
+	if len(correction.Moves) != 1 || correction.Moves[0].Repo != "a26.5n6.01.tp1.naomi-chery" ||
+		correction.Moves[0].Target != "a26.5n6.01.tp1.naomi-chery-dupont" {
+		t.Fatalf("seul le dépôt de Naomi doit suivre : %+v", correction.Moves)
+	}
+}
+
+// Déplacer quelqu'un qui n'a pas de compte emporte ses dépôts, et pas ceux des
+// autres personnes sans compte.
+func TestDeplacerParLeMatriculeNEmporteQueSesDepots(t *testing.T) {
+	inventaire := depots("a26.5n6.01.tp1.naomi-chery", "a26.5n6.01.tp2.claire-otis")
+	depart := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Claire Otis", StudentID: "2100789"},
+	}).Enrich(nil, inventaire)
+	naomi, _ := depart.Find("2100456")
+
+	lignes, err := classroom.PlanMove(depart, groupe("a26", "5n6", "02", nil),
+		[]roster.Person{naomi}, inventaire)
+	if err != nil {
+		t.Fatalf("plan refusé : %v", err)
+	}
+	if len(lignes) != 1 || lignes[0].Repo != "a26.5n6.01.tp1.naomi-chery" ||
+		lignes[0].Target != "a26.5n6.02.tp1.naomi-chery" {
+		t.Fatalf("seul le dépôt de Naomi doit partir : %+v", lignes)
+	}
+}
+
 // nomsConnus tient lieu de registre : un fragment de dépôt, la personne qu'il
 // désigne.
 type nomsConnus map[string]roster.Person

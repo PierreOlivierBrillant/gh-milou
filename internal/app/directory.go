@@ -161,7 +161,7 @@ func (d *directorySession) show() {
 			role = console.OK("enseignant")
 		}
 		rows = append(rows, []string{
-			itoa(index + 1), nom, "@" + ligne.Username, role, suivis,
+			itoa(index + 1), nom, colonneCompte(console, ligne.Username), role, suivis,
 			itoa(len(ligne.Repos)), envoi,
 		})
 	}

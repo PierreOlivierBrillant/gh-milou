@@ -516,6 +516,19 @@ func (c Classroom) Find(handle string) (roster.Person, bool) {
 	return roster.Person{}, false
 }
 
+// Handle rend ce qui désigne une personne auprès de Find et de Rename : son
+// compte, à défaut son matricule. Vide, il ne désigne personne.
+//
+// C'est ce qu'une interface propose quand elle laisse choisir quelqu'un : une
+// liste du collège n'a que des matricules, et les écarter, c'était écarter
+// justement ceux à qui l'on veut rattacher un compte.
+func Handle(person roster.Person) string {
+	if compte := strings.TrimSpace(person.Username); compte != "" {
+		return compte
+	}
+	return strings.TrimSpace(person.StudentID)
+}
+
 // ------------------------------------------------------------------- travaux
 
 // Nature d'un travail. Elle ne se déclare pas : elle se lit dans le dernier

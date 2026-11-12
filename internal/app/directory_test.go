@@ -74,6 +74,25 @@ func TestAnnuaireDuTerminal(t *testing.T) {
 		"2027-02-10")
 }
 
+// Qui n'a encore que son matricule figure à l'annuaire comme ailleurs : sa case
+// « Compte » dit qu'il reste à rattacher, plutôt qu'un « @ » tout seul.
+func TestAnnuaireDitLeCompteARattacher(t *testing.T) {
+	h := nouveau(t, nil)
+	h.Options.StudentsRequested = true
+	h.declarer(classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{
+			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+			{FullName: "Naomi Chéry", StudentID: "2100456"},
+		},
+	})
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	h.contient("@jlpicard", "Naomi Chéry      à rattacher")
+	h.absent("@ ")
+}
+
 // Les critères de la ligne de commande valent aussi pour l'annuaire : c'est le
 // même paquet qui les applique dans les trois interfaces.
 func TestAnnuaireFiltreParSessionEtParCours(t *testing.T) {
