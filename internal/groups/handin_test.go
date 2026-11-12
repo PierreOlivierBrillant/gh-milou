@@ -1,6 +1,7 @@
 package groups_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
@@ -134,6 +135,29 @@ func TestCompleteGardeCeQuAucunEnvoiNADepasse(t *testing.T) {
 	}
 	if _, garde := completes["tp1-adopte"]; !garde {
 		t.Error("un dépôt absent de l'inventaire perd son relevé")
+	}
+}
+
+// Un relevé dépassé par un envoi est à relire d'office : la mémoire seule le
+// croirait encore bon. Ce qui n'a jamais été relevé, ou que rien n'a dépassé,
+// ne se lit que s'il manque.
+func TestUnReleveDepasseSeRelitDOffice(t *testing.T) {
+	inventaire := []groups.RepoInfo{
+		{Name: "tp1-ecote", PushedAt: "2026-09-30T18:00:00Z"},
+		{Name: "tp1-jlpicard", PushedAt: "2026-09-30T11:00:00Z"},
+		{Name: "tp1-nouveau", PushedAt: "2026-09-30T18:00:00Z"},
+	}
+	histoires := map[string]groups.Handin{
+		"tp1-ecote":    {Seen: "2026-09-30T12:00:00Z"},
+		"tp1-jlpicard": {Seen: "2026-09-30T12:00:00Z"},
+	}
+	depasses, autres := groups.Overtaken(
+		[]string{"tp1-ecote", "tp1-jlpicard", "tp1-nouveau"}, inventaire, histoires)
+	if strings.Join(depasses, " ") != "tp1-ecote" {
+		t.Errorf("dépassés = %v, attendu le seul dépôt poussé depuis son relevé", depasses)
+	}
+	if strings.Join(autres, " ") != "tp1-jlpicard tp1-nouveau" {
+		t.Errorf("autres = %v", autres)
 	}
 }
 

@@ -108,6 +108,27 @@ func Complete(repos []RepoInfo, remises map[string]Handin) map[string]Handin {
 	return completes
 }
 
+// Overtaken sépare des dépôts selon leur historique relevé : ceux qu'un envoi a
+// dépassés depuis leur lecture, et tous les autres — jamais relevés, ou relevés
+// et encore complets. Les premiers sont à relire d'office, si récent que soit
+// leur relevé : la mémoire seule les croirait encore bons, et c'est
+// l'inventaire qui sait que quelque chose a bougé. Les autres ne sont à lire
+// que s'ils manquent.
+func Overtaken(noms []string, repos []RepoInfo,
+	histoires map[string]Handin) (depasses, autres []string) {
+	completes := Complete(repos, histoires)
+	for _, nom := range noms {
+		_, releve := histoires[nom]
+		_, complete := completes[nom]
+		if releve && !complete {
+			depasses = append(depasses, nom)
+			continue
+		}
+		autres = append(autres, nom)
+	}
+	return depasses, autres
+}
+
 // Activity rend l'inventaire tel que les étudiants l'ont fait : le dernier
 // envoi de chaque dépôt y ignore ce que les comptes écartés — ceux qui
 // enseignent — y ont poussé.

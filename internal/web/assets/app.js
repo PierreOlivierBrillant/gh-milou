@@ -103,6 +103,11 @@ const TRACES = {
     '7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 ' +
     '1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 ' +
     '1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.499 5.499 0 0 0 8 2.5Z',
+  externe: 'M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8' +
+    '.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75' +
+    ' 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.2' +
+    '5 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042' +
+    'l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z',
   cle: 'M10.5 0a5.499 5.499 0 1 1-1.288 10.848l-.932.932a.749.749 0 0 1-.53.22H7v.75a.749.74' +
     '9 0 0 1-.22.53l-.5.5a.749.749 0 0 1-.53.22H5v.75a.749.749 0 0 1-.22.53l-.5.5a.749.749 0' +
     ' 0 1-.53.22h-2A1.75 1.75 0 0 1 0 14.25v-2c0-.199.079-.389.22-.53l4.932-4.932A5.5 5.5 0 ' +
@@ -499,6 +504,29 @@ function suivre(fiche, miroir = null) {
   });
 }
 
+// suivreEnSilence attend la fin d'une opération sans ouvrir le panneau : c'est
+// le cas d'un relevé que la page lance d'elle-même, que personne n'a demandé à
+// regarder. « avancer » reçoit l'avancement chiffré ; la promesse rend le
+// bilan, ou rien si la lecture s'interrompt.
+function suivreEnSilence(fiche, avancer = () => {}) {
+  return new Promise((resolve) => {
+    const source = new EventSource(`/api/jobs/${encode(fiche.id)}/events?from=0`);
+    source.onmessage = (evenement) => {
+      const item = JSON.parse(evenement.data);
+      if (item.kind === 'avancement' && item.total > 0) avancer(item.done, item.total);
+      if (item.kind === 'fin') {
+        source.close();
+        resolve((item.data && item.data.result) || null);
+      }
+    };
+    source.onerror = async () => {
+      source.close();
+      const fin = await api('GET', `/api/jobs/${encode(fiche.id)}`).catch(() => null);
+      resolve(fin && fin.status !== 'en cours' ? (fin.result || null) : null);
+    };
+  });
+}
+
 $('operation-fermer').addEventListener('click', () => {
   $('operation').hidden = true;
   document.body.classList.remove('avec-operation');
@@ -580,10 +608,12 @@ async function montrer(titre, contenu) {
 
 // --------------------------------------------------------------------- vues
 
-// Les vues d'un groupe partagent ses onglets.
+// L'onglet que chaque vue allume. Les vues d'un groupe partagent les siens —
+// l'assistant compte parmi ses travaux —, et celles d'un travail les leurs.
 const ongletDeLaVue = {
-  travaux: 'travaux', travail: 'travaux', assistant: 'travaux', plagiat: 'travaux',
+  travaux: 'travaux', assistant: 'travaux',
   etudiants: 'etudiants', equipes: 'equipes', 'groupe-reglages': 'groupe-reglages',
+  travail: 'travail', plagiat: 'plagiat',
 };
 
 // aplati met un texte à plat pour la recherche : minuscules, accents retirés.
@@ -664,20 +694,26 @@ function lireDate(valeur) {
 // dateLisible écrit une date : « ven. 13 nov., 23:59 », l'heure seulement
 // quand elle est connue et voulue. Avec « relatif », elle dit aussi l'écart
 // quand il aide à lire — la veille d'une remise, « dans 2 jours » se comprend
-// plus vite qu'une date. Sans « semaine », le jour de la semaine se tait :
-// « l'analyse du jeu. 12 nov. » se lirait de travers. Une valeur qu'elle ne
-// comprend pas est rendue telle quelle plutôt que perdue.
+// plus vite qu'une date ; avec « relatif: 'seul' », l'écart remplace la date
+// quand il y en a un, ce qui tient dans une colonne étroite. Sans « semaine »,
+// le jour de la semaine se tait : « l'analyse du jeu. 12 nov. » se lirait de
+// travers. Une valeur qu'elle ne comprend pas est rendue telle quelle plutôt
+// que perdue.
 function dateLisible(valeur, { relatif = false, heure = true, semaine = true } = {}) {
   const lue = lireDate(valeur);
   if (!lue) return String(valeur || '');
   const { moment, avecHeure } = lue;
+  if (relatif === 'seul') {
+    const proche = ecartLisible(moment, avecHeure);
+    if (proche) return proche;
+  }
   const annee = moment.getFullYear() !== new Date().getFullYear();
   let lisible = formatDeDate(semaine, annee).format(moment);
   if (avecHeure && heure) {
     const deuxChiffres = (nombre) => String(nombre).padStart(2, '0');
     lisible += `, ${deuxChiffres(moment.getHours())}:${deuxChiffres(moment.getMinutes())}`;
   }
-  const proche = relatif ? ecartLisible(moment, avecHeure) : '';
+  const proche = relatif === true ? ecartLisible(moment, avecHeure) : '';
   return proche ? `${lisible} (${proche})` : lisible;
 }
 
@@ -700,6 +736,13 @@ function ecartLisible(moment, avecHeure) {
 for (const bouton of $('onglets').querySelectorAll('button')) {
   bouton.addEventListener('click', () => afficherVue(bouton.dataset.vue));
 }
+
+// Les onglets d'un travail : ses dépôts, et ses comparaisons — dont la page
+// charge d'abord les options de l'analyse.
+$('onglets-travail').querySelector('[data-vue="travail"]')
+  .addEventListener('click', () => afficherVue('travail'));
+$('onglets-travail').querySelector('[data-vue="plagiat"]')
+  .addEventListener('click', () => tenter(() => preparerPlagiat(), 'Comparaisons'));
 
 // ------------------------------------------------------------------ adresses
 
@@ -885,7 +928,7 @@ function afficherVue(nom, sansHistorique) {
   document.body.classList.toggle('pleine-largeur', vuesPleineLargeur.has(nom));
   $('ouvrir-reglages').hidden = !etat.organisation;
   $('accueil').disabled = !etat.organisation;
-  for (const bouton of $('onglets').querySelectorAll('button')) {
+  for (const bouton of document.querySelectorAll('#entete-page .onglets button')) {
     bouton.classList.toggle('actif', bouton.dataset.vue === onglet);
   }
   for (const vue of document.querySelectorAll('.vue')) {
@@ -914,7 +957,6 @@ function afficherVue(nom, sansHistorique) {
 function dessinerEntete(nom, onglet) {
   const entete = $('entete-page');
   entete.hidden = nom === 'organisation';
-  $('onglets').hidden = !onglet;
   entete.classList.toggle('avec-onglets', !!onglet);
   if (entete.hidden) return;
 
@@ -1051,8 +1093,8 @@ function ficheDeLEntete(nom) {
   // y remonte d'un clic.
   if (nom === 'plagiat' && etat.travail) {
     fil.push({ texte: etat.travail.name, action: () => afficherVue('travail') });
-    fil.push({ texte: 'Nouvelle comparaison' });
-    return { fil, titre: `Nouvelle comparaison — ${etat.travail.name}`, avis };
+    fil.push({ texte: 'Comparaisons' });
+    return { fil, titre: etat.travail.name, avis };
   }
   if (nom === 'assistant') {
     const titre = etat.assistantTitre || 'Nouveau travail';
@@ -1184,7 +1226,7 @@ function enteteDeComparaison(nom, racine) {
     const depuis = etat.plagiat.reglesDepuisLaPreparation && etat.travail && etat.groupe
       ? [...filDuGroupe(etat.groupe, racine),
         { texte: etat.travail.name, action: () => afficherVue('travail') },
-        { texte: 'Nouvelle comparaison', action: () => afficherVue('plagiat') }]
+        { texte: 'Comparaisons', action: () => afficherVue('plagiat') }]
       : [racine];
     return {
       fil: [...depuis, { texte: 'Règles de comparaison' }],
@@ -1199,10 +1241,13 @@ function enteteDeComparaison(nom, racine) {
   // rapport venu d'ailleurs — un groupe retiré depuis — garde le fil court.
   const place = placeDuRapport(rapport);
   const travail = place ? place.travail : ((rapport && rapport.assignment) || 'comparaison');
+  // Un rapport vit sous les comparaisons de son travail.
+  const adresseDuTravail = place
+    ? `/g/${encode(place.groupe.scope)}/travaux/${encode(travail)}` : '';
   const filDuTravail = place
     ? [...filDuGroupe(place.groupe, racine),
-      { texte: travail, action: () => rejoindre(
-        `/g/${encode(place.groupe.scope)}/travaux/${encode(travail)}`) }]
+      { texte: travail, action: () => rejoindre(adresseDuTravail) },
+      { texte: 'Comparaisons', action: () => rejoindre(`${adresseDuTravail}/plagiat`) }]
     : [racine];
   const etapeRapport = place && rapport
     ? `Comparaison du ${dateLisible(rapport.created_at, { heure: false, semaine: false })}`
@@ -1840,12 +1885,13 @@ async function ouvrirTravail(travail, force, sansHistorique) {
     etat.acces.clear();
     etat.selection = new Set();
     etat.travailRegle = travail.id;
+    etat.releveTente = '';
   }
   if (!await chargerTravail(travail, force, !meme)) return;
   afficherVue('travail', sansHistorique);
 }
 
-async function chargerTravail(travail, force, toutCocher) {
+async function chargerTravail(travail, force, nouveau) {
   const attente = attendreTable('detail-table', 'detail-vide', 'Chargement des dépôts…');
   const detail = await tenter(() => api('GET', adresseTravail(travail.name, force)), 'Travail');
   if (!attente.fini(detail, "Les dépôts n'ont pas pu être chargés.")) return false;
@@ -1863,6 +1909,9 @@ async function chargerTravail(travail, force, toutCocher) {
     // Réunir deux comptes depuis une ligne est une décision d'enseignant : le
     // serveur dit si la page peut le proposer, comme il le dit à la fiche.
     may_decide: !!detail.may_decide,
+    // La synthèse des remises et le nombre de dépôts privés parlent du travail
+    // entier : le filtre de la liste ne les réduit pas.
+    etats: detail.states || [], prives: detail.private || 0,
   };
   // Le serveur verse ce qu'il sait déjà des accès : ceux qu'un préchargement a
   // lus, et ceux qu'une inspection précédente a mémorisés. La colonne est
@@ -1871,13 +1920,15 @@ async function chargerTravail(travail, force, toutCocher) {
   for (const repo of detail.repos) {
     if (repo.access) etat.acces.set(repo.name, repo.access);
   }
-  // Une sélection ne survit pas à ce que le filtre écarte : on agit sur ce
-  // qu'on voit, et rien d'autre.
+  // Rien n'est coché au départ : les commandes portent alors sur toute la
+  // liste, et cocher en restreint la portée. Une sélection ne survit pas à ce
+  // que le filtre écarte : on agit sur ce qu'on voit, et rien d'autre.
   const visibles = new Set(detail.repos.map((repo) => repo.name));
-  etat.selection = toutCocher
-    ? visibles
+  etat.selection = nouveau
+    ? new Set()
     : new Set([...etat.selection].filter((nom) => visibles.has(nom)));
   dessinerTravail();
+  releverSiBesoin();
   return true;
 }
 
@@ -1908,40 +1959,27 @@ const barreTravail = barreDeFiltre({
 });
 
 function dessinerTravail() {
-  const depots = etat.travail.depots;
+  const travail = etat.travail;
+  const depots = travail.depots;
   const total = gens(etat.groupe).length;
-  const equipe = etat.travail.kind === 'équipe';
-  // Le serveur a déjà rattaché chaque dépôt à son destinataire : la page n'a
-  // plus à deviner qui se cache derrière un nom.
-  const servis = depots.filter((repo) => repo.username || repo.team).length;
-  // Sous filtre, le résumé dit sur combien : sans cela, une liste courte ne
-  // distinguerait pas un travail peu distribué d'un critère trop étroit.
-  const parts = equipe
-    ? [`${pluriel(depots.length, 'dépôt')} d'équipe` +
-       (depots.length === etat.travail.total ? '' : ` sur ${etat.travail.total}`)]
-    : (depots.length === etat.travail.total
-      ? [pluriel(depots.length, 'dépôt'),
-         `${pluriel(servis, 'étudiant')} du groupe sur ${total} ` +
-           `en ${accord(servis, 'a', 'ont')} un`]
-      : [`${pluriel(depots.length, 'dépôt')} sur ${etat.travail.total}`,
-         `${pluriel(servis, 'étudiant')} du groupe`]);
-  if (depots.length - servis > 0) parts.push(`${depots.length - servis} hors liste`);
-  if (etat.travail.due) {
-    parts.push(`à remettre ${dateLisible(etat.travail.due, { relatif: true })}`);
-  }
-  const releves = depots.filter((repo) => repo.seen);
-  if (releves.length) {
-    const commits = releves.reduce((somme, repo) => somme + repo.commits, 0);
-    parts.push(`${pluriel(commits, 'commit')} dans ` +
-      `${pluriel(releves.length, 'dépôt relevé', 'dépôts relevés')}`);
-  }
+  const equipe = travail.kind === 'équipe';
+  const fiche = travailOuvert();
+
+  // Sous le titre : l'échéance et ce que le travail compte de dépôts. Où en
+  // sont les remises se lit dans les pastilles, qui parlent du travail entier.
+  const parts = [];
+  if (travail.due) parts.push(`à remettre ${dateLisible(travail.due, { relatif: true })}`);
+  parts.push(nombreDeDepots(travail));
+  if (fiche && fiche.others > 0) parts.push(`${fiche.others} hors liste`);
   $('detail-resume').textContent = parts.join(' · ');
+  dessinerSynthese();
+  dessinerReleve();
+
   $('detail-colonne').textContent = equipe ? 'Équipe' : 'Étudiant';
   // Le geste primaire n'est offert que s'il a quelque chose à faire : vert à
   // côté d'un travail que tout le monde a reçu, il inviterait à un geste vide.
   // Le compte vient de la fiche du travail, que le filtre de la liste ne
   // réduit pas.
-  const fiche = travailOuvert();
   const manquants = !fiche || !etat.groupe.session ? 0 : (equipe
     ? (etat.groupe.teams || 0) - (fiche.teams || 0)
     : total - (fiche.students || 0));
@@ -1955,6 +1993,9 @@ function dessinerTravail() {
   $('detail-vide').hidden = depots.length > 0;
   direVide($('detail-vide'), 'Aucun dépôt ne répond à ces critères.', 'roi');
 
+  // La visibilité ne se lit plus sur chaque ligne : l'en-tête la dit pour
+  // tous, et seul un dépôt qui fait exception la porte.
+  const habituelle = travail.prives * 2 >= travail.total;
   const corps = $('detail-table').querySelector('tbody');
   vider(corps);
   for (const repo of depots) {
@@ -1962,44 +2003,31 @@ function dessinerTravail() {
       el('td', {}, el('input', {
         type: 'checkbox',
         checked: etat.selection.has(repo.name),
+        'aria-label': `Choisir ${repo.full_name || repo.name}`,
         onchange: (evenement) => {
           if (evenement.target.checked) etat.selection.add(repo.name);
           else etat.selection.delete(repo.name);
           majSelection();
         },
       })),
-      // « hors liste » dit que le dépôt n'est rattaché à personne, pas que son
-      // nom complet manque : un dépôt nommé par le compte GitHub d'un inscrit
-      // lui appartient, et le dire autrement ferait croire à un intrus. Un
-      // dépôt d'équipe, lui, nomme l'équipe et ses membres : il n'appartient à
-      // personne en particulier, et c'est normal.
-      el('td', {}, repo.team
-        ? el('div', {},
-            el('strong', { texte: repo.full_name }),
-            // Les membres se lisent par leur nom et par leur compte : un dépôt
-            // d'équipe ne porte celui de personne, et c'est leur association
-            // qu'on vient vérifier ici.
-            (repo.members || []).length === 0
-              ? el('span', { classe: 'note', texte: ' — équipe vide' })
-              : el('div', { classe: 'equipe-membres' },
-                  (repo.members || []).map((personne) => ligneDeMembre(personne, {
-                    invite: (repo.waiting || []).some((compte) =>
-                      compte.toLowerCase() === personne.username.toLowerCase()),
-                  }))))
-        : (repo.username
-            ? lienVersLaFiche(repo)
-            : el('span', { classe: 'vide', texte: repo.student + ' (hors liste)' }))),
-      el('td', {}, el('a', {
-        href: repo.url, target: '_blank', rel: 'noreferrer noopener', texte: repo.name,
-      })),
-      el('td', {}, el('span', { classe: 'jeton', texte: repo.visibility })),
-      el('td', repo.pushed_at
-        ? { texte: dateLisible(repo.pushed_at) } : { classe: 'vide', texte: 'jamais' }),
-      // Une colonne vide dit qu'on n'a pas regardé ; un zéro, qu'il n'y a rien.
-      el('td', repo.seen ? { texte: String(repo.commits) } : { classe: 'vide', texte: '—' }),
+      el('td', {}, ...destinataireDuDepot(repo),
+        repo.private === habituelle ? null
+          : el('span', { classe: 'jeton', texte: repo.visibility,
+            title: `Ce dépôt est ${repo.visibility}, au contraire des autres` })),
       el('td', {}, ...pastillesDuDepot(repo)),
-      el('td', {}, ...pastillesDInvitation(repo)),
+      el('td', dernierEnvoiDuDepot(repo)),
+      // Une colonne vide dit qu'on n'a pas regardé ; un zéro, qu'il n'y a rien.
+      el('td', repo.seen
+        ? { classe: 'chiffre', texte: String(repo.commits) }
+        : { classe: 'chiffre vide', texte: '—' }),
+      el('td', { classe: 'col-invitation' }, ...pastillesDInvitation(repo)),
+      // Voir, régler, supprimer : le même ordre partout, le geste qui détruit
+      // en dernier.
       el('td', { classe: 'etroit' }, el('span', { classe: 'actions' },
+        el('a', {
+          classe: 'lien icone', href: repo.url, target: '_blank', rel: 'noreferrer noopener',
+          title: `Ouvrir ${repo.name} sur GitHub`, 'aria-label': `Ouvrir ${repo.name} sur GitHub`,
+        }, icone('externe')),
         el('button', {
           type: 'button', classe: 'lien icone',
           title: 'Accès', 'aria-label': `Accès de ${repo.name}`,
@@ -2012,8 +2040,95 @@ function dessinerTravail() {
         }, icone('corbeille')))),
     ));
   }
+  // La colonne des invitations ne montre que les exceptions : quand chacun est
+  // entré dans son dépôt, elle n'a rien à dire et disparaît.
+  $('detail-table').classList.toggle('sans-invitation',
+    depots.every((repo) => repo.invitation === 'acceptée'));
   barreTravail.maj();
   majSelection();
+}
+
+// nombreDeDepots dit combien de dépôts compte le travail, et leur visibilité
+// quand elle est la même pour tous — ce qu'une colonne répétait sur chaque
+// ligne.
+function nombreDeDepots(travail) {
+  const [un, plusieurs] = travail.kind === 'équipe'
+    ? ["dépôt d'équipe", "dépôts d'équipe"] : ['dépôt', 'dépôts'];
+  const nombre = pluriel(travail.total, un, plusieurs);
+  if (travail.prives === travail.total) {
+    return `${nombre} ${accord(travail.total, 'privé', 'privés')}`;
+  }
+  if (travail.prives === 0) return `${nombre} ${accord(travail.total, 'public', 'publics')}`;
+  return `${nombre}, dont ${pluriel(travail.prives, 'privé')}`;
+}
+
+// Le mot d'un état s'accorde avec le nombre de dépôts qui y sont.
+const etatsAuPluriel = { 'non accepté': 'non acceptés', 'non relevé': 'non relevés' };
+
+// dessinerSynthese montre où en sont les remises du travail entier, une
+// pastille par état, dans les couleurs de la colonne « Remise ». Chacune
+// filtre la liste sur son état ; celle du filtre posé l'enlève.
+function dessinerSynthese() {
+  const zone = $('detail-synthese');
+  vider(zone);
+  const pose = etat.filtreTravail.remise;
+  for (const { state, count } of etat.travail.etats) {
+    const aspect = etatsDeRemise[state] || etatsDeRemise['non relevé'];
+    const choisi = pose === state;
+    zone.append(el('button', {
+      type: 'button',
+      classe: aspect.classe.startsWith('jeton') ? aspect.classe : 'jeton',
+      texte: pluriel(count, state, etatsAuPluriel[state] || state),
+      title: choisi ? 'Montrer tous les dépôts' : `Ne montrer que les dépôts « ${state} »`,
+      'aria-pressed': String(choisi),
+      onclick: () => {
+        etat.filtreTravail.remise = choisi ? '' : state;
+        rechargerTravail();
+      },
+    }));
+  }
+}
+
+// destinataireDuDepot dit à qui le dépôt est destiné : une personne, et son
+// compte dessous ; une équipe et ses membres ; ou personne de la liste.
+//
+// « hors liste » dit que le dépôt n'est rattaché à personne, pas que son nom
+// complet manque : un dépôt nommé par le compte GitHub d'un inscrit lui
+// appartient, et le dire autrement ferait croire à un intrus. Un dépôt
+// d'équipe, lui, nomme l'équipe et ses membres : il n'appartient à personne en
+// particulier, et c'est normal.
+function destinataireDuDepot(repo) {
+  if (repo.team) {
+    return [el('strong', { texte: repo.full_name }),
+      // Les membres se lisent par leur nom et par leur compte : un dépôt
+      // d'équipe ne porte celui de personne, et c'est leur association
+      // qu'on vient vérifier ici.
+      (repo.members || []).length === 0
+        ? el('span', { classe: 'note', texte: ' — équipe vide' })
+        : el('div', { classe: 'equipe-membres' },
+            (repo.members || []).map((personne) => ligneDeMembre(personne, {
+              invite: (repo.waiting || []).some((compte) =>
+                compte.toLowerCase() === personne.username.toLowerCase()),
+            })))];
+  }
+  if (!repo.username) {
+    return [el('span', { classe: 'vide', texte: repo.student + ' (hors liste)',
+      title: repo.name })];
+  }
+  return [lienVersLaFiche(repo), el('span', { classe: 'sous-nom', texte: '@' + repo.username })];
+}
+
+// dernierEnvoiDuDepot ne montre le dernier envoi que s'il dit autre chose que
+// la remise : à la minute près, c'est la même date, déjà écrite à côté. Il se
+// dit par l'écart quand il est proche — « il y a 2 h » —, la date restant au
+// survol.
+function dernierEnvoiDuDepot(repo) {
+  if (!repo.pushed_at) return { classe: 'vide', texte: 'jamais' };
+  const envoi = lireDate(repo.pushed_at);
+  const remise = lireDate(repo.last);
+  if (envoi && remise && Math.abs(envoi.moment - remise.moment) < 60000) return {};
+  return { texte: dateLisible(repo.pushed_at, { relatif: 'seul' }),
+    title: dateLisible(repo.pushed_at) };
 }
 
 // pastilleDEtat dit d'un mot où en est la remise. L'état vient du serveur, qui
@@ -2036,13 +2151,15 @@ const etatsDeRemise = {
 function pastillesDuDepot(repo) {
   const aspect = etatsDeRemise[repo.state] || etatsDeRemise['non relevé'];
   const jetons = [];
-  if (repo.state === 'remis') {
-    // Une remise à temps se montre par sa date : c'est ce qu'on vient lire.
-    jetons.push(el('span', { classe: 'jeton oui', texte: dateLisible(repo.last) }));
-  } else if (repo.state === 'en retard') {
+  if (repo.state === 'remis' || repo.state === 'en retard') {
+    // Une remise se montre par son état et par sa date : c'est ce qu'on vient
+    // lire, et la date d'un retard dit de combien.
     jetons.push(el('span', {
-      classe: aspect.classe, texte: aspect.texte,
-      title: `Remis le ${dateLisible(repo.last)}, après la date cible`,
+      classe: aspect.classe,
+      texte: `${aspect.texte} ${dateLisible(repo.last, { semaine: false })}`,
+      title: repo.state === 'en retard'
+        ? `Remis le ${dateLisible(repo.last)}, après la date cible`
+        : `Remis le ${dateLisible(repo.last)}`,
     }));
   } else if (repo.state === 'non remis' && !repo.commits && !(repo.silent || []).length) {
     // Un dépôt vide que personne n'était attendu à remplir n'est pas une
@@ -2092,7 +2209,7 @@ function pastillesDuDepot(repo) {
 // couleur.
 const etatsDInvitation = {
   '': { classe: 'vide', texte: '—',
-    title: "Accès non inspectés : « Ce travail › Inspecter les accès » va les lire" },
+    title: "Accès non inspectés : « Actions › Inspecter les accès » va les lire" },
   acceptée: { classe: 'jeton oui', texte: 'acceptée',
     title: 'La personne a accès à son dépôt' },
   'en attente': { classe: 'jeton orange', texte: 'en attente',
@@ -2111,6 +2228,8 @@ const etatsDInvitation = {
 // remédierait, de quoi le faire : renvoyer une invitation expirée, ou inviter
 // qui n'en a pas. Le serveur en décide ; la page n'en choisit que le mot.
 function pastillesDInvitation(repo) {
+  // Une invitation acceptée est la règle : seule l'exception se montre.
+  if (repo.invitation === 'acceptée') return [];
   const etatInvitation = etatsDInvitation[repo.invitation || ''] || etatsDInvitation[''];
   const jeton = el('span', {
     classe: etatInvitation.classe, texte: etatInvitation.texte, title: etatInvitation.title,
@@ -2153,14 +2272,35 @@ async function renvoyerInvitation(repo, identifiant) {
 }
 
 function majSelection() {
-  const total = etat.travail ? etat.travail.depots.length : 0;
+  const travail = etat.travail;
+  const affiches = travail ? travail.depots.length : 0;
   const choisis = etat.selection.size;
-  // Même formulation que la liste des étudiants : les deux bandeaux disent la
-  // même chose, et celui-ci porte assez de commandes pour ne pas s'allonger.
-  $('detail-selection').textContent = choisis === 0
-    ? pluriel(total, 'dépôt affiché', 'dépôts affichés')
-    : `${pluriel(choisis, 'sélectionné')} sur ${total}`;
-  $('detail-tout').checked = total > 0 && choisis === total;
+  // Sous filtre, le bandeau dit sur combien : une liste courte ne doit pas se
+  // confondre avec un travail peu distribué.
+  if (choisis > 0) {
+    $('detail-selection').textContent = `${pluriel(choisis, 'sélectionné')} sur ${affiches}`;
+  } else if (travail && affiches < travail.total) {
+    $('detail-selection').textContent = `${pluriel(affiches, 'dépôt')} sur ${travail.total}`;
+  } else {
+    $('detail-selection').textContent = pluriel(affiches, 'dépôt');
+  }
+  $('detail-tout').checked = affiches > 0 && choisis === affiches;
+
+  // Chaque commande dit sur quoi elle porte : la sélection, ou à défaut toute
+  // la liste affichée.
+  const nombre = choisis > 0 ? choisis : affiches;
+  const objet = choisis > 0
+    ? accord(choisis, 'le dépôt sélectionné', `les ${choisis} dépôts sélectionnés`)
+    : accord(affiches, 'le dépôt', `les ${affiches} dépôts`);
+  const deLObjet = choisis > 0
+    ? accord(choisis, 'du dépôt sélectionné', `des ${choisis} dépôts sélectionnés`)
+    : accord(affiches, 'du dépôt', `des ${affiches} dépôts`);
+  $('detail-copier').textContent = `Copier ${accord(nombre, "l'URL", 'les URL')} ${deLObjet}`;
+  $('detail-csv').textContent = `Exporter ${objet} en CSV`;
+  $('detail-cloner').textContent = `Cloner ${objet}…`;
+  for (const id of ['detail-copier', 'detail-csv', 'detail-cloner']) {
+    $(id).disabled = nombre === 0;
+  }
 }
 
 plageDeCases($('detail-table').querySelector('tbody'));
@@ -2175,6 +2315,19 @@ $('detail-tout').addEventListener('change', (evenement) => {
 function selectionnes() {
   return etat.travail.depots.filter((repo) => etat.selection.has(repo.name));
 }
+
+// cibles rend ce sur quoi portent les commandes de la liste : la sélection, ou
+// à défaut tout ce que la liste montre. Rien n'étant coché au départ, la liste
+// entière est la portée ordinaire.
+function cibles() {
+  const choisis = selectionnes();
+  return choisis.length ? choisis : etat.travail.depots;
+}
+
+// Les deux menus du bandeau : ce qui sort la liste, ce qui la copie sur ce
+// poste. Leurs commandes les referment d'elles-mêmes.
+menuDeroulant('detail-exporter-ouvrir', 'detail-exporter');
+menuDeroulant('detail-clones-ouvrir', 'detail-clones');
 
 // --- ce qu'on fait au travail entier
 
@@ -2203,34 +2356,87 @@ function commandeDuTravail(bouton, action) {
 commandeDuTravail('detail-deplacer', (travail) => deplacerTravaux([travail]));
 commandeDuTravail('detail-renommer', (travail) => renommerTravail(travail));
 
-// Comparer les copies entre elles. L'écran de préparation vient d'abord : il
-// montre ce qui sera comparé et ce que cela coûtera, parce qu'une analyse
-// lancée à l'aveugle sur cinq ans de dépôts se termine mal.
-$('detail-plagiat').addEventListener('click', () => {
-  menuTravail.deplier(false);
-  tenter(() => preparerPlagiat(), 'Comparaison des copies');
-});
+// ------------------------------------------------- relevé des remises
 
-// Relever les remises du seul travail ouvert : c'est le geste courant — on
-// regarde un travail la veille de sa date cible, pas un groupe entier.
-$('detail-remises').addEventListener('click', async () => {
-  menuTravail.deplier(false);
-  const fiche = await tenter(() => api('POST',
-    `/api/classrooms/${encode(etat.groupe.scope)}/assignments/` +
-    `${encode(etat.travail.name)}/handins?refresh=1`), 'Remises');
+// Relever les remises d'un travail est un rafraîchissement de sa colonne
+// « Remise », pas une commande : il se demande d'un clic au-dessus d'elle, et
+// la page le fait d'elle-même quand un dépôt n'est pas relevé — jamais lu, ou
+// dépassé par un envoi depuis.
+$('detail-relever').append(icone('recharger'));
+$('detail-relever').setAttribute('aria-label', 'Relever les remises');
+$('detail-relever').addEventListener('click', () => releverLeTravail(true));
+
+// releverLeTravail relit les historiques des dépôts du travail. Demandé, il
+// relit tout et montre son avancement dans le panneau d'opération ; lancé par
+// la page, il ne va chercher que ce qui manque ou a été dépassé, sans rien
+// ouvrir : l'icône tourne tant qu'il lit.
+async function releverLeTravail(demande) {
+  if (etat.releveEnCours) return;
+  const travail = etat.travail;
+  const lancer = () => api('POST', `/api/classrooms/${encode(etat.groupe.scope)}/assignments/` +
+    `${encode(travail.name)}/handins` + (demande ? '?refresh=1' : ''));
+  // Un relevé que personne n'a demandé n'a pas à signaler son échec : l'icône
+  // reste là pour le demander.
+  const fiche = demande ? await tenter(lancer, 'Remises') : await lancer().catch(() => null);
   if (!fiche) return;
-  const bilans = await suivre(fiche);
-  if (!Array.isArray(bilans)) return;
-  // L'état de chaque remise — remis, en retard, non accepté — se décide au
-  // serveur, à partir de l'historique et des accès qu'il vient de relever, et
-  // le dernier envoi d'un dépôt relevé devient celui de l'étudiant. Poser le
-  // bilan sur les lignes en oublierait la moitié : il suffit de relire le
-  // travail, sans réseau, comme après l'inspection des accès.
-  rechargerTravail();
-  // La liste des travaux porte les mêmes pastilles : la laisser en arrière
-  // ferait dire deux choses différentes au même écran.
-  await releverLesRemises(false);
-});
+  etat.releveEnCours = true;
+  const bouton = $('detail-relever');
+  bouton.classList.add('tourne');
+  try {
+    if (demande) {
+      await suivre(fiche);
+    } else {
+      await suivreEnSilence(fiche, (faits, total) => {
+        bouton.title = `Relevé des remises en cours… ${faits} / ${total}`;
+      });
+    }
+  } finally {
+    etat.releveEnCours = false;
+    bouton.classList.remove('tourne');
+  }
+  // L'état de chaque remise se décide au serveur, à partir de l'historique et
+  // des accès qu'il vient de relever : il suffit de relire le travail, sans
+  // réseau. La liste des travaux porte les mêmes pastilles, et se relit de
+  // même.
+  if (etat.travail && etat.travail.id === travail.id) {
+    await chargerTravail(etat.travail, false, false);
+  }
+  rafraichirTravauxDuGroupe();
+}
+
+// releverSiBesoin lance le relevé quand un dépôt du travail n'est pas relevé.
+// Une fois par ouverture du travail : un dépôt que le jeton ne peut pas lire
+// resterait « non relevé », et le redemander à chaque affichage ne ferait que
+// répéter la même question à GitHub.
+function releverSiBesoin() {
+  const travail = etat.travail;
+  const nonReleves = travail.etats.find((item) => item.state === 'non relevé');
+  if (!nonReleves || etat.releveTente === travail.id || etat.releveEnCours) return;
+  etat.releveTente = travail.id;
+  releverLeTravail(false);
+}
+
+// dessinerReleve dit, au survol de l'icône, de quand date le plus ancien relevé
+// de la liste : c'est lui qui peut ne plus être vrai.
+function dessinerReleve() {
+  if (etat.releveEnCours) return;
+  const vus = etat.travail.depots.map((repo) => repo.seen_at).filter(Boolean).sort();
+  $('detail-relever').title = vus.length
+    ? `Relever les remises — relevé ${dateLisible(vus[0], { relatif: 'seul' })}`
+    : 'Relever les remises — jamais relevé';
+}
+
+// rafraichirTravauxDuGroupe relit la fiche du groupe, sans réseau vers
+// GitHub : ses travaux portent les pastilles des remises, et la liste ne doit
+// pas dire autre chose que la page qu'on quitte.
+async function rafraichirTravauxDuGroupe() {
+  const scope = etat.groupe && etat.groupe.scope;
+  if (!scope) return;
+  const groupe = await api('GET', `/api/classrooms/${encode(scope)}`).catch(() => null);
+  if (groupe && etat.groupe && etat.groupe.scope === scope) {
+    etat.groupe.assignments = groupe.assignments;
+  }
+}
 
 // La date cible se change ici, depuis le travail qu'elle concerne. Elle ne
 // s'écrit nulle part sur GitHub : c'est le groupe qui la retient.
@@ -2568,19 +2774,19 @@ async function supprimerDepot(repo) {
 // --- URL, clonage, mise à jour
 
 $('detail-copier').addEventListener('click', async () => {
-  const urls = selectionnes().map((repo) => repo.url).join('\n');
-  if (!urls) { message('Aucun dépôt sélectionné.', 'alerte'); return; }
+  const choisis = cibles();
+  if (!choisis.length) { message('Aucun dépôt à copier.', 'alerte'); return; }
   try {
-    await navigator.clipboard.writeText(urls);
-    message(`${pluriel(etat.selection.size, 'URL copiée', 'URL copiées')}.`);
+    await navigator.clipboard.writeText(choisis.map((repo) => repo.url).join('\n'));
+    message(`${pluriel(choisis.length, 'URL copiée', 'URL copiées')}.`);
   } catch {
     message("Copie refusée par le navigateur : utilisez l'export CSV.", 'alerte');
   }
 });
 
 $('detail-csv').addEventListener('click', () => {
-  const choisis = selectionnes();
-  if (!choisis.length) { message('Aucun dépôt sélectionné.', 'alerte'); return; }
+  const choisis = cibles();
+  if (!choisis.length) { message('Aucun dépôt à exporter.', 'alerte'); return; }
   const lignes = [['nom_complet', 'depot', 'url']];
   for (const repo of choisis) {
     lignes.push([repo.full_name || repo.student, repo.name, repo.url]);
@@ -2612,8 +2818,8 @@ function destinationProposee() {
 }
 
 $('detail-cloner').addEventListener('click', async () => {
-  const choisis = selectionnes();
-  if (!choisis.length) { message('Aucun dépôt sélectionné.', 'alerte'); return; }
+  const choisis = cibles();
+  if (!choisis.length) { message('Aucun dépôt à cloner.', 'alerte'); return; }
 
   const { zone, champ: destination } = zoneDepot({
     dossier: true, titre: 'Choisir où cloner', valeur: destinationProposee(),
@@ -7273,26 +7479,29 @@ async function preparerPlagiat(sansHistorique) {
   dessinerDemandes();
 }
 
-// dessinerAnalysesPassees liste les rapports déjà produits sur ce poste.
+// dessinerAnalysesPassees liste, en tête de l'onglet, les comparaisons déjà
+// faites de ce travail sur ce poste ; les autres restent à portée, repliées.
 //
 // Un rapport est un fichier : le rouvrir ne relance rien, ne coûte aucune
 // requête à GitHub, et montre exactement ce qui avait été mesuré ce jour-là.
 async function dessinerAnalysesPassees() {
-  const zone = $('pl-apercu-resultat');
+  const zone = $('pl-analyses');
+  vider(zone);
   const liste = await api('GET', '/api/plagiat/reports').catch(() => null);
-  if (!liste || !(liste.reports || []).length) return;
+  const rapports = (liste && liste.reports) || [];
+  const id = ((etat.travail && etat.travail.id) || '').toLowerCase();
+  const siens = rapports.filter((rapport) => (rapport.assignment || '').toLowerCase() === id);
+  const autres = rapports.filter((rapport) => !siens.includes(rapport));
 
-  const corps = el('div', { classe: 'boite-corps' });
-  for (const rapport of liste.reports) {
-    if (rapport.error) {
-      corps.append(el('p', { classe: 'note', texte: `${rapport.name} — ${rapport.error}` }));
-      continue;
-    }
-    corps.append(el('div', {},
+  const ligne = (rapport) => (rapport.error
+    ? el('p', { classe: 'note', texte: `${rapport.name} — ${rapport.error}` })
+    : el('div', {},
       el('button', {
         type: 'button', classe: 'lien',
-        texte: `${rapport.assignment || rapport.name} — `
-          + `${dateLisible(rapport.created_at)}`,
+        // Les siennes se reconnaissent à leur date ; les autres, à leur travail.
+        texte: siens.includes(rapport)
+          ? `Comparaison du ${dateLisible(rapport.created_at, { semaine: false })}`
+          : `${rapport.assignment || rapport.name} — ${dateLisible(rapport.created_at)}`,
         onclick: () => tenter(() => ouvrirRapportPlagiat(rapport.name), 'Rapport'),
       }),
       el('span', {
@@ -7301,10 +7510,19 @@ async function dessinerAnalysesPassees() {
           + (rapport.problems
             ? `, ${pluriel(rapport.problems, 'dépôt non analysé', 'dépôts non analysés')}` : ''),
       })));
-  }
+
   zone.append(el('div', { classe: 'boite' },
     el('div', { classe: 'boite-entete' },
-      el('strong', { texte: 'Analyses déjà faites sur ce poste' })), corps));
+      el('strong', { texte: 'Comparaisons de ce travail' })),
+    siens.length
+      ? el('div', { classe: 'boite-corps' }, siens.map(ligne))
+      : el('div', { classe: 'boite-vide',
+        texte: 'Aucune comparaison de ce travail sur ce poste : « Analyser » en lance une.' })));
+  if (autres.length) {
+    zone.append(el('details', { classe: 'boite' },
+      el('summary', { texte: `Autres comparaisons de ce poste (${autres.length})` }),
+      el('div', { classe: 'boite-corps' }, autres.map(ligne))));
+  }
 }
 
 // resumeExclusions dit en une ligne ce qui ne sera jamais comparé. Le détail

@@ -185,10 +185,15 @@ main { padding: 1.5rem; }
 
 .boite-vide { padding: 1.5rem .9rem; text-align: center; color: var(--texte-doux); font-size: .875rem; }
 
+/* Un intertitre sépare deux parties d'une même page — les comparaisons déjà
+   faites et la nouvelle. Il ne porte aucune action : celles de la page sont
+   dans l'en-tête. */
+h2.intertitre { margin: 2rem 0 .75rem; font-size: 1rem; }
+
 /* Les gestes lourds d'une page — renommer tous les dépôts d'un groupe,
    l'oublier — viennent à la fin, sous leur propre intitulé, dans des boîtes
    cernées de la couleur du danger : on ne doit pas y arriver en passant. */
-h2.zone-sensible { margin: 2rem 0 .75rem; font-size: 1rem; color: var(--erreur); }
+h2.intertitre.sensible { color: var(--erreur); }
 .boite.sensible { border-color: var(--erreur); }
 .boite-corps .nomenclature { margin: 0; }
 
@@ -302,6 +307,13 @@ h2.zone-sensible { margin: 2rem 0 .75rem; font-size: 1rem; color: var(--erreur);
 }
 
 .jeton.lien:hover { border-color: var(--lien); }
+
+/* La synthèse d'un travail, sous son titre : une pastille par état de remise,
+   qui filtre la liste sur lui. Celle du filtre posé se distingue par son
+   contour. */
+.synthese { margin-top: .5rem; }
+.synthese button.jeton { font: inherit; font-size: .75rem; cursor: pointer; }
+.synthese button.jeton[aria-pressed="true"] { outline: 2px solid var(--lien); outline-offset: 1px; }
 /* Le compte d'une personne, à côté de son nom : c'est leur association qu'on
    lit, et le compte se reconnaît à sa fonte. */
 .jeton .compte {
@@ -679,6 +691,15 @@ textarea.champ { resize: vertical; font-family: var(--police-mono); }
 .tableau th { color: var(--texte-doux); font-weight: 600; font-size: .8125rem; background: var(--fond-doux); }
 .tableau tbody tr:hover { background: var(--fond-doux); }
 .tableau .etroit { width: 1%; white-space: nowrap; }
+.tableau th.chiffre, .tableau td.chiffre { text-align: right; font-variant-numeric: tabular-nums; }
+/* Une colonne qui ne montre que des exceptions disparaît quand il n'y en a
+   aucune : vide sur toutes ses lignes, elle ne dirait rien. */
+.tableau.sans-invitation .col-invitation { display: none; }
+
+/* Le compte sous le nom : c'est leur association qu'on vérifie, le compte se
+   lit à sa fonte. */
+.tableau .sous-nom { display: block; font-family: var(--police-mono); font-size: .75rem;
+  color: var(--texte-doux); }
 .tableau .vide { color: var(--texte-doux); font-style: italic; }
 /* Une valeur sans espace — un nom de dépôt, une suite de comptes — ne doit pas
    élargir le tableau au point d'en pousser la dernière colonne hors de la
@@ -1380,3 +1401,14 @@ dialog .corps-dialogue > * + * { margin-top: .75rem; }
 /* Une règle tient sur une ligne : un nom, ses équivalents, son libellé. */
 .pl-regle { align-items: flex-end; margin-bottom: .6rem; }
 .pl-regle .champ-bloc { min-width: 8rem; }
+
+/* --------------------------------------------------- relevé des remises */
+
+/* Le relevé se fait au-dessus de la colonne qu'il remplit ; il tourne tant
+   qu'il lit. */
+.entete-remise { display: inline-flex; align-items: center; gap: .3rem; }
+.entete-remise .lien.icone { color: var(--texte-doux); }
+.entete-remise .lien.icone:hover { color: var(--lien); }
+.lien.icone.tourne svg { animation: tourner 1.2s linear infinite; }
+@keyframes tourner { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lien.icone.tourne svg { animation: none; } }

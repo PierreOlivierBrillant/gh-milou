@@ -336,6 +336,29 @@ func (s HandinState) Keep(etat HandinState) bool {
 	return s == AnyHandin || s == etat
 }
 
+// StateCount compte les dépôts d'un travail qui en sont au même point.
+type StateCount struct {
+	State HandinState `json:"state"`
+	Count int         `json:"count"`
+}
+
+// Tally compte des dépôts par état de remise, dans l'ordre de HandinStates :
+// c'est la synthèse qu'on lit d'un coup d'œil au-dessus d'une liste, du plus
+// tranquille au plus alarmant. Un état qu'aucun dépôt n'a n'y figure pas.
+func Tally(etats []HandinState) []StateCount {
+	comptes := make(map[HandinState]int, len(HandinStates))
+	for _, etat := range etats {
+		comptes[etat]++
+	}
+	synthese := []StateCount{}
+	for _, etat := range HandinStates {
+		if etat != AnyHandin && comptes[etat] > 0 {
+			synthese = append(synthese, StateCount{State: etat, Count: comptes[etat]})
+		}
+	}
+	return synthese
+}
+
 // StateOf dit où en est la remise d'un dépôt.
 //
 // « releve » dit que l'historique a été lu. Sans lui, rien ne se conclut : un
