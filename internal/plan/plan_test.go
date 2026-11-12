@@ -96,6 +96,25 @@ func TestBuildRefuseLesCollisions(t *testing.T) {
 	}
 }
 
+// Un gabarit qui nomme par le compte ne peut pas nommer qui n'en a pas : il le
+// dit, plutôt que de créer « tp1- » ou d'annoncer une collision sans cause.
+func TestBuildRefuseDeNommerParUnCompteAbsent(t *testing.T) {
+	gens := []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		{FullName: "Naomi Chéry", StudentID: "2100456"},
+	}
+	_, err := plan.Build(gens, reglages("{assignment}-{username}"))
+	if err == nil || !strings.Contains(err.Error(), "Naomi Chéry") ||
+		!strings.Contains(err.Error(), "{name}") {
+		t.Fatalf("refus attendu, nommant Naomi et proposant {name} : %v", err)
+	}
+
+	items, err := plan.Build(gens, reglages("{assignment}-{name}"))
+	if err != nil || len(items) != 2 || items[1].Name != "tp1-naomi-chery" {
+		t.Fatalf("par le nom, chacun a son dépôt : %+v (%v)", items, err)
+	}
+}
+
 func TestBuildRefuseUnNomDeDepotInvalide(t *testing.T) {
 	gens := []roster.Person{{FullName: "Émilie Côté", Username: "emilie-cote"}}
 	settings := reglages("{fullname} {username}")

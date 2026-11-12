@@ -3145,9 +3145,9 @@ function majApercuDuNom() {
 // --- destinataires
 
 // destinatairesPossibles rend ceux à qui le travail peut être distribué : les
-// étudiants du groupe, ou ses équipes. Chacun n'y est que par son identifiant —
-// un compte GitHub ou un nom court d'équipe —, si bien que la suite ne fait
-// plus de différence entre les deux.
+// étudiants du groupe, ou ses équipes. Chacun n'y est que par ce qui le
+// désigne — un compte GitHub, le matricule de qui n'en a pas encore, ou le nom
+// court d'une équipe —, si bien que la suite ne fait plus de différence.
 function destinatairesPossibles() {
   // Dans l'ordre alphabétique, comme les autres listes du groupe : l'ordre du
   // fichier du collège ne dit rien à qui cherche un nom à décocher.
@@ -3160,10 +3160,13 @@ function destinatairesPossibles() {
         : (equipe.members || []).map((compte) => '@' + compte).join(', '),
     })).sort((a, b) => parNom(a.titre, b.titre));
   }
+  // Sans compte, c'est le matricule qui désigne quelqu'un, comme partout
+  // ailleurs : une clé vide cochait la personne sans jamais la servir.
   return gens(etat.groupe).map((personne) => ({
-    cle: personne.username,
+    cle: personne.username || personne.student_id,
     titre: personne.full_name || '',
-    detail: '@' + personne.username,
+    detail: personne.username ? '@' + personne.username : 'compte à rattacher',
+    sansCompte: !personne.username,
   })).sort((a, b) => parNom(a.titre || a.cle, b.titre || b.cle));
 }
 
@@ -3213,7 +3216,7 @@ function dessinerDestinataires() {
     conteneur.append(el('label', { classe: 'case' }, coche,
       el('span', {},
         item.titre ? item.titre + ' ' : '',
-        el('span', { classe: 'compte', texte: item.detail }))));
+        el('span', { classe: item.sansCompte ? 'vide' : 'compte', texte: item.detail }))));
   }
   majDestinataires();
 }
@@ -3330,9 +3333,11 @@ async function rafraichirApercu() {
       corps.append(el('tr', {},
         el('td', {}, el('code', { texte: item.name })),
         el('td', { texte: item.full_name || '—' }),
+        // Une case vide se lirait comme un oubli d'affichage : sans compte,
+        // personne ne sera invité, et c'est ce que la case doit dire.
         el('td', {}, item.username
           ? el('code', { texte: '@' + item.username })
-          : el('span', { classe: 'vide', texte: '—' })),
+          : el('span', { classe: 'vide', texte: enEquipe() ? '—' : 'à rattacher' })),
         el('td', { classe: 'note', texte: item.description })));
     }
     table.hidden = apercu.items.length === 0;
@@ -3341,10 +3346,11 @@ async function rafraichirApercu() {
         `travail « ${apercu.assignment} »`;
 
     if (apercu.served && apercu.served.length) {
-      // « served » porte des comptes pour un travail individuel, des noms
-      // d'équipes pour un travail d'équipe.
+      // « served » porte des personnes pour un travail individuel, des noms
+      // d'équipes pour un travail d'équipe. Une personne se dit par son nom :
+      // qui n'a pas encore de compte n'aurait sinon qu'une arobase.
       const noms = apercu.served.map((item) =>
-        typeof item === 'string' ? item : '@' + item.username);
+        typeof item === 'string' ? item : item.full_name || '@' + item.username);
       $('deja-servis').append(el('div', { classe: 'avis',
         texte: `${pluriel(noms.length, apercu.teams ? 'équipe' : 'étudiant')} ` +
           `${accord(noms.length, 'a', 'ont')} déjà un dépôt pour ce travail : ` + noms.join(', ') +

@@ -40,6 +40,20 @@ func (i Identity) Username() string {
 	return i.Accounts[0]
 }
 
+// designations rend tout ce qui désigne la personne dans une liste de classe,
+// sous la forme de designation : chacun de ses comptes, et son matricule. Un
+// compte et un matricule n'y sont jamais confondus, même écrits pareil.
+func (i Identity) designations() []string {
+	cles := make([]string, 0, len(i.Accounts)+1)
+	for _, compte := range i.Accounts {
+		cles = append(cles, designation(roster.Person{Username: compte}))
+	}
+	if cle := designation(roster.Person{StudentID: i.StudentID}); cle != "" {
+		cles = append(cles, cle)
+	}
+	return cles
+}
+
 // Person rend la personne sous la forme que le reste attend.
 func (i Identity) Person() roster.Person {
 	autres := append([]string(nil), i.Accounts...)
@@ -122,6 +136,27 @@ func identitiesOf(people []roster.Person) []Identity {
 		}
 	}
 	return identites
+}
+
+// rang retrouve une personne parmi des identités par ce qui la désigne : l'un
+// de ses comptes d'abord, son matricule ensuite (voir Find). Un mot vide ne
+// désigne personne.
+func rang(identites []Identity, handle string) (int, bool) {
+	for position, identite := range identites {
+		if identite.Has(handle) {
+			return position, true
+		}
+	}
+	matricule := strings.TrimSpace(handle)
+	if matricule == "" {
+		return 0, false
+	}
+	for position, identite := range identites {
+		if strings.EqualFold(strings.TrimSpace(identite.StudentID), matricule) {
+			return position, true
+		}
+	}
+	return 0, false
 }
 
 // IdentityOf retrouve la personne à qui un compte appartient, avec tous ses
