@@ -129,6 +129,23 @@ func Path(value, label string) (string, error) {
 	return strings.Join(rendus, Separator), nil
 }
 
+// Assignment met en forme l'identifiant d'un travail saisi à la main.
+//
+// Celui d'un travail de la nomenclature — « a26.5N6.01.TP1 » — garde ses
+// niveaux : c'est sous lui que le registre range ses marques et sa date cible.
+// Mis en forme d'un seul tenant, il devenait « a26-5n6-01-tp1 », un préfixe
+// hérité que le registre refuse : aucune marque n'y montait. Tout autre
+// identifiant est un préfixe hérité — « tp1 », « projet-final » — et se met en
+// forme comme avant.
+func Assignment(value, label string) (string, error) {
+	if chemin, err := Path(value, label); err == nil {
+		if _, _, situe := SplitAssignment(chemin); situe {
+			return chemin, nil
+		}
+	}
+	return valid.SlugFragment(value, label)
+}
+
 // Student compose le fragment d'une personne à partir de son nom complet. Un
 // nom complet vide ne donne rien : le dépôt ne peut pas être nommé.
 func Student(fullName string) (string, error) {

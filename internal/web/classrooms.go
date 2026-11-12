@@ -537,9 +537,12 @@ func (s *Server) handleAddStudent(writer http.ResponseWriter, request *http.Requ
 			if job.Canceled() {
 				break
 			}
+			// Son dépôt est signé comme ceux du reste du groupe, et sa marque
+			// monte au même registre : sans lui, rien ne dirait à qui elle est.
 			executor := runner.New(s.deps.Client, remise.Settings, remise.Bundle)
 			report, err := executor.Run(remise.Items, runner.Options{
 				Sign:        !remise.Settings.NoSign,
+				Registry:    s.registryOf(cours.Org),
 				TeacherTeam: equipe, TeacherPermission: droit,
 				OnProgress: func(_, _ int, result runner.Result) {
 					job.Line(result.Repo+" : "+result.Status, result)
@@ -547,6 +550,9 @@ func (s *Server) handleAddStudent(writer http.ResponseWriter, request *http.Requ
 			})
 			if err != nil {
 				return nil, err
+			}
+			if report.Marks.Problem != "" {
+				job.Warn(report.Marks.Problem)
 			}
 			crees += report.Count(runner.Created)
 			existants += report.Count(runner.Existing)
@@ -1514,10 +1520,15 @@ func (s *Server) handleCreateAssignment(writer http.ResponseWriter, request *htt
 	equipe, droit := s.teacherGrant(cours)
 	job := s.jobs.Start("distribution", label, func(job *Job) (any, error) {
 		executor := runner.New(s.deps.Client, settings, bundle)
+		// Les marques délivrées montent au registre avec la distribution :
+		// c'est le seul endroit qui dira un jour à qui appartient l'une
+		// d'elles. Celles qui n'y montent pas ne font pas échouer la
+		// distribution — les dépôts sont créés —, mais cela se dit.
 		report, err := executor.Run(items, runner.Options{
 			DryRun:            body.DryRun,
 			ForceStarter:      body.ForceStarter,
 			Sign:              !settings.NoSign,
+			Registry:          s.registryOf(cours.Org),
 			TeacherTeam:       equipe,
 			TeacherPermission: droit,
 			OnProgress: func(index, total int, result runner.Result) {
@@ -1532,16 +1543,8 @@ func (s *Server) handleCreateAssignment(writer http.ResponseWriter, request *htt
 			// Voir « updateInventory » : une création se relit, un renommage se suit.
 			s.forget(cours.Org)
 		}
-		// Les marques délivrées montent au registre : c'est le seul endroit qui
-		// dira un jour à qui appartient l'une d'elles. Un échec ne fait pas
-		// échouer la distribution — les dépôts sont créés — mais il se dit.
-		if !body.DryRun && report.Signed() > 0 {
-			if _, err := s.registryOf(cours.Org).Apply(
-				registry.Mark(report.Signatures(settings.Assignment)...)); err != nil {
-				job.Warn("Marques non enregistrées au registre : " + err.Error() +
-					". Les dépôts sont signés, mais rien ne dira à qui " +
-					"appartient une marque.")
-			}
+		if report.Marks.Problem != "" {
+			job.Warn(report.Marks.Problem)
 		}
 
 		bilan := map[string]any{

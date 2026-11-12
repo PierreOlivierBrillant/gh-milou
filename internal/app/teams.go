@@ -821,14 +821,12 @@ func (s *Session) createTeams() (int, error) {
 	if err := s.configure(); err != nil {
 		return ExitOK, err
 	}
-	// « configure » slugifie l'identifiant reçu, point compris : la
-	// nomenclature le rétablit. Et le gabarit de nom n'est pas négociable pour
-	// un travail d'équipe — c'est l'équipe qui occupe le dernier niveau, là où
-	// un travail individuel met l'étudiant.
-	s.Settings.Assignment = bureau.cours.AssignmentID(travail)
-	s.Settings.NamePattern = classroom.NamePattern
-
-	items, err := plan.BuildTeams(classroom.TeamTargets(retenues), s.Settings)
+	// Le gabarit de nom n'est pas négociable pour un travail d'équipe — c'est
+	// l'équipe qui occupe le dernier niveau, là où un travail individuel met
+	// l'étudiant —, et « configure » garde l'identifiant tel que la
+	// nomenclature l'écrit : le plan suit l'une et l'autre.
+	items, err := plan.BuildTeams(classroom.TeamTargets(retenues),
+		classroom.PlanSettings(s.Settings))
 	if err != nil {
 		return ExitOK, err
 	}

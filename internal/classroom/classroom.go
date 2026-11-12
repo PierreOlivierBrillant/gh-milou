@@ -33,6 +33,20 @@ import (
 // la nomenclature elle-même, et tout le reste en dépend.
 const NamePattern = "{assignment}" + naming.Separator + "{name}"
 
+// PlanSettings rend les réglages d'un travail tels que le plan doit les suivre.
+//
+// Un travail de la nomenclature — « a26.5n6.01.tp1 » — nomme ses dépôts par
+// elle, quel que soit le gabarit retenu pour les préfixes hérités : c'est ainsi
+// que le navigateur les nomme, et que son groupe les reconnaît. Le gabarit
+// retenu n'est pas touché pour autant : il reste celui du prochain préfixe
+// hérité, que ce travail-ci n'a pas à changer.
+func PlanSettings(settings config.Settings) config.Settings {
+	if _, _, situe := naming.SplitAssignment(settings.Assignment); situe {
+		settings.NamePattern = NamePattern
+	}
+	return settings
+}
+
 // Defaults rassemble les réglages que les travaux du groupe reprennent.
 type Defaults struct {
 	DescriptionPattern string  `json:"description_pattern"`

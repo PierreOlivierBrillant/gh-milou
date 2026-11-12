@@ -802,9 +802,12 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 	}
 	executor := runner.New(session.Client, session.Settings, session.Starter).
 		WithClock(session.Sleep, session.Now)
+	// Les dépôts ajoutés sont signés comme les autres, et leurs marques montent
+	// au même registre : sans lui, rien ne dirait jamais à qui elles sont.
 	report, err := executor.Run(items, runner.Options{
 		ForceStarter: session.Options.ForceStarter,
 		Sign:         !session.Settings.NoSign,
+		Registry:     session.registryOf(m.org),
 		OnProgress: func(index, total int, result runner.Result) {
 			session.printProgress(index, total, result, width)
 		},
@@ -817,6 +820,7 @@ func (m *manageSession) addRepos(group *groups.Group) error {
 		console.OK(itoa(crees)), valid.Agree(crees, "créé"),
 		console.Info(itoa(presents)), valid.Agree(presents, "déjà présent", "déjà présents"),
 		console.Err(itoa(len(report.Failures()))))
+	session.direLesMarques(report)
 
 	reportDir, err := roster.ExpandPath(session.Options.ReportDir)
 	if err == nil {

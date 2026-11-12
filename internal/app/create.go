@@ -11,7 +11,6 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ghapi"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/naming"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/plan"
-	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/runner"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/starter"
@@ -38,7 +37,7 @@ func (s *Session) create() (int, error) {
 		return ExitOK, err
 	}
 
-	items, err := plan.Build(people, s.Settings)
+	items, err := plan.Build(people, classroom.PlanSettings(s.Settings))
 	if err != nil {
 		return ExitOK, err
 	}
@@ -406,7 +405,7 @@ func (s *Session) configure() error {
 
 	switch {
 	case options.Assignment != "":
-		assignment, err := valid.SlugFragment(options.Assignment, "Travail")
+		assignment, err := naming.Assignment(options.Assignment, "Travail")
 		if err != nil {
 			return err
 		}
@@ -416,7 +415,7 @@ func (s *Session) configure() error {
 			Title:   "Identifiant du travail (ex. tp1, projet-final)",
 			Default: s.Settings.Assignment,
 			Validate: func(value string) (string, error) {
-				return valid.SlugFragment(value, "Travail")
+				return naming.Assignment(value, "Travail")
 			},
 		})
 		if err != nil {
@@ -428,14 +427,25 @@ func (s *Session) configure() error {
 		if err != nil {
 			return err
 		}
-		assignment, err := valid.SlugFragment(value, "Travail")
+		assignment, err := naming.Assignment(value, "Travail")
 		if err != nil {
 			return err
 		}
 		s.Settings.Assignment = assignment
 	}
 
+	// Un travail de la nomenclature nomme ses dépôts par elle, comme au
+	// navigateur : son gabarit ne se choisit pas, et la question n'a pas lieu
+	// d'être posée. Un gabarit passé en drapeau ne vaut que pour un préfixe
+	// hérité, et le dire évite de croire qu'il a servi.
+	_, _, nomenclature := naming.SplitAssignment(s.Settings.Assignment)
 	switch {
+	case nomenclature:
+		if strings.TrimSpace(options.Pattern) != "" &&
+			strings.TrimSpace(options.Pattern) != classroom.NamePattern {
+			s.Console.Note("--pattern ne vaut que pour un préfixe hérité : les dépôts de "+
+				"« %s » se nomment « %s ».", s.Settings.Assignment, classroom.NamePattern)
+		}
 	case options.Pattern != "":
 		pattern, err := plan.ValidatePattern(options.Pattern, "Gabarit de nom", true)
 		if err != nil {
@@ -763,6 +773,7 @@ func (s *Session) execute(items []plan.PlannedRepo) (int, error) {
 		DryRun:            s.Options.DryRun,
 		ForceStarter:      s.Options.ForceStarter,
 		Sign:              !s.Settings.NoSign,
+		Registry:          s.registryOf(s.Settings.Org),
 		TeacherTeam:       equipe,
 		TeacherPermission: droit,
 		OnProgress: func(index, total int, result runner.Result) {
@@ -777,7 +788,7 @@ func (s *Session) execute(items []plan.PlannedRepo) (int, error) {
 		s.Cache.Forget(cache.ReposKey(s.Settings.Org))
 		s.invalidateCaches()
 	}
-	s.verserLesMarques(report)
+	s.direLesMarques(report)
 
 	s.Console.Heading("Bilan")
 	crees, presents := report.Count(runner.Created), report.Count(runner.Existing)
@@ -858,26 +869,19 @@ func pad(text string, width int) string {
 
 func itoa(value int) string { return strconv.Itoa(value) }
 
-// verserLesMarques monte au registre les marques invisibles délivrées.
+// direLesMarques dit ce qu'il est advenu des marques invisibles déposées.
 //
-// Un échec ne fait pas échouer la distribution : les dépôts sont créés, les
-// étudiants peuvent travailler. Ce qui manque est la table qui relie une marque
-// à quelqu'un — la détection verra encore deux travaux porter la même, mais
-// personne ne pourra dire de qui il s'agit. Cela mérite un avertissement, pas
-// un refus.
-func (s *Session) verserLesMarques(report *runner.Report) {
-	if s.Options.DryRun || report.Signed() == 0 {
-		return
+// C'est l'exécuteur qui les verse au registre ; il reste à dire combien de
+// dépôts en portent une, et pourquoi celles qui n'y sont pas n'y ont pas
+// monté. Une marque absente du registre ne fait pas échouer la distribution :
+// les dépôts sont créés, les étudiants peuvent travailler. Cela mérite un
+// avertissement, pas un refus.
+func (s *Session) direLesMarques(report *runner.Report) {
+	if report.Marks.Recorded > 0 {
+		s.Console.Printf("  %s d'une marque invisible.",
+			valid.Plural(report.Marks.Signed, "dépôt signé", "dépôts signés"))
 	}
-	delivrees := report.Signatures(s.Settings.Assignment)
-	if len(delivrees) == 0 {
-		return
+	if report.Marks.Problem != "" {
+		s.Console.Warning("%s", report.Marks.Problem)
 	}
-	if _, err := s.registryOf(s.Settings.Org).Apply(registry.Mark(delivrees...)); err != nil {
-		s.Console.Warning("Marques non enregistrées au registre : %v. Les dépôts "+
-			"sont signés, mais rien ne dira à qui appartient une marque.", err)
-		return
-	}
-	s.Console.Printf("  %s d'une marque invisible.",
-		valid.Plural(report.Signed(), "dépôt signé", "dépôts signés"))
 }

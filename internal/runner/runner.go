@@ -1,7 +1,8 @@
 // Package runner applique un plan de génération : création des dépôts, dépôt des
 // fichiers de départ, puis attribution de l'accès — une invitation à la
 // personne pour un travail individuel, un partage avec l'équipe pour un travail
-// d'équipe.
+// d'équipe. Les marques qu'il dépose en chemin montent ensuite au registre de
+// l'organisation.
 package runner
 
 import (
@@ -15,7 +16,9 @@ import (
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/config"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ghapi"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/naming"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/plan"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/signature"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/starter"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
@@ -79,6 +82,22 @@ type Report struct {
 	StartedAt  string   `json:"started_at"`
 	DryRun     bool     `json:"dry_run"`
 	Results    []Result `json:"results"`
+	// Marks dit ce qu'il est advenu des marques déposées : une marque qui n'a
+	// pas monté au registre ne désignera jamais personne, et le bilan doit
+	// le dire.
+	Marks Delivery `json:"marks,omitzero"`
+}
+
+// Delivery dit ce qu'il est advenu des marques d'une distribution : combien de
+// dépôts ont été signés, combien de marques ont monté au registre, et pourquoi
+// les autres n'y sont pas. Le terminal et le navigateur en disent la même
+// phrase.
+type Delivery struct {
+	Signed   int `json:"signed"`
+	Recorded int `json:"recorded"`
+	// Problem dit pourquoi des marques n'ont pas monté au registre. Vide, elles
+	// y sont toutes.
+	Problem string `json:"problem,omitempty"`
 }
 
 // Count compte les résultats d'un statut donné.
@@ -150,21 +169,31 @@ func (r *Report) Save(directory string) (string, string, error) {
 	return jsonPath, csvPath, nil
 }
 
-// Signatures rend les marques délivrées, prêtes à monter au registre.
+// Signatures rend les marques délivrées, prêtes à monter au registre, pour le
+// travail donné.
 //
-// Elles n'y montent pas d'elles-mêmes : c'est l'appelant qui décide, parce que
-// c'est lui qui sait dans quelle organisation et pour quel travail. Une marque
-// qu'on ne verserait pas resterait dans le dépôt sans que personne ne puisse
-// dire de qui elle est — la détection la verrait encore en double, mais
-// s'arrêterait là.
+// Une marque qu'on ne verserait pas resterait dans le dépôt sans que personne
+// ne puisse dire de qui elle est — la détection la verrait encore en double,
+// mais s'arrêterait là. C'est pourquoi l'exécuteur les verse lui-même dès
+// qu'on lui donne le registre : voir « deliver ».
 //
 // Chacun y est désigné comme dans sa liste de classe : par son compte, et à
 // défaut par son matricule. Une inscrite sans compte — toute cohorte importée
 // du collège — en reçoit donc une comme les autres, et c'est maintenant
 // qu'elle doit monter : le jeton est tiré au hasard, rien ne le retrouverait
-// une fois son compte rattaché.
+// une fois son compte rattaché. Le dépôt d'une équipe, lui, ne désigne aucun
+// de ses membres : sa marque se range sous l'équipe.
 func (r *Report) Signatures(assignment string) []signature.Issued {
+	delivrees, _ := r.marques(assignment)
+	return delivrees
+}
+
+// marques sépare les marques déposées : celles qui désignent quelqu'un, prêtes
+// à monter, et les dépôts dont la marque ne désigne personne — ceux d'une
+// personne qui n'a ni compte ni matricule.
+func (r *Report) marques(assignment string) ([]signature.Issued, []Result) {
 	delivrees := make([]signature.Issued, 0, len(r.Results))
+	var anonymes []Result
 	for _, result := range r.Results {
 		if result.Signature == "" {
 			continue
@@ -177,14 +206,83 @@ func (r *Report) Signatures(assignment string) []signature.Issued {
 			delivree.Username = result.Username
 		case strings.TrimSpace(result.StudentID) != "":
 			delivree.StudentID = result.StudentID
+		case strings.TrimSpace(result.Team) != "":
+			delivree.Team = result.Team
 		default:
-			// Ni compte ni matricule : c'est un dépôt d'équipe, qui ne désigne
-			// personne en particulier. Sa marque n'a pas encore où se ranger.
+			anonymes = append(anonymes, result)
 			continue
 		}
 		delivrees = append(delivrees, delivree)
 	}
-	return delivrees
+	return delivrees, anonymes
+}
+
+// sansAttribution dit ce que coûte une marque qui n'a pas monté au registre.
+const sansAttribution = "Les dépôts sont signés, mais rien ne dira à qui appartient une marque."
+
+// deliver verse au registre les marques que la distribution vient de déposer,
+// et dit ce qu'il en est advenu.
+//
+// Un échec ne fait pas échouer la distribution : les dépôts sont créés, les
+// étudiants peuvent travailler. Ce qui manque est la table qui relie une marque
+// à quelqu'un — la détection verra encore deux travaux porter la même, mais
+// personne ne pourra dire de qui il s'agit. Cela se dit, sans rien refuser.
+func (r *Report) deliver(registre *registry.Store) Delivery {
+	versement := Delivery{Signed: r.Signed()}
+	if versement.Signed == 0 {
+		return versement
+	}
+	// Le registre range une marque sous son travail, et un préfixe hérité —
+	// « tp1 » — ne dit pas de quel groupe il est : deux groupes qui ont
+	// chacun le leur s'y confondraient. Le registre le refuserait ; mieux vaut
+	// le dire en clair que de répéter son refus.
+	if _, _, situe := naming.SplitAssignment(r.Assignment); !situe {
+		versement.Problem = fmt.Sprintf("Marques non enregistrées au registre : il ne les "+
+			"range que sous un travail nommé « session%[2]scours%[2]sgroupe%[2]stravail », "+
+			"et « %[1]s » n'en est pas un. %[3]s",
+			r.Assignment, naming.Separator, sansAttribution)
+		return versement
+	}
+	if registre == nil {
+		versement.Problem = "Marques non enregistrées : aucun registre ne les reçoit. " +
+			sansAttribution
+		return versement
+	}
+	delivrees, anonymes := r.marques(r.Assignment)
+	if len(delivrees) > 0 {
+		if _, err := registre.Apply(registry.Mark(delivrees...)); err != nil {
+			// L'erreur finit souvent par un point : la phrase qui la reprend ne
+			// doit pas en ajouter un second.
+			versement.Problem = "Marques non enregistrées au registre : " +
+				strings.TrimSuffix(strings.TrimSpace(err.Error()), ".") + ". " + sansAttribution
+			return versement
+		}
+		versement.Recorded = len(delivrees)
+	}
+	if len(anonymes) > 0 {
+		versement.Problem = anonymat(anonymes)
+	}
+	return versement
+}
+
+// anonymat dit quelles marques ne montent pas faute de rien qui désigne leur
+// destinataire. Un registre range une personne sous son compte ou son
+// matricule, jamais sous son nom : deux homonymes s'y confondraient.
+func anonymat(anonymes []Result) string {
+	noms := make([]string, 0, len(anonymes))
+	for index, result := range anonymes {
+		if index == 5 {
+			noms = append(noms, "…")
+			break
+		}
+		noms = append(noms, result.FullName)
+	}
+	return valid.Agree(len(anonymes),
+		fmt.Sprintf("%s n'a ni compte ni matricule : la marque de son dépôt ne monte "+
+			"pas au registre, et rien ne dira à qui elle est.", noms[0]),
+		fmt.Sprintf("%s n'ont ni compte ni matricule (%s) : les marques de leurs dépôts "+
+			"ne montent pas au registre, et rien ne dira à qui elles sont.",
+			valid.Plural(len(anonymes), "personne"), strings.Join(noms, ", ")))
 }
 
 // Signed compte les dépôts signés.
@@ -208,7 +306,13 @@ type Options struct {
 	// Sign dépose dans le README de chaque dépôt une marque invisible, propre à
 	// son destinataire. Deux travaux qui portent la même marque n'ont pas
 	// d'explication innocente ; l'absence de marque, elle, ne prouve rien.
-	Sign       bool
+	Sign bool
+	// Registry est le registre de l'organisation, où montent les marques
+	// déposées : c'est le seul endroit qui dira un jour à qui l'une d'elles
+	// appartient. L'exécuteur les y verse lui-même à la fin du lot, et le
+	// bilan dit ce qu'il en est advenu : un chemin qui signe ne peut plus
+	// oublier de les verser, seulement de donner le registre — et cela se dit.
+	Registry   *registry.Store
 	OnProgress ProgressFunc
 	// TeacherTeam est l'équipe enseignante du groupe, quand il est cloisonné.
 	// Chaque dépôt créé lui est accordé d'emblée : sans cela, un groupe
@@ -273,6 +377,11 @@ func (e *Executor) Run(items []plan.PlannedRepo, options Options) (*Report, erro
 			index+1 < total && e.settings.DelaySeconds > 0 {
 			e.sleep(time.Duration(e.settings.DelaySeconds * float64(time.Second)))
 		}
+	}
+	// Les marques montent d'un seul commit, une fois le lot traité : une par
+	// dépôt ferait autant d'écritures au registre que de dépôts.
+	if options.Sign && !options.DryRun {
+		report.Marks = report.deliver(options.Registry)
 	}
 	return report, nil
 }

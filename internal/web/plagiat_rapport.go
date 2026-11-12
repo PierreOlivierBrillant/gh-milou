@@ -262,8 +262,9 @@ func (s *Server) porteursDeMarques(report *plagiarism.Report) map[string]any {
 		}
 		porteurs[signal.Detail] = map[string]any{
 			"username": titulaire.Username, "full_name": titulaire.FullName,
-			"student_id": titulaire.StudentID, "phrase": titulaire.Phrase(),
-			"assignment": titulaire.Issued.Assignment, "issued_at": titulaire.Issued.IssuedAt,
+			"student_id": titulaire.StudentID, "team": titulaire.Team,
+			"phrase": titulaire.Phrase(), "assignment": titulaire.Issued.Assignment,
+			"issued_at": titulaire.Issued.IssuedAt,
 		}
 	}
 	return porteurs
