@@ -159,16 +159,16 @@ func (a annuaire) Lookup(fragment string) (roster.Person, bool) {
 func TestUnCompteSansNomCompletResteUnEtudiantDuGroupe(t *testing.T) {
 	inventaire := depots(
 		"a26.5n6.01.tp1.emilie-cote",
-		"a26.5n6.01.tp1.aleksilepaj",
+		"a26.5n6.01.tp1.aleksilesaj",
 		"a26.5n6.01.tp1.visiteur-inconnu",
 	)
 	connus := annuaire{
 		"emilie-cote": roster.Person{FullName: "Émilie Côté", Username: "emilie-cote"},
-		"aleksilepaj": roster.Person{Username: "aleksilepaj"},
+		"aleksilesaj": roster.Person{Username: "aleksilesaj"},
 	}
 	cours := groupe("a26", "5n6", "01", nil).Enrich(connus, inventaire)
 
-	sansNom, inscrit := cours.Find("aleksilepaj")
+	sansNom, inscrit := cours.Find("aleksilesaj")
 	if !inscrit {
 		t.Fatalf("étudiants déduits : %v", cours.Students)
 	}
@@ -177,7 +177,7 @@ func TestUnCompteSansNomCompletResteUnEtudiantDuGroupe(t *testing.T) {
 	}
 	// Son dépôt lui est rattaché : il compte parmi ceux du groupe, et non
 	// parmi les orphelins.
-	if _, sien := cours.StudentOf("a26.5n6.01.tp1.aleksilepaj"); !sien {
+	if _, sien := cours.StudentOf("a26.5n6.01.tp1.aleksilesaj"); !sien {
 		t.Error("le dépôt doit être rattaché à son étudiant")
 	}
 	travaux := cours.Assignments(inventaire, nil)
@@ -217,21 +217,21 @@ func TestRecipientsEcarteLesDejaServis(t *testing.T) {
 // commun, elles n'en ont aucun.
 func TestRecipientsDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
 	cours := groupe("a26", "5n6", "01", append(personnes("Jean-Luc Picard", "jlpicard"),
-		roster.Person{FullName: "Naomi Chéry", StudentID: "2100456"},
+		roster.Person{FullName: "Nadia Pépin", StudentID: "2100110"},
 		roster.Person{FullName: "Aminata Diallo", StudentID: "2100789"},
 	))
-	inventaire := depots("a26.5n6.01.tp1.naomi-chery")
+	inventaire := depots("a26.5n6.01.tp1.nadia-pepin")
 
 	attendus, servis := cours.Recipients("a26.5n6.01.tp1", inventaire,
-		[]string{"2100456", "2100789"})
-	if lesNoms(attendus) != "Aminata Diallo" || lesNoms(servis) != "Naomi Chéry" {
+		[]string{"2100110", "2100789"})
+	if lesNoms(attendus) != "Aminata Diallo" || lesNoms(servis) != "Nadia Pépin" {
 		t.Errorf("sélection par matricule — attendus : %s ; servis : %s",
 			lesNoms(attendus), lesNoms(servis))
 	}
 
 	attendus, _ = cours.Recipients("a26.5n6.01.tp1", inventaire, nil)
 	if lesNoms(attendus) != "Jean-Luc Picard, Aminata Diallo" {
-		t.Errorf("sans sélection, tout le groupe attend sauf Naomi : %s", lesNoms(attendus))
+		t.Errorf("sans sélection, tout le groupe attend sauf Nadia : %s", lesNoms(attendus))
 	}
 
 	// Une désignation vide ne désigne personne : c'est elle que l'aperçu
@@ -281,17 +281,17 @@ func TestPendingReconnaitQuiADejaSonDepot(t *testing.T) {
 // recevrait un second sous son nom corrigé.
 func TestPendingSansCompteEtSousUnNomCorrige(t *testing.T) {
 	liste := append(personnes("Jean-Luc Picard", "jlpicard"),
-		roster.Person{FullName: "Naomi Chéry", StudentID: "2100456"},
+		roster.Person{FullName: "Nadia Pépin", StudentID: "2100110"},
 		roster.Person{FullName: "Aminata Diallo", StudentID: "2100789"},
 	)
 	travail := groups.Build("a26.5n6.01.tp1",
-		depots("a26.5n6.01.tp1.naomi-chery", "a26.5n6.01.tp1.jean-luc-picar"))
+		depots("a26.5n6.01.tp1.nadia-pepin", "a26.5n6.01.tp1.jean-luc-picar"))
 	connus := annuaire{
 		"jean-luc-picar": {FullName: "Jean-Luc Picar", Username: "jlpicard"},
 	}
 
 	attendus, servis := classroom.Pending(liste, travail, connus)
-	if lesNoms(servis) != "Jean-Luc Picard, Naomi Chéry" || lesNoms(attendus) != "Aminata Diallo" {
+	if lesNoms(servis) != "Jean-Luc Picard, Nadia Pépin" || lesNoms(attendus) != "Aminata Diallo" {
 		t.Errorf("avec le registre — attendus : %s ; servis : %s",
 			lesNoms(attendus), lesNoms(servis))
 	}
@@ -659,15 +659,15 @@ func TestCompteMarqueRejointLeSien(t *testing.T) {
 	}
 }
 
-// Sans le compte de base pour l'attester, la marque ne prouve rien : « LT-9 »
+// Sans le compte de base pour l'attester, la marque ne prouve rien : « CO-7 »
 // est un vrai compte, et le lui retirer inventerait quelqu'un.
 func TestCompteQuiFinitParUnNombreEstLaisseIntact(t *testing.T) {
-	cours := groupe("a26", "5n6", "01", personnes("Lukas Therrien", "LT-9"))
+	cours := groupe("a26", "5n6", "01", personnes("Claire Otis", "CO-7"))
 	valide, err := cours.Validate()
 	if err != nil {
 		t.Fatalf("validation : %v", err)
 	}
-	if len(valide.Students) != 1 || valide.Students[0].Username != "LT-9" {
+	if len(valide.Students) != 1 || valide.Students[0].Username != "CO-7" {
 		t.Fatalf("liste : %+v", valide.Students)
 	}
 }
@@ -720,11 +720,11 @@ func TestMagasinCorrigeUnCompteMarqueDUnAutreGroupe(t *testing.T) {
 	chemin := filepath.Join(t.TempDir(), "groupes.json")
 	magasin := classroom.Open(chemin)
 	if _, err := magasin.Save(groupe("h24", "4n6", "1020",
-		personnes("Alexis Lepage", "aleksilepaj"))); err != nil {
+		personnes("Alexis Lesage", "aleksilesaj"))); err != nil {
 		t.Fatalf("enregistrement : %v", err)
 	}
 	if _, err := magasin.Save(groupe("a24", "5n6", "1030",
-		personnes("Alexis Lepage", "aleksilepaj-1"))); err != nil {
+		personnes("Alexis Lesage", "aleksilesaj-1"))); err != nil {
 		t.Fatalf("enregistrement : %v", err)
 	}
 
@@ -732,7 +732,7 @@ func TestMagasinCorrigeUnCompteMarqueDUnAutreGroupe(t *testing.T) {
 	if !present {
 		t.Fatal("groupe introuvable")
 	}
-	if len(relu.Students) != 1 || relu.Students[0].Username != "aleksilepaj" {
+	if len(relu.Students) != 1 || relu.Students[0].Username != "aleksilesaj" {
 		t.Fatalf("liste relue : %+v", relu.Students)
 	}
 }

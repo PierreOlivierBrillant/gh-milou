@@ -189,7 +189,7 @@ func TestPlusieursEtudiantsDeplacesEnsemble(t *testing.T) {
 func TestDeplacerQuiNAQueSonMatricule(t *testing.T) {
 	state := fakegh.NewState()
 	for _, nom := range []string{
-		"a26.5n6.01.tp1.jean-luc-picard", "a26.5n6.01.tp1.naomi-chery",
+		"a26.5n6.01.tp1.jean-luc-picard", "a26.5n6.01.tp1.nadia-pepin",
 		"a26.5n6.01.tp1.claire-otis",
 	} {
 		state.AddRepo("acme", nom, true)
@@ -197,36 +197,36 @@ func TestDeplacerQuiNAQueSonMatricule(t *testing.T) {
 	h := nouveau(t, state)
 	depart := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
 	h.poserListe(depart, inscritParCompte("Jean-Luc Picard", "jlpicard"),
-		inscritParMatricule("Naomi Chéry", "2100456"),
+		inscritParMatricule("Nadia Pépin", "2100110"),
 		inscritParMatricule("Claire Otis", "2100789"))
 	arrivee := h.groupe("a26", "5n6", "02", "Aminata Diallo", "aminata-d")
 
 	// Le dialogue compte les dépôts que la ligne lui montre : sans eux, il
 	// annonçait n'en renommer aucun, puis les renommait.
-	if naomi := h.ligneDe(depart, "Naomi Chéry"); len(naomi.Assignments) != 1 {
-		t.Errorf("la ligne de Naomi doit montrer son dépôt : %+v", naomi)
+	if nadia := h.ligneDe(depart, "Nadia Pépin"); len(nadia.Assignments) != 1 {
+		t.Errorf("la ligne de Nadia doit montrer son dépôt : %+v", nadia)
 	}
 
 	bilan := h.travail(http.MethodPost, "/api/classrooms/"+depart+"/students/move",
-		map[string]any{"usernames": []string{"2100456"}, "target": arrivee})
+		map[string]any{"usernames": []string{"2100110"}, "target": arrivee})
 	if bilan["status"] != "terminé" {
 		t.Fatalf("travail %v : %v", bilan["status"], bilan["failure"])
 	}
-	if bilan["label"] != "Déplacement de Naomi Chéry vers « Groupe 02 »" {
+	if bilan["label"] != "Déplacement de Nadia Pépin vers « Groupe 02 »" {
 		t.Errorf("titre du journal : %v", bilan["label"])
 	}
 	resultat, _ := bilan["result"].(map[string]any)
 	if resultat["count"] != float64(1) || resultat["renamed"] != float64(1) {
 		t.Fatalf("bilan : %+v", resultat)
 	}
-	if designees := fmt.Sprint(resultat["moved"]); designees != "[2100456]" {
-		t.Errorf("le bilan doit désigner Naomi par son matricule : %s", designees)
+	if designees := fmt.Sprint(resultat["moved"]); designees != "[2100110]" {
+		t.Errorf("le bilan doit désigner Nadia par son matricule : %s", designees)
 	}
 
 	noms := h.depots()
 	sort.Strings(noms)
 	attendu := "a26.5n6.01.tp1.claire-otis,a26.5n6.01.tp1.jean-luc-picard," +
-		"a26.5n6.02.tp1.naomi-chery"
+		"a26.5n6.02.tp1.nadia-pepin"
 	if strings.Join(noms, ",") != attendu {
 		t.Fatalf("dépôts : %v", noms)
 	}
@@ -234,12 +234,12 @@ func TestDeplacerQuiNAQueSonMatricule(t *testing.T) {
 	if reste := nomsDe(h.liste(depart)); reste != "Claire Otis, Jean-Luc Picard" {
 		t.Errorf("groupe de départ : %s", reste)
 	}
-	if arrives := nomsDe(h.liste(arrivee)); arrives != "Aminata Diallo, Naomi Chéry" {
+	if arrives := nomsDe(h.liste(arrivee)); arrives != "Aminata Diallo, Nadia Pépin" {
 		t.Errorf("groupe d'arrivée : %s", arrives)
 	}
-	if naomi := h.ligneDe(arrivee, "Naomi Chéry"); naomi.StudentID != "2100456" ||
-		len(naomi.Assignments) != 1 || naomi.Assignments[0].Repo != "a26.5n6.02.tp1.naomi-chery" {
-		t.Errorf("ligne de Naomi à l'arrivée : %+v", naomi)
+	if nadia := h.ligneDe(arrivee, "Nadia Pépin"); nadia.StudentID != "2100110" ||
+		len(nadia.Assignments) != 1 || nadia.Assignments[0].Repo != "a26.5n6.02.tp1.nadia-pepin" {
+		t.Errorf("ligne de Nadia à l'arrivée : %+v", nadia)
 	}
 }
 

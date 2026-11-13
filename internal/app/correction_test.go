@@ -146,32 +146,32 @@ func TestCorrigerUnEtudiantDepuisLaGestion(t *testing.T) {
 	}
 }
 
-// omnivox déclare un groupe tel qu'une liste du collège l'inscrit : Naomi Chéry
+// omnivox déclare un groupe tel qu'une liste du collège l'inscrit : Nadia Pépin
 // n'y a que son matricule, et son dépôt de « tp1 » a été créé sans elle. Son
 // compte existe sur GitHub ; il reste à le lui rattacher.
 func omnivox(t *testing.T) *harnais {
 	t.Helper()
 	state := fakegh.NewState()
-	state.Users["nchery"] = "Naomi Chéry"
-	state.AddRepo("acme", "a26.5n6.01.tp1.naomi-chery", true)
+	state.Users["npepin"] = "Nadia Pépin"
+	state.AddRepo("acme", "a26.5n6.01.tp1.nadia-pepin", true)
 	state.AddRepo("acme", "a26.5n6.01.tp1.jean-luc-picard", true)
 	h := nouveau(t, state)
 	h.declarer(classroom.Classroom{
 		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
 		Students: []roster.Person{
 			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-			{FullName: "Naomi Chéry", StudentID: "2100456"},
+			{FullName: "Nadia Pépin", StudentID: "2100110"},
 		},
 	})
 	return h
 }
 
-// rattacheeANchery vérifie ce que le rattachement laisse derrière lui : une
-// seule ligne pour Naomi, sous son compte et avec son matricule, et un registre
+// rattacheeANpepin vérifie ce que le rattachement laisse derrière lui : une
+// seule ligne pour Nadia, sous son compte et avec son matricule, et un registre
 // qui a appris l'un avec l'autre — c'est ce qui rapporte à ce compte ce qui
 // avait été délivré au matricule. Son nom, que le registre porte désormais, n'a
 // plus à être redit par la liste du poste.
-func rattacheeANchery(t *testing.T, h *harnais) {
+func rattacheeANpepin(t *testing.T, h *harnais) {
 	t.Helper()
 	cours, existe := classroom.Open(classroom.PathNextTo(h.Reglages)).Find("acme", "a26.5n6.01")
 	if !existe {
@@ -180,13 +180,13 @@ func rattacheeANchery(t *testing.T, h *harnais) {
 	if len(cours.Students) != 2 {
 		t.Fatalf("liste du groupe : %d lignes\n%s", len(cours.Students), h.groupesLocaux())
 	}
-	if naomi, inscrite := cours.Find("nchery"); !inscrite || naomi.StudentID != "2100456" {
-		t.Fatalf("Naomi doit garder son matricule sous son compte :\n%s", h.groupesLocaux())
+	if nadia, inscrite := cours.Find("npepin"); !inscrite || nadia.StudentID != "2100110" {
+		t.Fatalf("Nadia doit garder son matricule sous son compte :\n%s", h.groupesLocaux())
 	}
 	contenu := h.State.Files("acme/"+registry.RepoName, registry.Branch)[registry.UsersFile]
 	set, _ := registry.Decode([]byte(contenu))
-	fiche, connue := set.PersonOf("nchery")
-	if !connue || fiche.StudentID != "2100456" || fiche.FullName != "Naomi Chéry" {
+	fiche, connue := set.PersonOf("npepin")
+	if !connue || fiche.StudentID != "2100110" || fiche.FullName != "Nadia Pépin" {
 		t.Fatalf("le registre doit apprendre le matricule avec le compte : %+v\n%s",
 			fiche, contenu)
 	}
@@ -197,17 +197,17 @@ func rattacheeANchery(t *testing.T, h *harnais) {
 // — « @ n'est pas dans « Groupe 01 ». » — faute d'un compte pour la désigner.
 func TestRattacherUnPremierCompteParLeMatricule(t *testing.T) {
 	h := omnivox(t)
-	corriger(h, "a26.5n6.01", "2100456")
-	h.Options.StudentAccount = "nchery"
+	corriger(h, "a26.5n6.01", "2100110")
+	h.Options.StudentAccount = "npepin"
 	h.Options.Yes = true
 
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Fiche de Naomi Chéry dans « a26.5n6.01 »", "à rattacher → @nchery",
-		"Fiche de @nchery corrigée")
+	h.contient("Fiche de Nadia Pépin dans « a26.5n6.01 »", "à rattacher → @npepin",
+		"Fiche de @npepin corrigée")
 	h.absent("@ ", "n'est pas dans")
-	rattacheeANchery(t, h)
+	rattacheeANpepin(t, h)
 }
 
 // L'assistant la propose aussi, désignée par son matricule : il l'écartait,
@@ -221,27 +221,27 @@ func TestRattacherUnPremierCompteDepuisLaGestion(t *testing.T) {
 
 	// Quel étudiant ; son nom (inchangé) ; son premier compte ; ses dépôts
 	// aussi ; confirmation ; et on s'en va.
-	code, scripte := h.script("groupe", "etudiant", "2100456", "", "nchery", "oui", "oui",
+	code, scripte := h.script("groupe", "etudiant", "2100110", "", "npepin", "oui", "oui",
 		"quitter")
 	if code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
 	menu, propose := scripte.MenuFor("Quel étudiant")
-	if !propose || !strings.Contains(strings.Join(menu.Labels(), "\n"), "Naomi Chéry (2100456)") {
-		t.Fatalf("Naomi doit être proposée par son matricule : %+v", menu)
+	if !propose || !strings.Contains(strings.Join(menu.Labels(), "\n"), "Nadia Pépin (2100110)") {
+		t.Fatalf("Nadia doit être proposée par son matricule : %+v", menu)
 	}
 	if posees := strings.Join(scripte.Asked, "\n"); !strings.Contains(posees,
-		"Corriger la fiche de Naomi Chéry ?") {
+		"Corriger la fiche de Nadia Pépin ?") {
 		t.Errorf("la confirmation doit la nommer :\n%s", posees)
 	}
-	h.contient("Fiche de Naomi Chéry dans", "à rattacher → @nchery", "rien à renommer",
-		"Fiche de @nchery corrigée")
+	h.contient("Fiche de Nadia Pépin dans", "à rattacher → @npepin", "rien à renommer",
+		"Fiche de @npepin corrigée")
 	h.absent("@ ")
 	if noms := h.depots(); strings.Join(noms, ",") !=
-		"a26.5n6.01.tp1.jean-luc-picard,a26.5n6.01.tp1.naomi-chery" {
+		"a26.5n6.01.tp1.jean-luc-picard,a26.5n6.01.tp1.nadia-pepin" {
 		t.Fatalf("dépôts : %v", noms)
 	}
-	rattacheeANchery(t, h)
+	rattacheeANpepin(t, h)
 }
 
 // Nommer depuis la fiche ne renomme aucun dépôt ; la fiche dit donc, groupe par

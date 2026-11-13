@@ -97,11 +97,11 @@ func TestUnCollegueVoitLaListeDuGroupe(t *testing.T) {
 func TestUnCompteSansNomFigureDansLaListeDuGroupe(t *testing.T) {
 	state := fakegh.NewState()
 	state.AddRepo("acme", "a26.5n6.01.tp1.emilie-cote", true)
-	state.AddRepo("acme", "a26.5n6.01.tp1.aleksilepaj", true)
+	state.AddRepo("acme", "a26.5n6.01.tp1.aleksilesaj", true)
 
 	premiere := nouveau(t, state)
 	place := premiere.groupe("a26", "5N6", "01",
-		"Émilie Côté", "emilie-cote", "", "aleksilepaj")
+		"Émilie Côté", "emilie-cote", "", "aleksilesaj")
 
 	// Le collègue n'a rien déclaré : tout ce qu'il voit du groupe vient du
 	// registre et des dépôts.
@@ -122,10 +122,10 @@ func TestUnCompteSansNomFigureDansLaListeDuGroupe(t *testing.T) {
 	}
 	// Un nom qui manque se range en tête : c'est ce qu'on vient y chercher.
 	sansNom := vue.Students[0]
-	if sansNom.Username != "aleksilepaj" || sansNom.FullName != "" {
+	if sansNom.Username != "aleksilesaj" || sansNom.FullName != "" {
 		t.Fatalf("étudiant sans nom = %+v", sansNom)
 	}
-	if len(sansNom.Assignments) != 1 || sansNom.Assignments[0].Repo != "a26.5n6.01.tp1.aleksilepaj" {
+	if len(sansNom.Assignments) != 1 || sansNom.Assignments[0].Repo != "a26.5n6.01.tp1.aleksilesaj" {
 		t.Errorf("son dépôt n'a pas suivi : %+v", sansNom.Assignments)
 	}
 	if vue.MissingNames != 1 {
@@ -135,11 +135,11 @@ func TestUnCompteSansNomFigureDansLaListeDuGroupe(t *testing.T) {
 	// Et il peut le nommer de là, sans avoir rien déclaré : c'est ce que la
 	// liste promet en le montrant.
 	collegue.json(http.MethodPost, "/api/classrooms/"+place+"/students/rename", map[string]any{
-		"username": "aleksilepaj", "full_name": "Aleksi Lepaj", "repos": false,
+		"username": "aleksilesaj", "full_name": "Aleksi Lesaj", "repos": false,
 	}, nil)
 	collegue.json(http.MethodGet, "/api/classrooms/"+place+"/students", nil, &vue)
 	for _, ligne := range vue.Students {
-		if ligne.Username == "aleksilepaj" && ligne.FullName != "Aleksi Lepaj" {
+		if ligne.Username == "aleksilesaj" && ligne.FullName != "Aleksi Lesaj" {
 			t.Fatalf("nom retenu = %q", ligne.FullName)
 		}
 	}

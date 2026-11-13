@@ -633,10 +633,10 @@ func desindexer(t *testing.T, h *harnais, travail string) {
 func TestUneMarqueDelivreeParMatriculeSeNommeAuTerminal(t *testing.T) {
 	for _, cas := range []struct{ nom, etudiants, attendu string }{
 		{"sans compte", `{"version": 2, "users": []}`,
-			"délivrée au matricule 2100456 pour « a26.5n6.01.tp1 »"},
-		{"compte rattaché", `{"version": 2, "users": [{"username": "nchery", ` +
-			`"full_name": "Naomi Chéry", "student_id": "2100456", "is_teacher": false}]}`,
-			"délivrée à Naomi Chéry pour « a26.5n6.01.tp1 »"},
+			"délivrée au matricule 2100110 pour « a26.5n6.01.tp1 »"},
+		{"compte rattaché", `{"version": 2, "users": [{"username": "npepin", ` +
+			`"full_name": "Nadia Pépin", "student_id": "2100110", "is_teacher": false}]}`,
+			"délivrée à Nadia Pépin pour « a26.5n6.01.tp1 »"},
 	} {
 		t.Run(cas.nom, func(t *testing.T) {
 			h := groupeRemis(t)
@@ -644,7 +644,7 @@ func TestUneMarqueDelivreeParMatriculeSeNommeAuTerminal(t *testing.T) {
 			if err != nil {
 				t.Fatalf("tirage : %v", err)
 			}
-			// Naomi a reçu cette marque dans son README ; Émilie et Jean-Luc
+			// Nadia a reçu cette marque dans son README ; Émilie et Jean-Luc
 			// l'ont recopié avec le reste.
 			readme := string(signature.Sign([]byte("# Travail pratique 1\n"), tirage))
 			for _, depot := range []string{
@@ -659,7 +659,7 @@ func TestUneMarqueDelivreeParMatriculeSeNommeAuTerminal(t *testing.T) {
 			h.State.SeedCommit("acme/.cohorte", map[string]string{
 				"etudiants.json": cas.etudiants,
 				"signatures.json": `{"version": 1, "issued": [{"assignment": ` +
-					`"a26.5n6.01.tp1", "student_id": "2100456", "token": "` +
+					`"a26.5n6.01.tp1", "student_id": "2100110", "token": "` +
 					signature.Text(tirage) + `"}]}`,
 			}, "main")
 

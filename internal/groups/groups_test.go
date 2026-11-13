@@ -291,7 +291,7 @@ func TestSplitRetireLeCompteQuiTermineLeNom(t *testing.T) {
 	}{
 		// Le cas qui motive la fonction : deux tirets dans le travail, un dans
 		// le nom du compte, et rien dans le nom seul ne dit où couper.
-		{"kickmyb-firebase-Walid7Akk", "Walid7Akk", "kickmyb-firebase", true},
+		{"kickmyb-firebase-Wasim7Zed", "Wasim7Zed", "kickmyb-firebase", true},
 		{"tp1-jlpicard", "jlpicard", "tp1", true},
 		{"tp1-JLPicard", "jlpicard", "tp1", true},
 		{"a26.5n6.01.tp1.emilie-cote", "emilie-cote", "a26.5n6.01.tp1", true},
@@ -312,16 +312,16 @@ func TestSplitRetireLeCompteQuiTermineLeNom(t *testing.T) {
 
 func TestOwnerPrefereLeCompteQueLeNomPorte(t *testing.T) {
 	// L'enseignant a aussi accès au dépôt : c'est le nom qui tranche.
-	compte, sur := groups.Owner("kickmyb-firebase-Walid7Akk",
-		[]string{"prof-cegep", "Walid7Akk"})
-	if !sur || compte != "Walid7Akk" {
+	compte, sur := groups.Owner("kickmyb-firebase-Wasim7Zed",
+		[]string{"prof-cegep", "Wasim7Zed"})
+	if !sur || compte != "Wasim7Zed" {
 		t.Fatalf("Owner = %q, %v", compte, sur)
 	}
 }
 
 func TestOwnerPrendLeCompteLePlusLong(t *testing.T) {
-	compte, sur := groups.Owner("tp1-walid7akk", []string{"akk", "walid7akk"})
-	if !sur || compte != "walid7akk" {
+	compte, sur := groups.Owner("tp1-wasim7zed", []string{"akk", "wasim7zed"})
+	if !sur || compte != "wasim7zed" {
 		t.Fatalf("Owner = %q, %v", compte, sur)
 	}
 }
@@ -359,7 +359,7 @@ func TestSplitNeGardePasLeSeparateurEnTrop(t *testing.T) {
 func TestBuildNeGardePasLeSeparateurEnTeteDuSuffixe(t *testing.T) {
 	// GitHub Classroom double parfois le tiret : le second n'est à personne.
 	depots := []groups.RepoInfo{
-		{Name: "TP3-H23-4204N6-KickMyB--ahmadloudin"},
+		{Name: "TP3-H23-4204N6-KickMyB--anwarlamari"},
 		{Name: "TP3-H23-4204N6-KickMyB--felixb"},
 	}
 	// Le préfixe arrive tel que la détection le propose, tiret final compris.
@@ -373,7 +373,7 @@ func TestBuildNeGardePasLeSeparateurEnTeteDuSuffixe(t *testing.T) {
 				depot.Suffix)
 		}
 	}
-	if _, _, trouve := groupe.Find("ahmadloudin"); !trouve {
+	if _, _, trouve := groupe.Find("anwarlamari"); !trouve {
 		t.Fatalf("le dépôt ne se retrouve pas par son compte : %+v", groupe.Repos)
 	}
 }

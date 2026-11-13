@@ -101,16 +101,16 @@ func TestBuildRefuseLesCollisions(t *testing.T) {
 func TestBuildRefuseDeNommerParUnCompteAbsent(t *testing.T) {
 	gens := []roster.Person{
 		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 	}
 	_, err := plan.Build(gens, reglages("{assignment}-{username}"))
-	if err == nil || !strings.Contains(err.Error(), "Naomi Chéry") ||
+	if err == nil || !strings.Contains(err.Error(), "Nadia Pépin") ||
 		!strings.Contains(err.Error(), "{name}") {
-		t.Fatalf("refus attendu, nommant Naomi et proposant {name} : %v", err)
+		t.Fatalf("refus attendu, nommant Nadia et proposant {name} : %v", err)
 	}
 
 	items, err := plan.Build(gens, reglages("{assignment}-{name}"))
-	if err != nil || len(items) != 2 || items[1].Name != "tp1-naomi-chery" {
+	if err != nil || len(items) != 2 || items[1].Name != "tp1-nadia-pepin" {
 		t.Fatalf("par le nom, chacun a son dépôt : %+v (%v)", items, err)
 	}
 }

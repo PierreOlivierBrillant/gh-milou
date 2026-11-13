@@ -35,8 +35,8 @@ func TestUnCheminCompletSeLitCommeUnNom(t *testing.T) {
 // étudiant, là où le nom a pu être changé.
 func TestLaColonneGroupePasseAvantLeNomDuFichier(t *testing.T) {
 	entrees := []roster.Entry{
-		{FullName: "Étienne Lyonnais", Group: "1030"},
-		{FullName: "Félix Bourassa", Group: "1030"},
+		{FullName: "Édouard Loiselle", Group: "1030"},
+		{FullName: "Félix Boisvert", Group: "1030"},
 	}
 	indices := roster.HintsFrom("ListeEtudiants_cours4203N5EM_gr9999.csv", entrees)
 	if indices.Group != "1030" || len(indices.Groups) != 0 {
@@ -48,8 +48,8 @@ func TestLaColonneGroupePasseAvantLeNomDuFichier(t *testing.T) {
 // choix à qui saura trancher.
 func TestUneListeQuiMeleDeuxGroupesNEnChoisitAucun(t *testing.T) {
 	entrees := []roster.Entry{
-		{FullName: "Étienne Lyonnais", Group: "1040"},
-		{FullName: "Félix Bourassa", Group: "1030"},
+		{FullName: "Édouard Loiselle", Group: "1040"},
+		{FullName: "Félix Boisvert", Group: "1030"},
 		{FullName: "Mei Chen", Group: "1040"},
 	}
 	indices := roster.HintsFrom("ListeEtudiants.csv", entrees)

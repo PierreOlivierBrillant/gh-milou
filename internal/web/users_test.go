@@ -202,12 +202,12 @@ func TestAnnuaireSansGroupeDeclare(t *testing.T) {
 // toutes dépliées.
 func TestLAnnuaireDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
 	state := fakegh.NewState()
-	state.AddRepo("acme", "a26.5n6.01.tp1.naomi-chery", true)
+	state.AddRepo("acme", "a26.5n6.01.tp1.nadia-pepin", true)
 	state.AddRepo("acme", "a26.5n6.01.tp1.claire-otis", true)
 	h := nouveau(t, state)
 	place := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
 	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
-		inscritParMatricule("Naomi Chéry", "2100456"),
+		inscritParMatricule("Nadia Pépin", "2100110"),
 		inscritParMatricule("Claire Otis", "2100789"))
 
 	trouvees := map[string]annuaireLigne{}
@@ -215,7 +215,7 @@ func TestLAnnuaireDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
 		trouvees[ligne.FullName] = ligne
 	}
 	for nom, matricule := range map[string]string{
-		"Naomi Chéry": "2100456", "Claire Otis": "2100789",
+		"Nadia Pépin": "2100110", "Claire Otis": "2100789",
 	} {
 		if ligne := trouvees[nom]; ligne.StudentID != matricule || ligne.Repos != 1 {
 			t.Errorf("%s : %+v", nom, ligne)

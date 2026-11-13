@@ -16,8 +16,8 @@ import (
 func classroomOrg() *fakegh.State {
 	state := fakegh.NewState()
 	for _, nom := range []string{
-		"tp1-ladamlarocque", "tp1-felixbourassa", "tp1-lyonnais",
-		"projet-final-lyonnais", "projet-final-felixbourassa",
+		"tp1-laubelachance", "tp1-felixboisvert", "tp1-loiselle",
+		"projet-final-loiselle", "projet-final-felixboisvert",
 	} {
 		state.AddRepo("acme", nom, true)
 	}
@@ -30,9 +30,9 @@ func listeOmnivox(t *testing.T) string {
 	t.Helper()
 	lignes := []string{
 		"No étudiant;Groupe;Nom de l'étudiant;Prénom de l'étudiant;Code perm.;",
-		`="1680229";="1030";="Adam-Larocque";="Laurent";="ADAL20059908";`,
-		`="2143020";="1030";="Bourassa";="Félix";="BOUF68040412";`,
-		`="1983429";="1030";="Lyonnais";="Étienne";="LYOE78040203";`,
+		`="1600105";="1030";="Aube-Lachance";="Lorenzo";="AUBL10109901";`,
+		`="2100106";="1030";="Boisvert";="Félix";="BOIF10109902";`,
+		`="1900107";="1030";="Loiselle";="Édouard";="LOIE10109903";`,
 	}
 	var octets []byte
 	for _, ligne := range lignes {
@@ -123,7 +123,7 @@ func TestApercuDeLImportationNecritRien(t *testing.T) {
 	for _, ligne := range plan.Moves {
 		cibles[ligne.Repo] = ligne.Target
 	}
-	if cibles["tp1-ladamlarocque"] != "a26.5n6.1030.tp1.laurent-adam-larocque" {
+	if cibles["tp1-laubelachance"] != "a26.5n6.1030.tp1.lorenzo-aube-lachance" {
 		t.Fatalf("cibles = %v", cibles)
 	}
 	// Chaque rapprochement dit par quoi il a été reconnu.
@@ -132,7 +132,7 @@ func TestApercuDeLImportationNecritRien(t *testing.T) {
 			t.Fatalf("rapprochement muet : %+v", trouve)
 		}
 	}
-	if noms := h.depots(); !slices.Contains(noms, "tp1-ladamlarocque") {
+	if noms := h.depots(); !slices.Contains(noms, "tp1-laubelachance") {
 		t.Fatalf("un aperçu a renommé : %v", noms)
 	}
 }
@@ -155,16 +155,16 @@ func TestImportationParLInterfaceWeb(t *testing.T) {
 	}
 
 	noms := h.depots()
-	if !slices.Contains(noms, "a26.5n6.1030.tp1.etienne-lyonnais") {
+	if !slices.Contains(noms, "a26.5n6.1030.tp1.edouard-loiselle") {
 		t.Fatalf("dépôts = %v", noms)
 	}
 	// L'autre travail n'a pas bougé.
-	if !slices.Contains(noms, "projet-final-lyonnais") {
+	if !slices.Contains(noms, "projet-final-loiselle") {
 		t.Fatalf("un travail non demandé a bougé : %v", noms)
 	}
 	// Les noms sont montés au registre.
 	contenu := state.Files("acme/"+registry.RepoName, registry.Branch)[registry.UsersFile]
-	if !strings.Contains(contenu, "Laurent Adam-Larocque") {
+	if !strings.Contains(contenu, "Lorenzo Aube-Lachance") {
 		t.Fatalf("registre =\n%s", contenu)
 	}
 	// Et le groupe est déclaré, avec sa liste.
@@ -186,7 +186,7 @@ func TestUnRapprochementCorrigeLEmporte(t *testing.T) {
 	h.json(http.MethodPost, "/api/orgs/acme/import/preview", map[string]any{
 		"prefix": "tp1", "name": "tp1", "scope": "a26.5n6.1030",
 		"people": []map[string]string{
-			{"full_name": "Quelqu'un d'Autre", "username": "ladamlarocque"},
+			{"full_name": "Quelqu'un d'Autre", "username": "laubelachance"},
 		},
 	}, &plan)
 
@@ -197,7 +197,7 @@ func TestUnRapprochementCorrigeLEmporte(t *testing.T) {
 	for _, ligne := range plan.Moves {
 		cibles[ligne.Repo] = ligne.Target
 	}
-	if cibles["tp1-ladamlarocque"] != "a26.5n6.1030.tp1.quelqu-un-d-autre" {
+	if cibles["tp1-laubelachance"] != "a26.5n6.1030.tp1.quelqu-un-d-autre" {
 		t.Fatalf("la correction n'a pas été suivie : %v", cibles)
 	}
 	// Les deux autres comptes ne mènent à personne : ils gardent leur nom.
@@ -225,7 +225,7 @@ func TestUnTravailAbsentEstRefuse(t *testing.T) {
 // commit du travail.
 func TestLInterfaceDevineLaPlaceDArrivee(t *testing.T) {
 	state := classroomOrg()
-	state.Repos["acme/tp1-lyonnais"].History = fakegh.Commits("2027-02-03T10:00:00Z")
+	state.Repos["acme/tp1-loiselle"].History = fakegh.Commits("2027-02-03T10:00:00Z")
 	h := nouveau(t, state)
 
 	var place struct {
@@ -303,15 +303,15 @@ func TestLInterfaceLaisseLesDepotsSansEtudiant(t *testing.T) {
 	}
 }
 
-// Le cas rapporté : « kickmyb-firebase » est le travail, « Walid7Akk » le
+// Le cas rapporté : « kickmyb-firebase » est le travail, « Wasim7Zed » le
 // compte, et le nom seul ne dit pas où couper. Sans les accès, l'interface
-// affichait « @firebase-Walid7Akk » et lui cherchait un nom.
+// affichait « @firebase-Wasim7Zed » et lui cherchait un nom.
 func TestLeCompteVientDesAccesPasDuNom(t *testing.T) {
 	state := fakegh.NewState()
 	for nom, compte := range map[string]string{
-		"kickmyb-firebase-ladamlarocque": "ladamlarocque",
-		"kickmyb-firebase-felixbourassa": "felixbourassa",
-		"kickmyb-firebase-lyonnais":      "lyonnais",
+		"kickmyb-firebase-laubelachance": "laubelachance",
+		"kickmyb-firebase-felixboisvert": "felixboisvert",
+		"kickmyb-firebase-loiselle":      "loiselle",
 	} {
 		state.AddRepo("acme", nom, true)
 		state.AddCollaborator("acme/"+nom, compte, "push")
@@ -345,7 +345,7 @@ func TestLeCompteVientDesAccesPasDuNom(t *testing.T) {
 	for _, ligne := range plan.Moves {
 		cibles[ligne.Repo] = ligne.Target
 	}
-	if cibles["kickmyb-firebase-ladamlarocque"] != "a26.5n6.1030.kickmyb-firebase.laurent-adam-larocque" {
+	if cibles["kickmyb-firebase-laubelachance"] != "a26.5n6.1030.kickmyb-firebase.lorenzo-aube-lachance" {
 		t.Fatalf("cibles = %v", cibles)
 	}
 }
@@ -355,9 +355,9 @@ func TestLeCompteVientDesAccesPasDuNom(t *testing.T) {
 func TestUnPrefixeQuiCacheDeuxTravauxDemandeAChoisir(t *testing.T) {
 	state := fakegh.NewState()
 	for nom, compte := range map[string]string{
-		"kickmyb-firebase-ladamlarocque": "ladamlarocque",
-		"kickmyb-firebase-felixbourassa": "felixbourassa",
-		"kickmyb-android-lyonnais":       "lyonnais",
+		"kickmyb-firebase-laubelachance": "laubelachance",
+		"kickmyb-firebase-felixboisvert": "felixboisvert",
+		"kickmyb-android-loiselle":       "loiselle",
 	} {
 		state.AddRepo("acme", nom, true)
 		state.AddCollaborator("acme/"+nom, compte, "push")
@@ -385,7 +385,7 @@ func TestUnPrefixeQuiCacheDeuxTravauxDemandeAChoisir(t *testing.T) {
 	if !strings.Contains(string(contenu), "un à la fois") {
 		t.Fatalf("message = %s", contenu)
 	}
-	if noms := h.depots(); !slices.Contains(noms, "kickmyb-android-lyonnais") {
+	if noms := h.depots(); !slices.Contains(noms, "kickmyb-android-loiselle") {
 		t.Fatalf("un dépôt a été renommé : %v", noms)
 	}
 
@@ -408,7 +408,7 @@ func TestLeRegistreEviteUnRapprochementAChercher(t *testing.T) {
 	h := nouveau(t, state)
 	h.json(http.MethodPost, "/api/classrooms", map[string]any{
 		"session": "a25", "course": "5n6", "group": "1030",
-		"students": []map[string]string{{"username": "xy42", "full_name": "Étienne Lyonnais"}},
+		"students": []map[string]string{{"username": "xy42", "full_name": "Édouard Loiselle"}},
 	}, nil)
 
 	var plan planVue
@@ -421,7 +421,7 @@ func TestLeRegistreEviteUnRapprochementAChercher(t *testing.T) {
 		t.Fatalf("rapprochements = %+v", plan.Pairings)
 	}
 	trouve := plan.Pairings[0]
-	if trouve.Entry.FullName != "Étienne Lyonnais" || trouve.Score != 100 {
+	if trouve.Entry.FullName != "Édouard Loiselle" || trouve.Score != 100 {
 		t.Fatalf("rapprochement = %+v", trouve)
 	}
 	if trouve.Reason != "déjà connu de l'organisation" {
@@ -458,14 +458,14 @@ func TestLaSelectionDeDepotsLimiteLaReprise(t *testing.T) {
 	h.json(http.MethodPost, "/api/orgs/acme/import/preview", map[string]any{
 		"prefix": "tp1", "name": "tp1", "scope": "a26.5n6.1030",
 		"path": listeOmnivox(t),
-		"only": []string{"tp1-ladamlarocque", "tp1-felixbourassa"},
+		"only": []string{"tp1-laubelachance", "tp1-felixboisvert"},
 	}, &plan)
 
 	if len(plan.Moves) != 2 || len(plan.Pairings) != 2 {
 		t.Fatalf("plan = %+v", plan)
 	}
 	for _, ligne := range plan.Moves {
-		if ligne.Repo == "tp1-lyonnais" {
+		if ligne.Repo == "tp1-loiselle" {
 			t.Fatalf("un dépôt écarté a été repris : %+v", plan.Moves)
 		}
 	}
@@ -474,9 +474,9 @@ func TestLaSelectionDeDepotsLimiteLaReprise(t *testing.T) {
 	h.travail(http.MethodPost, "/api/orgs/acme/import", map[string]any{
 		"prefix": "tp1", "name": "tp1", "scope": "a26.5n6.1030",
 		"path": listeOmnivox(t),
-		"only": []string{"tp1-ladamlarocque", "tp1-felixbourassa"},
+		"only": []string{"tp1-laubelachance", "tp1-felixboisvert"},
 	})
-	if noms := h.depots(); !slices.Contains(noms, "tp1-lyonnais") {
+	if noms := h.depots(); !slices.Contains(noms, "tp1-loiselle") {
 		t.Fatalf("le dépôt écarté a bougé : %v", noms)
 	}
 }
@@ -485,12 +485,12 @@ func TestLaSelectionDeDepotsLimiteLaReprise(t *testing.T) {
 // permet de la passer en connaissance de cause.
 func TestLesDepotsDisentQuiEstDejaConnu(t *testing.T) {
 	state := classroomOrg()
-	state.AddCollaborator("acme/tp1-ladamlarocque", "ladamlarocque", "push")
+	state.AddCollaborator("acme/tp1-laubelachance", "laubelachance", "push")
 	h := nouveau(t, state)
 	h.json(http.MethodPost, "/api/classrooms", map[string]any{
 		"session": "a25", "course": "5n6", "group": "1030",
 		"students": []map[string]string{
-			{"username": "ladamlarocque", "full_name": "Laurent Adam-Larocque"},
+			{"username": "laubelachance", "full_name": "Lorenzo Aube-Lachance"},
 		},
 	}, nil)
 
@@ -510,10 +510,10 @@ func TestLesDepotsDisentQuiEstDejaConnu(t *testing.T) {
 		t.Fatalf("décompte = %d sur %d", vue.Known, vue.Total)
 	}
 	for _, depot := range vue.Repos {
-		if depot.Name != "tp1-ladamlarocque" {
+		if depot.Name != "tp1-laubelachance" {
 			continue
 		}
-		if depot.Login != "ladamlarocque" || depot.Student != "Laurent Adam-Larocque" {
+		if depot.Login != "laubelachance" || depot.Student != "Lorenzo Aube-Lachance" {
 			t.Fatalf("dépôt = %+v", depot)
 		}
 	}
@@ -527,9 +527,9 @@ func TestLaRepriseSePasseDeListe(t *testing.T) {
 	h.json(http.MethodPost, "/api/classrooms", map[string]any{
 		"session": "a25", "course": "5n6", "group": "1030",
 		"students": []map[string]string{
-			{"username": "ladamlarocque", "full_name": "Laurent Adam-Larocque"},
-			{"username": "felixbourassa", "full_name": "Félix Bourassa"},
-			{"username": "lyonnais", "full_name": "Étienne Lyonnais"},
+			{"username": "laubelachance", "full_name": "Lorenzo Aube-Lachance"},
+			{"username": "felixboisvert", "full_name": "Félix Boisvert"},
+			{"username": "loiselle", "full_name": "Édouard Loiselle"},
 		},
 	}, nil)
 
@@ -545,19 +545,19 @@ func TestLaRepriseSePasseDeListe(t *testing.T) {
 	for _, ligne := range plan.Moves {
 		cibles[ligne.Repo] = ligne.Target
 	}
-	if cibles["tp1-ladamlarocque"] != "a26.5n6.1030.tp1.laurent-adam-larocque" {
+	if cibles["tp1-laubelachance"] != "a26.5n6.1030.tp1.lorenzo-aube-lachance" {
 		t.Fatalf("cibles = %v", cibles)
 	}
 }
 
 // Le préfixe proposé porte parfois le tiret que le nom doublait —
 // « tp3-h23-4204n6-kickmyb- ». Le compte ne doit pas hériter du second : rien
-// sur GitHub ne s'appelle « -ahmadloudin ».
+// sur GitHub ne s'appelle « -anwarlamari ».
 func TestLeCompteNheritePasDuTiretDouble(t *testing.T) {
 	state := fakegh.NewState()
 	for _, nom := range []string{
-		"TP3-H23-4204N6-KickMyB--ahmadloudin",
-		"TP3-H23-4204N6-KickMyB--ladamlarocque",
+		"TP3-H23-4204N6-KickMyB--anwarlamari",
+		"TP3-H23-4204N6-KickMyB--laubelachance",
 	} {
 		state.AddRepo("acme", nom, true)
 	}

@@ -77,9 +77,9 @@ func TestCreerVerseLesMarquesDUnTravailDeLaNomenclature(t *testing.T) {
 		{"par compte", "nom_complet,github_username\nJean-Luc Picard,jlpicard\n",
 			"a26.5n6.01.tp1.jean-luc-picard",
 			marqueVersee{Assignment: "a26.5n6.01.tp1", Username: "jlpicard"}},
-		{"par matricule", "nom_complet,matricule\nNaomi Chéry,2100456\n",
-			"a26.5n6.01.tp1.naomi-chery",
-			marqueVersee{Assignment: "a26.5n6.01.tp1", StudentID: "2100456"}},
+		{"par matricule", "nom_complet,matricule\nNadia Pépin,2100110\n",
+			"a26.5n6.01.tp1.nadia-pepin",
+			marqueVersee{Assignment: "a26.5n6.01.tp1", StudentID: "2100110"}},
 	} {
 		t.Run(cas.nom, func(t *testing.T) {
 			h := nouveau(t, nil)
@@ -191,7 +191,7 @@ func TestAjouterDesDepotsAuGroupeVerseLeursMarques(t *testing.T) {
 	state := fakegh.NewState()
 	state.AddRepo("acme", "a26.5n6.01.tp1.jean-luc-picard", true)
 	h := gestion(t, state, "a26.5n6.01.tp1")
-	liste := h.liste("nom_complet,matricule\nNaomi Chéry,2100456\n")
+	liste := h.liste("nom_complet,matricule\nNadia Pépin,2100110\n")
 
 	code, _ := h.script(
 		"depots", "ajouter",
@@ -205,8 +205,8 @@ func TestAjouterDesDepotsAuGroupeVerseLeursMarques(t *testing.T) {
 	}
 	marques := h.marquesVersees()
 	attendue := marqueVersee{
-		Assignment: "a26.5n6.01.tp1", StudentID: "2100456",
-		Token: h.marqueDe("a26.5n6.01.tp1.naomi-chery"),
+		Assignment: "a26.5n6.01.tp1", StudentID: "2100110",
+		Token: h.marqueDe("a26.5n6.01.tp1.nadia-pepin"),
 	}
 	if len(marques) != 1 || marques[0] != attendue {
 		t.Fatalf("registre des marques : %+v, attendu %+v\n%s", marques, attendue, h.texte())

@@ -21,8 +21,8 @@ func classroomOrg(t *testing.T) *fakegh.State {
 	t.Helper()
 	state := fakegh.NewState()
 	for _, nom := range []string{
-		"tp1-ladamlarocque", "tp1-felixbourassa", "tp1-lyonnais",
-		"projet-final-ladamlarocque", "projet-final-lyonnais",
+		"tp1-laubelachance", "tp1-felixboisvert", "tp1-loiselle",
+		"projet-final-laubelachance", "projet-final-loiselle",
 	} {
 		state.AddRepo("acme", nom, true)
 	}
@@ -50,9 +50,9 @@ func listeOmnivox(t *testing.T, dossier string, lignes ...string) string {
 
 func liste(t *testing.T) string {
 	return listeOmnivox(t, t.TempDir(),
-		`="1680229";="1030";="Adam-Larocque";="Laurent";="ADAL20059908";`,
-		`="2143020";="1030";="Bourassa";="Félix";="BOUF68040412";`,
-		`="1983429";="1030";="Lyonnais";="Étienne";="LYOE78040203";`,
+		`="1600105";="1030";="Aube-Lachance";="Lorenzo";="AUBL10109901";`,
+		`="2100106";="1030";="Boisvert";="Félix";="BOIF10109902";`,
+		`="1900107";="1030";="Loiselle";="Édouard";="LOIE10109903";`,
 	)
 }
 
@@ -72,22 +72,22 @@ func TestImportDepuisGitHubClassroom(t *testing.T) {
 	}
 	noms := h.depots()
 	for _, attendu := range []string{
-		"a26.5n6.1030.tp1.laurent-adam-larocque",
-		"a26.5n6.1030.tp1.felix-bourassa",
-		"a26.5n6.1030.tp1.etienne-lyonnais",
+		"a26.5n6.1030.tp1.lorenzo-aube-lachance",
+		"a26.5n6.1030.tp1.felix-boisvert",
+		"a26.5n6.1030.tp1.edouard-loiselle",
 	} {
 		if !slices.Contains(noms, attendu) {
 			t.Fatalf("« %s » manque : %v", attendu, noms)
 		}
 	}
 	// L'autre travail n'a pas bougé : on n'importe que ce qu'on a demandé.
-	if !slices.Contains(noms, "projet-final-lyonnais") {
+	if !slices.Contains(noms, "projet-final-loiselle") {
 		t.Fatalf("un travail non demandé a bougé : %v", noms)
 	}
 
 	// Les noms sont montés au registre : c'est là qu'ils vivent désormais.
 	contenu := state.Files("acme/"+registry.RepoName, registry.Branch)[registry.UsersFile]
-	for _, attendu := range []string{"Laurent Adam-Larocque", "ladamlarocque", "Étienne Lyonnais"} {
+	for _, attendu := range []string{"Lorenzo Aube-Lachance", "laubelachance", "Édouard Loiselle"} {
 		if !strings.Contains(contenu, attendu) {
 			t.Fatalf("« %s » manque au registre :\n%s", attendu, contenu)
 		}
@@ -108,8 +108,8 @@ func TestImportEnSimulationNEcritRien(t *testing.T) {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
 	// Le rapprochement est montré, avec la raison qui l'a produit.
-	h.contient("Laurent Adam-Larocque", "→ a26.5n6.1030.tp1.", "Simulation")
-	if noms := h.depots(); !slices.Contains(noms, "tp1-ladamlarocque") {
+	h.contient("Lorenzo Aube-Lachance", "→ a26.5n6.1030.tp1.", "Simulation")
+	if noms := h.depots(); !slices.Contains(noms, "tp1-laubelachance") {
 		t.Fatalf("un dépôt a été renommé en simulation : %v", noms)
 	}
 }
@@ -140,7 +140,7 @@ func TestImportRenommeLeTravailAuPassage(t *testing.T) {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
 	if noms := h.depots(); !slices.Contains(noms,
-		"h27.5n6.1030.projet-de-session.etienne-lyonnais") {
+		"h27.5n6.1030.projet-de-session.edouard-loiselle") {
 		t.Fatalf("dépôts = %v", noms)
 	}
 }
@@ -155,16 +155,16 @@ func TestImportCorrigeUnRapprochementALaMain(t *testing.T) {
 	h.Options.Import = "tp1"
 	h.Options.Into = "a26.5n6.1030"
 	h.Options.Roster = listeOmnivox(t, t.TempDir(),
-		`="1680229";="1030";="Adam-Larocque";="Laurent";="ADAL20059908";`,
-		`="2143020";="1030";="Bourassa";="Félix";="BOUF68040412";`,
-		`="1983429";="1030";="Lyonnais";="Étienne";="LYOE78040203";`,
+		`="1600105";="1030";="Aube-Lachance";="Lorenzo";="AUBL10109901";`,
+		`="2100106";="1030";="Boisvert";="Félix";="BOIF10109902";`,
+		`="1900107";="1030";="Loiselle";="Édouard";="LOIE10109903";`,
 		`="1990022";="1030";="Tremblay";="Sophie";="TRES33040506";`,
 	)
 
 	code, _ := h.script(
 		"tous",            // reprendre tous les dépôts du travail
 		"oui",             // corriger un rapprochement
-		"lyonnais",        // le compte à reprendre
+		"loiselle",        // le compte à reprendre
 		"Sophie Tremblay", // la personne qu'il désigne vraiment
 		"non",             // rien d'autre à corriger
 		"oui",             // renommer
@@ -176,18 +176,18 @@ func TestImportCorrigeUnRapprochementALaMain(t *testing.T) {
 	if !slices.Contains(noms, "a26.5n6.1030.tp1.sophie-tremblay") {
 		t.Fatalf("la correction n'a pas été suivie : %v", noms)
 	}
-	if slices.Contains(noms, "a26.5n6.1030.tp1.etienne-lyonnais") {
+	if slices.Contains(noms, "a26.5n6.1030.tp1.edouard-loiselle") {
 		t.Fatalf("le rapprochement deviné a été gardé : %v", noms)
 	}
 
 	// La personne libérée ne reste associée à personne : la proposer encore
 	// ferait croire qu'elle a un dépôt.
-	menu, trouve := h.dernierMenu("Étudiant pour @lyonnais")
+	menu, trouve := h.dernierMenu("Étudiant pour @loiselle")
 	if !trouve {
 		t.Fatalf("aucun menu de correction :\n%s", h.texte())
 	}
 	for _, option := range menu.Options {
-		if option.Label == "Félix Bourassa" {
+		if option.Label == "Félix Boisvert" {
 			t.Fatalf("une personne déjà prise a été proposée : %+v", menu.Options)
 		}
 	}
@@ -198,14 +198,14 @@ func TestImportCorrigeUnRapprochementALaMain(t *testing.T) {
 func TestImportProposeLaPlaceDArrivee(t *testing.T) {
 	state := classroomOrg(t)
 	// Un travail donné en septembre : c'est la session d'automne.
-	state.Repos["acme/tp1-lyonnais"].History = fakegh.Commits("2026-09-14T08:00:00Z")
+	state.Repos["acme/tp1-loiselle"].History = fakegh.Commits("2026-09-14T08:00:00Z")
 
 	h := nouveau(t, state)
 	h.Options.ImportRequested = true
 	h.Options.Import = "tp1"
 	h.Options.Roster = listeOmnivox(t, t.TempDir(),
-		`="1680229";="1040";="Adam-Larocque";="Laurent";="ADAL20059908";`,
-		`="1983429";="1040";="Lyonnais";="Étienne";="LYOE78040203";`,
+		`="1600105";="1040";="Aube-Lachance";="Lorenzo";="AUBL10109901";`,
+		`="1900107";="1040";="Loiselle";="Édouard";="LOIE10109903";`,
 	)
 	// Le nom du fichier porte le cours et le groupe ; la colonne dit le groupe.
 	chemin := filepath.Join(filepath.Dir(h.Options.Roster),
@@ -228,7 +228,7 @@ func TestImportProposeLaPlaceDArrivee(t *testing.T) {
 	if len(scripte.Questions) == 0 {
 		t.Fatalf("aucune question posée :\n%s", h.texte())
 	}
-	if !slices.Contains(h.depots(), "a26.3n5.1040.tp1.etienne-lyonnais") {
+	if !slices.Contains(h.depots(), "a26.3n5.1040.tp1.edouard-loiselle") {
 		t.Fatalf("la place proposée n'a pas été suivie : %v", h.depots())
 	}
 }
@@ -258,7 +258,7 @@ func TestImportPeutLaisserLesDepotsSansEtudiant(t *testing.T) {
 	if !slices.Contains(noms, "tp1-visiteur-anonyme-42") {
 		t.Fatalf("le dépôt inconnu a été repris : %v", noms)
 	}
-	if !slices.Contains(noms, "a26.5n6.1030.tp1.etienne-lyonnais") {
+	if !slices.Contains(noms, "a26.5n6.1030.tp1.edouard-loiselle") {
 		t.Fatalf("les dépôts connus n'ont pas été repris : %v", noms)
 	}
 }
@@ -311,7 +311,7 @@ func TestImportNeReprendQueLesDepotsChoisis(t *testing.T) {
 	if repris != 2 {
 		t.Fatalf("%d dépôt(s) repris, deux attendus : %v", repris, noms)
 	}
-	if !slices.Contains(noms, "tp1-lyonnais") {
+	if !slices.Contains(noms, "tp1-loiselle") {
 		t.Fatalf("le dépôt écarté a été repris quand même : %v", noms)
 	}
 }
@@ -323,17 +323,17 @@ func TestImportChoisitLesDepotsAuDrapeau(t *testing.T) {
 	h.Options.Import = "tp1"
 	h.Options.Into = "a26.5n6.1030"
 	h.Options.Roster = liste(t)
-	h.Options.Repos = "tp1-ladamlarocque"
+	h.Options.Repos = "tp1-laubelachance"
 	h.Options.Yes = true
 
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
 	noms := h.depots()
-	if !slices.Contains(noms, "a26.5n6.1030.tp1.laurent-adam-larocque") {
+	if !slices.Contains(noms, "a26.5n6.1030.tp1.lorenzo-aube-lachance") {
 		t.Fatalf("le dépôt choisi n'a pas été repris : %v", noms)
 	}
-	for _, reste := range []string{"tp1-felixbourassa", "tp1-lyonnais"} {
+	for _, reste := range []string{"tp1-felixboisvert", "tp1-loiselle"} {
 		if !slices.Contains(noms, reste) {
 			t.Fatalf("« %s » a été repris alors qu'il n'était pas choisi : %v", reste, noms)
 		}
@@ -368,9 +368,9 @@ func TestImportSansListeQuandLesNomsSontConnus(t *testing.T) {
 		t.Fatal(err)
 	}
 	ancien.Students = []roster.Person{
-		{FullName: "Laurent Adam-Larocque", Username: "ladamlarocque"},
-		{FullName: "Félix Bourassa", Username: "felixbourassa"},
-		{FullName: "Étienne Lyonnais", Username: "lyonnais"},
+		{FullName: "Lorenzo Aube-Lachance", Username: "laubelachance"},
+		{FullName: "Félix Boisvert", Username: "felixboisvert"},
+		{FullName: "Édouard Loiselle", Username: "loiselle"},
 	}
 	h.declarer(ancien)
 	h.Options.ImportRequested = true
@@ -383,9 +383,9 @@ func TestImportSansListeQuandLesNomsSontConnus(t *testing.T) {
 	}
 	noms := h.depots()
 	for _, attendu := range []string{
-		"a26.5n6.1030.tp1.laurent-adam-larocque",
-		"a26.5n6.1030.tp1.felix-bourassa",
-		"a26.5n6.1030.tp1.etienne-lyonnais",
+		"a26.5n6.1030.tp1.lorenzo-aube-lachance",
+		"a26.5n6.1030.tp1.felix-boisvert",
+		"a26.5n6.1030.tp1.edouard-loiselle",
 	} {
 		if !slices.Contains(noms, attendu) {
 			t.Fatalf("« %s » manque : %v", attendu, noms)

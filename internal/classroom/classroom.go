@@ -450,7 +450,7 @@ type known map[string]roster.Person
 
 // personne retrouve à qui appartient le dernier niveau d'un nom de dépôt. La
 // marque de doublon que GitHub ajoute à un nom déjà pris n'en fait pas un autre
-// compte : « aleksilepaj-1 » est « aleksilepaj », et son dépôt est le sien.
+// compte : « aleksilesaj-1 » est « aleksilesaj », et son dépôt est le sien.
 func (k known) personne(fragment string) (roster.Person, bool) {
 	if person, inscrit := k[strings.ToLower(fragment)]; inscrit {
 		return person, true
@@ -873,7 +873,7 @@ func StudentsOf(usernames []string) []roster.Person {
 
 // dedupe écarte les doublons de comptes, en gardant le premier nom connu. Les
 // comptes que la marque de doublon de GitHub avait dédoublés sont ramenés au
-// leur juste avant : « aleksilepaj » et « aleksilepaj-1 » sont une personne, et
+// leur juste avant : « aleksilesaj » et « aleksilesaj-1 » sont une personne, et
 // c'est ici — dans Validate, donc à chaque enregistrement — qu'ils se
 // rejoignent, quelle que soit l'interface qui a monté la liste.
 func dedupe(people []roster.Person) []roster.Person {
@@ -944,7 +944,7 @@ func designationsDe(person roster.Person) []string {
 }
 
 // sansMarque ramène à leur compte les personnes qu'une marque de doublon a fait
-// dévier. La marque ne suffit pas à conclure — « LT-9 » est un vrai compte : le
+// dévier. La marque ne suffit pas à conclure — « CO-7 » est un vrai compte : le
 // compte sans elle doit être attesté par « comptes », qui rend le nom complet
 // qu'on lui connaît. Deux noms complets qui se contredisent restent deux
 // personnes, quitte à laisser la marque à qui saura trancher.

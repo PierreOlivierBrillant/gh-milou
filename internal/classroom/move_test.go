@@ -247,20 +247,20 @@ func TestUneCorrectionQuiNeChangeRienEstRefusee(t *testing.T) {
 func TestUneCorrectionRattacheUnPremierCompteParLeMatricule(t *testing.T) {
 	cours := groupe("a26", "5n6", "01", []roster.Person{
 		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 	})
 
-	correction, err := classroom.PlanCorrection(cours, "2100456",
-		roster.Person{Username: "nchery"}, false, nil)
+	correction, err := classroom.PlanCorrection(cours, "2100110",
+		roster.Person{Username: "npepin"}, false, nil)
 	if err != nil {
 		t.Fatalf("rattachement refusé : %v", err)
 	}
-	if correction.Before.Username != "" || correction.Before.StudentID != "2100456" {
+	if correction.Before.Username != "" || correction.Before.StudentID != "2100110" {
 		t.Errorf("avant : %+v", correction.Before)
 	}
 	apres := correction.After
-	if apres.Username != "nchery" || apres.StudentID != "2100456" ||
-		apres.FullName != "Naomi Chéry" {
+	if apres.Username != "npepin" || apres.StudentID != "2100110" ||
+		apres.FullName != "Nadia Pépin" {
 		t.Fatalf("fiche corrigée : %+v", apres)
 	}
 	if !correction.Changed() {
@@ -269,52 +269,52 @@ func TestUneCorrectionRattacheUnPremierCompteParLeMatricule(t *testing.T) {
 	if len(correction.Classroom.Students) != 2 {
 		t.Fatalf("liste corrigée : %+v", correction.Classroom.Students)
 	}
-	inscrite, trouvee := correction.Classroom.Find("nchery")
-	if !trouvee || inscrite.StudentID != "2100456" {
-		t.Errorf("Naomi n'est pas retrouvée sous son compte : %+v (%v)", inscrite, trouvee)
+	inscrite, trouvee := correction.Classroom.Find("npepin")
+	if !trouvee || inscrite.StudentID != "2100110" {
+		t.Errorf("Nadia n'est pas retrouvée sous son compte : %+v (%v)", inscrite, trouvee)
 	}
 }
 
 // Deux personnes sans compte n'ont en commun qu'un compte vide. C'est le
-// matricule, et lui seul, qui dit quels dépôts sont ceux de Naomi : celui de
+// matricule, et lui seul, qui dit quels dépôts sont ceux de Nadia : celui de
 // Claire, qui n'a pas de compte non plus, ne prend pas son nom. Rien ne
-// l'aurait arrêté, puisque Naomi n'a pas de dépôt pour ce travail-là.
+// l'aurait arrêté, puisque Nadia n'a pas de dépôt pour ce travail-là.
 func TestUneCorrectionParLeMatriculeNeRenommeQueSesDepots(t *testing.T) {
-	inventaire := depots("a26.5n6.01.tp1.naomi-chery", "a26.5n6.01.tp2.claire-otis")
+	inventaire := depots("a26.5n6.01.tp1.nadia-pepin", "a26.5n6.01.tp2.claire-otis")
 	cours := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 		{FullName: "Claire Otis", StudentID: "2100789"},
 	}).Enrich(nil, inventaire)
 
-	correction, err := classroom.PlanCorrection(cours, "2100456",
-		roster.Person{FullName: "Naomi Chéry-Dupont", Username: "nchery"}, true, inventaire)
+	correction, err := classroom.PlanCorrection(cours, "2100110",
+		roster.Person{FullName: "Nadia Pépin-Dupont", Username: "npepin"}, true, inventaire)
 	if err != nil {
 		t.Fatalf("correction refusée : %v", err)
 	}
-	if len(correction.Moves) != 1 || correction.Moves[0].Repo != "a26.5n6.01.tp1.naomi-chery" ||
-		correction.Moves[0].Target != "a26.5n6.01.tp1.naomi-chery-dupont" {
-		t.Fatalf("seul le dépôt de Naomi doit suivre : %+v", correction.Moves)
+	if len(correction.Moves) != 1 || correction.Moves[0].Repo != "a26.5n6.01.tp1.nadia-pepin" ||
+		correction.Moves[0].Target != "a26.5n6.01.tp1.nadia-pepin-dupont" {
+		t.Fatalf("seul le dépôt de Nadia doit suivre : %+v", correction.Moves)
 	}
 }
 
 // Déplacer quelqu'un qui n'a pas de compte emporte ses dépôts, et pas ceux des
 // autres personnes sans compte.
 func TestDeplacerParLeMatriculeNEmporteQueSesDepots(t *testing.T) {
-	inventaire := depots("a26.5n6.01.tp1.naomi-chery", "a26.5n6.01.tp2.claire-otis")
+	inventaire := depots("a26.5n6.01.tp1.nadia-pepin", "a26.5n6.01.tp2.claire-otis")
 	depart := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 		{FullName: "Claire Otis", StudentID: "2100789"},
 	}).Enrich(nil, inventaire)
-	naomi, _ := depart.Find("2100456")
+	nadia, _ := depart.Find("2100110")
 
 	lignes, err := classroom.PlanMove(depart, groupe("a26", "5n6", "02", nil),
-		[]roster.Person{naomi}, inventaire)
+		[]roster.Person{nadia}, inventaire)
 	if err != nil {
 		t.Fatalf("plan refusé : %v", err)
 	}
-	if len(lignes) != 1 || lignes[0].Repo != "a26.5n6.01.tp1.naomi-chery" ||
-		lignes[0].Target != "a26.5n6.02.tp1.naomi-chery" {
-		t.Fatalf("seul le dépôt de Naomi doit partir : %+v", lignes)
+	if len(lignes) != 1 || lignes[0].Repo != "a26.5n6.01.tp1.nadia-pepin" ||
+		lignes[0].Target != "a26.5n6.02.tp1.nadia-pepin" {
+		t.Fatalf("seul le dépôt de Nadia doit partir : %+v", lignes)
 	}
 }
 
@@ -324,29 +324,29 @@ func TestDeplacerParLeMatriculeNEmporteQueSesDepots(t *testing.T) {
 // qu'un dépôt, nommé d'après la ligne qui porte son nom. Il part avec elle,
 // même quand c'est par son compte qu'on la désigne.
 func TestDeplacerQuelquUnInscritDeuxFoisEmporteSesDepots(t *testing.T) {
-	inventaire := depots("a26.5n6.01.tp1.naomi-chery")
+	inventaire := depots("a26.5n6.01.tp1.nadia-pepin")
 	depart := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
-		{Username: "nchery", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
+		{Username: "npepin", StudentID: "2100110"},
 	}).Enrich(nil, inventaire)
-	naomi, _ := depart.Find("nchery")
+	nadia, _ := depart.Find("npepin")
 
 	lignes, err := classroom.PlanMove(depart, groupe("a26", "5n6", "02", nil),
-		[]roster.Person{naomi}, inventaire)
+		[]roster.Person{nadia}, inventaire)
 	if err != nil {
 		t.Fatalf("plan refusé : %v", err)
 	}
-	if len(lignes) != 1 || lignes[0].Target != "a26.5n6.02.tp1.naomi-chery" {
+	if len(lignes) != 1 || lignes[0].Target != "a26.5n6.02.tp1.nadia-pepin" {
 		t.Fatalf("son dépôt doit partir avec elle : %+v", lignes)
 	}
 }
 
 // sansCompte est un groupe au lendemain d'un import du collège : Jean-Luc a
-// déjà son compte, Naomi et Claire n'ont que leur matricule.
+// déjà son compte, Nadia et Claire n'ont que leur matricule.
 func sansCompte() []roster.Person {
 	return []roster.Person{
 		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 		{FullName: "Claire Otis", StudentID: "2100789"},
 	}
 }
@@ -366,12 +366,12 @@ func nomsDe(gens []roster.Person) string {
 func TestChoisirParLeMatriculeNeRetientQuElle(t *testing.T) {
 	depart := groupe("a26", "5n6", "01", sansCompte())
 
-	choisies, err := depart.Movers([]string{"2100456"})
+	choisies, err := depart.Movers([]string{"2100110"})
 	if err != nil {
 		t.Fatalf("choix refusé : %v", err)
 	}
-	if len(choisies) != 1 || choisies[0].FullName != "Naomi Chéry" ||
-		choisies[0].StudentID != "2100456" {
+	if len(choisies) != 1 || choisies[0].FullName != "Nadia Pépin" ||
+		choisies[0].StudentID != "2100110" {
 		t.Fatalf("personnes choisies : %+v", choisies)
 	}
 
@@ -388,16 +388,16 @@ func TestChoisirParLeMatriculeNeRetientQuElle(t *testing.T) {
 // pas deux fois, et le décompte du déplacement ne la compte pas double.
 func TestDeuxDesignationsDUnePersonneNeLaChoisissentQuUneFois(t *testing.T) {
 	depart := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
-		{Username: "nchery", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
+		{Username: "npepin", StudentID: "2100110"},
 	})
 
-	choisies, err := depart.Movers([]string{"nchery", "2100456"})
+	choisies, err := depart.Movers([]string{"npepin", "2100110"})
 	if err != nil {
 		t.Fatalf("choix refusé : %v", err)
 	}
-	if len(choisies) != 1 || choisies[0].Username != "nchery" ||
-		choisies[0].FullName != "Naomi Chéry" {
+	if len(choisies) != 1 || choisies[0].Username != "npepin" ||
+		choisies[0].FullName != "Nadia Pépin" {
 		t.Fatalf("personnes choisies : %+v", choisies)
 	}
 }
@@ -407,7 +407,7 @@ func TestDeuxDesignationsDUnePersonneNeLaChoisissentQuUneFois(t *testing.T) {
 func TestChoisirQuelquUnQuiNEstPasLaEstRefuse(t *testing.T) {
 	depart := groupe("a26", "5n6", "01", sansCompte())
 
-	_, err := depart.Movers([]string{"2100456", "2100999"})
+	_, err := depart.Movers([]string{"2100110", "2100999"})
 	if err == nil || err.Error() != "« 2100999 » n'est pas dans « Groupe 01 »." {
 		t.Errorf("refus attendu pour le matricule inconnu : %v", err)
 	}
@@ -417,14 +417,14 @@ func TestChoisirQuelquUnQuiNEstPasLaEstRefuse(t *testing.T) {
 	}
 }
 
-// Quitter une liste se fait par ce qui désigne : Naomi n'a aucun compte, et un
+// Quitter une liste se fait par ce qui désigne : Nadia n'a aucun compte, et un
 // retrait par compte la laissait au départ — tout en l'inscrivant à
 // l'arrivée. Claire, qui n'en a pas non plus, reste où elle est.
 func TestRetirerQuiNAQueSonMatriculeNeRetireQuElle(t *testing.T) {
 	depart := groupe("a26", "5n6", "01", sansCompte())
-	naomi, _ := depart.Find("2100456")
+	nadia, _ := depart.Find("2100110")
 
-	if reste := depart.Without(naomi); nomsDe(reste.Students) != "Jean-Luc Picard, Claire Otis" {
+	if reste := depart.Without(nadia); nomsDe(reste.Students) != "Jean-Luc Picard, Claire Otis" {
 		t.Fatalf("liste de départ : %+v", reste.Students)
 	}
 }
@@ -434,16 +434,16 @@ func TestRetirerQuiNAQueSonMatriculeNeRetireQuElle(t *testing.T) {
 // laisserait inscrite au départ.
 func TestRetirerUnePersonneRetireToutesSesLignes(t *testing.T) {
 	depart := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
-		{Username: "nchery", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
+		{Username: "npepin", StudentID: "2100110"},
 		{FullName: "Émilie Côté", Username: "emilie-cote", Also: []string{"emilie-perso"}},
 		{Username: "emilie-perso"},
 		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
 	})
-	naomi, _ := depart.Find("nchery")
+	nadia, _ := depart.Find("npepin")
 	emilie, _ := depart.Find("emilie-cote")
 
-	reste := depart.Without(naomi, emilie)
+	reste := depart.Without(nadia, emilie)
 	if len(reste.Students) != 1 || reste.Students[0].Username != "jlpicard" {
 		t.Fatalf("liste de départ : %+v", reste.Students)
 	}
@@ -454,13 +454,13 @@ func TestRetirerUnePersonneRetireToutesSesLignes(t *testing.T) {
 // qui le dira, au lieu de la voir disparaître sans un mot.
 func TestRetirerUnCompteNeRetireQueSaLigne(t *testing.T) {
 	cours := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Jean-Luc Picard", Username: "jlpicard", Also: []string{"nchery"}},
-		{Username: "nchery"},
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Jean-Luc Picard", Username: "jlpicard", Also: []string{"npepin"}},
+		{Username: "npepin"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 	})
 
-	reste := cours.Without(roster.Person{Username: "NChery"})
-	if nomsDe(reste.Students) != "Jean-Luc Picard, Naomi Chéry" {
+	reste := cours.Without(roster.Person{Username: "NPepin"})
+	if nomsDe(reste.Students) != "Jean-Luc Picard, Nadia Pépin" {
 		t.Fatalf("liste après retrait : %+v", reste.Students)
 	}
 }
@@ -469,24 +469,24 @@ func TestRetirerUnCompteNeRetireQueSaLigne(t *testing.T) {
 // inscrit pas deux fois celle qui y figurait déjà par son matricule.
 func TestArriverSansCompteNInscritQuUneFois(t *testing.T) {
 	depart := groupe("a26", "5n6", "01", sansCompte())
-	naomi, _ := depart.Find("2100456")
+	nadia, _ := depart.Find("2100110")
 	arrivee := groupe("a26", "5n6", "02", []roster.Person{
 		{FullName: "Claire Otis", StudentID: "2100789"},
 	})
 
-	apres, err := arrivee.With(naomi).Validate()
+	apres, err := arrivee.With(nadia).Validate()
 	if err != nil {
 		t.Fatalf("liste d'arrivée refusée : %v", err)
 	}
-	if nomsDe(apres.Students) != "Claire Otis, Naomi Chéry" {
+	if nomsDe(apres.Students) != "Claire Otis, Nadia Pépin" {
 		t.Fatalf("liste d'arrivée : %+v", apres.Students)
 	}
-	encore, err := apres.With(naomi).Validate()
+	encore, err := apres.With(nadia).Validate()
 	if err != nil {
 		t.Fatalf("liste d'arrivée refusée : %v", err)
 	}
 	if len(encore.Students) != 2 || len(encore.Identities()) != 2 {
-		t.Fatalf("Naomi doit y figurer une fois : %+v", encore.Students)
+		t.Fatalf("Nadia doit y figurer une fois : %+v", encore.Students)
 	}
 }
 
@@ -620,11 +620,11 @@ func TestLesFichesSuiventLeTravailDeplace(t *testing.T) {
 
 // Un travail déplacé n'emporte, parmi ceux qui n'ont pas de compte, que ceux
 // qui l'ont rendu. Le compte vide qu'ils partagent faisait suivre Claire, qui
-// n'a rendu que le travail suivant, et retenait Naomi, qui n'a plus rien au
+// n'a rendu que le travail suivant, et retenait Nadia, qui n'a plus rien au
 // départ.
 func TestUnTravailDeplaceNEmporteQueSesInscritsSansCompte(t *testing.T) {
 	inventaire := depots(
-		"a26.5n6.01.tp1.jean-luc-picard", "a26.5n6.01.tp1.naomi-chery",
+		"a26.5n6.01.tp1.jean-luc-picard", "a26.5n6.01.tp1.nadia-pepin",
 		"a26.5n6.01.tp2.claire-otis",
 	)
 	depart := groupe("a26", "5n6", "01", sansCompte())
@@ -635,10 +635,10 @@ func TestUnTravailDeplaceNEmporteQueSesInscritsSansCompte(t *testing.T) {
 		t.Fatalf("plan refusé : %v", err)
 	}
 	suivent, quittent := classroom.Followers(depart, lignes, inventaire)
-	if nomsDe(suivent) != "Jean-Luc Picard, Naomi Chéry" {
+	if nomsDe(suivent) != "Jean-Luc Picard, Nadia Pépin" {
 		t.Errorf("personnes qui suivent : %s", nomsDe(suivent))
 	}
-	if nomsDe(quittent) != "Jean-Luc Picard, Naomi Chéry" {
+	if nomsDe(quittent) != "Jean-Luc Picard, Nadia Pépin" {
 		t.Errorf("personnes qui quittent : %s", nomsDe(quittent))
 	}
 }

@@ -343,12 +343,12 @@ func TestUneEquipeNArrivePasSurUnNomDejaPris(t *testing.T) {
 // l'onglet des équipes, et c'est là qu'on vient la vérifier.
 func TestLeDepotDUneEquipeNommeSesMembresEtCeuxQuiAttendent(t *testing.T) {
 	state := fakegh.NewState()
-	state.Users["hugolevacher"] = "Hugo Levacher"
-	state.OutsideOrg["hugolevacher"] = true
+	state.Users["hugolamarche"] = "Hugo Lamarche"
+	state.OutsideOrg["hugolamarche"] = true
 	h := nouveau(t, state)
 	place := h.groupe("a26", "5n6", "01",
-		"Émilie Côté", "emilie-cote", "Hugo Levacher", "hugolevacher")
-	h.creerEquipe(place, "eq1", "emilie-cote", "hugolevacher")
+		"Émilie Côté", "emilie-cote", "Hugo Lamarche", "hugolamarche")
+	h.creerEquipe(place, "eq1", "emilie-cote", "hugolamarche")
 	h.State.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
 
 	var detail struct {
@@ -370,10 +370,10 @@ func TestLeDepotDUneEquipeNommeSesMembresEtCeuxQuiAttendent(t *testing.T) {
 		noms = append(noms, membre.FullName+" (@"+membre.Username+")")
 	}
 	sort.Strings(noms)
-	if strings.Join(noms, ", ") != "Hugo Levacher (@hugolevacher), Émilie Côté (@emilie-cote)" {
+	if strings.Join(noms, ", ") != "Hugo Lamarche (@hugolamarche), Émilie Côté (@emilie-cote)" {
 		t.Fatalf("les membres devraient être nommés : %v", noms)
 	}
-	if strings.Join(detail.Repos[0].Waiting, ",") != "hugolevacher" {
+	if strings.Join(detail.Repos[0].Waiting, ",") != "hugolamarche" {
 		t.Fatalf("l'invitation en attente devrait être dite : %v", detail.Repos[0].Waiting)
 	}
 }

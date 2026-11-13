@@ -433,7 +433,7 @@ func (s *Server) profiles(org, prefix string, repos []groups.RepoInfo,
 	pairs := make([]identity.Pair, 0, groupe.Len())
 	for _, depot := range groupe.Repos {
 		// Le compte des accès d'abord : demander le profil de ce que le nom
-		// portait — « firebase-Walid7Akk » — ne ramènerait rien.
+		// portait — « firebase-Wasim7Zed » — ne ramènerait rien.
 		compte := depot.Suffix
 		if login := proprietaires[depot.Name]; login != "" {
 			compte = login

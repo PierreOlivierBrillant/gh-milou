@@ -13,25 +13,25 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/users"
 )
 
-// deuxSessions est le cas de l'issue : @Mr-Commetuveux a suivi un cours à
-// l'automne, @commetuveuxx un autre à l'hiver, et c'est la même personne. Une
+// deuxSessions est le cas de l'issue : @Mr-Commeilfaut a suivi un cours à
+// l'automne, @commeilfautt un autre à l'hiver, et c'est la même personne. Une
 // homonyme sans rapport suit le cours d'hiver.
 func deuxSessions() ([]classroom.Classroom, []groups.RepoInfo) {
 	defauts := classroom.DefaultsFrom(config.Default())
 	return []classroom.Classroom{
 		{
 			Org: "acme", Session: "a26", Course: "5n6", Group: "01", Defaults: defauts,
-			Students: []roster.Person{{FullName: "Jean Commetuveux", Username: "Mr-Commetuveux"}},
+			Students: []roster.Person{{FullName: "Jean Commeilfaut", Username: "Mr-Commeilfaut"}},
 		},
 		{
 			Org: "acme", Session: "h27", Course: "4w6", Group: "01", Defaults: defauts,
 			Students: []roster.Person{
-				{FullName: "Jean Comme-Tu-Veux", Username: "commetuveuxx", StudentID: "2412345"},
-				{FullName: "Jean Commetuveux", Username: "autre-jean"},
+				{FullName: "Jean Comme-Tu-Veux", Username: "commeilfautt", StudentID: "2412345"},
+				{FullName: "Jean Commeilfaut", Username: "autre-jean"},
 			},
 		},
 	}, []groups.RepoInfo{
-		{Name: "a26.5n6.01.tp1.jean-commetuveux", PushedAt: "2026-09-20T10:00:00Z"},
+		{Name: "a26.5n6.01.tp1.jean-commeilfaut", PushedAt: "2026-09-20T10:00:00Z"},
 		{Name: "h27.4w6.01.tp1.jean-comme-tu-veux", PushedAt: "2027-02-10T10:00:00Z"},
 	}
 }
@@ -59,25 +59,25 @@ func TestUnCompteVuDansSesDepotsSeProposeEtSeReunit(t *testing.T) {
 	set := registreDe(t)
 	lignes := users.Directory(cours, inventaire, nil, nil, set)
 	remises := map[string]groups.Handin{
-		"a26.5n6.01.tp1.jean-commetuveux": {Authors: map[string]int{"mr-commetuveux": 2, "vieux-jean": 5}},
+		"a26.5n6.01.tp1.jean-commeilfaut": {Authors: map[string]int{"mr-commeilfaut": 2, "vieux-jean": 5}},
 	}
-	if vus := users.Seen(lignes, set, remises, "Mr-Commetuveux"); strings.Join(vus, " ") != "vieux-jean" {
+	if vus := users.Seen(lignes, set, remises, "Mr-Commeilfaut"); strings.Join(vus, " ") != "vieux-jean" {
 		t.Fatalf("vus = %v", vus)
 	}
-	if _, err := users.PlanJoin(lignes, set, "prof", "acme", "vieux-jean", "Mr-Commetuveux"); err == nil {
+	if _, err := users.PlanJoin(lignes, set, "prof", "acme", "vieux-jean", "Mr-Commeilfaut"); err == nil {
 		t.Fatal("un compte inconnu de l'annuaire devait être refusé sans témoin")
 	}
 
-	temoins := users.Witness(lignes, remises, "vieux-jean", "Mr-Commetuveux")
+	temoins := users.Witness(lignes, remises, "vieux-jean", "Mr-Commeilfaut")
 	if len(temoins) != len(lignes)+1 {
 		t.Fatalf("%d ligne(s) après témoignage, attendu %d", len(temoins), len(lignes)+1)
 	}
-	reunion, err := users.PlanJoin(temoins, set, "prof", "acme", "vieux-jean", "Mr-Commetuveux")
+	reunion, err := users.PlanJoin(temoins, set, "prof", "acme", "vieux-jean", "Mr-Commeilfaut")
 	if err != nil {
 		t.Fatalf("réunion refusée : %v", err)
 	}
-	if reunion.Principal != "Mr-Commetuveux" ||
-		strings.Join(reunion.Accounts, ",") != "Mr-Commetuveux,vieux-jean" {
+	if reunion.Principal != "Mr-Commeilfaut" ||
+		strings.Join(reunion.Accounts, ",") != "Mr-Commeilfaut,vieux-jean" {
 		t.Errorf("réunion = %+v", reunion)
 	}
 	if sans := users.Witness(lignes, remises, "inconnu"); len(sans) != len(lignes) {
@@ -94,16 +94,16 @@ func TestLAnnuaireReunitDeuxComptesDUneMemePersonne(t *testing.T) {
 		t.Fatalf("avant : %s", comptes(lignes))
 	}
 
-	set := registreDe(t, registry.Join("Mr-Commetuveux", "commetuveuxx"))
+	set := registreDe(t, registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	lignes := users.Directory(cours, inventaire, nil, nil, set)
-	if comptes(lignes) != "commetuveuxx,autre-jean" {
+	if comptes(lignes) != "commeilfautt,autre-jean" {
 		t.Fatalf("après : %s", comptes(lignes))
 	}
 	for _, ligne := range lignes {
-		if ligne.Username != "commetuveuxx" {
+		if ligne.Username != "commeilfautt" {
 			continue
 		}
-		if strings.Join(ligne.Accounts, ",") != "commetuveuxx,Mr-Commetuveux" ||
+		if strings.Join(ligne.Accounts, ",") != "commeilfautt,Mr-Commeilfaut" ||
 			len(ligne.Enrollments) != 2 || len(ligne.Repos) != 2 {
 			t.Fatalf("ligne = %+v", ligne)
 		}
@@ -114,9 +114,9 @@ func TestLAnnuaireReunitDeuxComptesDUneMemePersonne(t *testing.T) {
 	}
 
 	// La fiche, ouverte depuis l'un ou l'autre compte, montre l'ensemble.
-	for _, compte := range []string{"Mr-Commetuveux", "commetuveuxx"} {
+	for _, compte := range []string{"Mr-Commeilfaut", "commeilfautt"} {
 		fiche := users.ProfileOf(cours, inventaire, nil, nil, set, compte)
-		if fiche.Courses != 2 || len(fiche.Joined) != 2 || fiche.Username != "commetuveuxx" {
+		if fiche.Courses != 2 || len(fiche.Joined) != 2 || fiche.Username != "commeilfautt" {
 			t.Errorf("%s : fiche = %+v", compte, fiche)
 		}
 	}
@@ -153,22 +153,22 @@ func TestPreparerUneReunionDitCeQuiLEmporte(t *testing.T) {
 	set := registreDe(t)
 	lignes := users.Directory(cours, inventaire, nil, nil, set)
 
-	reunion, err := users.PlanJoin(lignes, set, "prof", "acme", "Mr-Commetuveux", "commetuveuxx")
+	reunion, err := users.PlanJoin(lignes, set, "prof", "acme", "Mr-Commeilfaut", "commeilfautt")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if reunion.FullName != "Jean Comme-Tu-Veux" || reunion.StudentID != "2412345" ||
 		reunion.Role != users.AsStudent ||
-		strings.Join(reunion.Accounts, ",") != "commetuveuxx,Mr-Commetuveux" {
+		strings.Join(reunion.Accounts, ",") != "commeilfautt,Mr-Commeilfaut" {
 		t.Fatalf("réunion = %+v", reunion)
 	}
 	// Dans l'autre sens, c'est l'autre nom qui l'emporte ; le matricule reste,
 	// faute d'un autre.
-	inverse, err := users.PlanJoin(lignes, set, "prof", "acme", "commetuveuxx", "Mr-Commetuveux")
+	inverse, err := users.PlanJoin(lignes, set, "prof", "acme", "commeilfautt", "Mr-Commeilfaut")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inverse.FullName != "Jean Commetuveux" || inverse.StudentID != "2412345" {
+	if inverse.FullName != "Jean Commeilfaut" || inverse.StudentID != "2412345" {
 		t.Errorf("inverse = %+v", inverse)
 	}
 }
@@ -177,7 +177,7 @@ func TestPreparerUneReunionDitCeQuiLEmporte(t *testing.T) {
 // frappe, d'un geste déjà fait, ou d'un clic d'étudiant.
 func TestCeQuUneReunionRefuse(t *testing.T) {
 	cours, inventaire := deuxSessions()
-	reunis := registreDe(t, registry.Join("Mr-Commetuveux", "commetuveuxx"))
+	reunis := registreDe(t, registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	cooptes := registreDe(t,
 		registry.Change{Learn: []registry.User{{Username: "prof"}}},
 		registry.SetRole("prof", true))
@@ -188,9 +188,9 @@ func TestCeQuUneReunionRefuse(t *testing.T) {
 		viewer, a, b, mot string
 	}{
 		{"même compte", registreDe(t), "prof", "autre-jean", "Autre-Jean", "même compte"},
-		{"déjà réunis", reunis, "prof", "commetuveuxx", "Mr-Commetuveux", "déjà réunis"},
+		{"déjà réunis", reunis, "prof", "commeilfautt", "Mr-Commeilfaut", "déjà réunis"},
 		{"faute de frappe", registreDe(t), "prof", "autre-jean", "comettuveux", "nulle part"},
-		{"pas enseignant", cooptes, "autre-jean", "autre-jean", "commetuveuxx", "Seul un enseignant"},
+		{"pas enseignant", cooptes, "autre-jean", "autre-jean", "commeilfautt", "Seul un enseignant"},
 	}
 	for _, c := range cas {
 		lignes := users.Directory(cours, inventaire, nil, nil, c.set)
@@ -204,7 +204,7 @@ func TestCeQuUneReunionRefuse(t *testing.T) {
 	cours[0].Students[0].StudentID = "2400001"
 	lignes := users.Directory(cours, inventaire, nil, nil, registreDe(t))
 	if _, err := users.PlanJoin(lignes, registreDe(t), "prof", "acme",
-		"Mr-Commetuveux", "commetuveuxx"); err == nil || !strings.Contains(err.Error(), "deux personnes") {
+		"Mr-Commeilfaut", "commeilfautt"); err == nil || !strings.Contains(err.Error(), "deux personnes") {
 		t.Errorf("matricules : err = %v", err)
 	}
 }
@@ -213,13 +213,13 @@ func TestCeQuUneReunionRefuse(t *testing.T) {
 // qui déclare deux comptes se corrige depuis ce groupe, et le domaine le dit.
 func TestSeparerNeDefaitQueCeQueLeRegistreAReuni(t *testing.T) {
 	cours, inventaire := deuxSessions()
-	set := registreDe(t, registry.Join("Mr-Commetuveux", "commetuveuxx"))
+	set := registreDe(t, registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	lignes := users.Directory(cours, inventaire, nil, nil, set)
-	separation, err := users.PlanSplit(lignes, set, "prof", "acme", "Mr-Commetuveux")
+	separation, err := users.PlanSplit(lignes, set, "prof", "acme", "Mr-Commeilfaut")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(separation.Remaining, ",") != "commetuveuxx" {
+	if strings.Join(separation.Remaining, ",") != "commeilfautt" {
 		t.Errorf("séparation = %+v", separation)
 	}
 
@@ -235,7 +235,7 @@ func TestSeparerNeDefaitQueCeQueLeRegistreAReuni(t *testing.T) {
 func TestLesCandidatsDeMemeNomPassentDAbord(t *testing.T) {
 	cours, inventaire := deuxSessions()
 	candidats := users.Candidates(users.Directory(cours, inventaire, nil, nil, registreDe(t)),
-		"Mr-Commetuveux")
+		"Mr-Commeilfaut")
 	if len(candidats) != 2 || candidats[0].Username != "autre-jean" || !candidats[0].SameName ||
 		candidats[1].SameName {
 		t.Fatalf("candidats = %+v", candidats)

@@ -83,13 +83,13 @@ func TestAnnuaireDitLeCompteARattacher(t *testing.T) {
 		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
 		Students: []roster.Person{
 			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-			{FullName: "Naomi Chéry", StudentID: "2100456"},
+			{FullName: "Nadia Pépin", StudentID: "2100110"},
 		},
 	})
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("@jlpicard", "Naomi Chéry      à rattacher")
+	h.contient("@jlpicard", "Nadia Pépin      à rattacher")
 	h.absent("@ ")
 }
 

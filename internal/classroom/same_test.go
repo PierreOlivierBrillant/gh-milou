@@ -10,18 +10,18 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 )
 
-// reunis rend un registre où @Mr-Commetuveux et @commetuveuxx sont une même
+// reunis rend un registre où @Mr-Commeilfaut et @commeilfautt sont une même
 // personne, désignée par le second.
 func reunis(t *testing.T) *registry.Set {
 	t.Helper()
 	set, _, err := registry.Empty().With(registry.Learn(
-		roster.Person{FullName: "Jean Commetuveux", Username: "Mr-Commetuveux"},
-		roster.Person{FullName: "Jean Commetuveux", Username: "commetuveuxx"},
+		roster.Person{FullName: "Jean Commeilfaut", Username: "Mr-Commeilfaut"},
+		roster.Person{FullName: "Jean Commeilfaut", Username: "commeilfautt"},
 	), "2026-10-07")
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, _, err = set.With(registry.Join("Mr-Commetuveux", "commetuveuxx"), "2026-10-07")
+	set, _, err = set.With(registry.Join("Mr-Commeilfaut", "commeilfautt"), "2026-10-07")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,14 +31,14 @@ func reunis(t *testing.T) *registry.Set {
 // Une réunion faite au registre vaut dans chaque groupe : la personne y a ses
 // deux comptes, et elle y est servie sous l'un comme sous l'autre.
 func TestLesComptesReunisAuRegistreRejoignentLeGroupe(t *testing.T) {
-	cours := groupe("a26", "5n6", "01", []roster.Person{{Username: "commetuveuxx"}}).
+	cours := groupe("a26", "5n6", "01", []roster.Person{{Username: "commeilfautt"}}).
 		Enrich(reunis(t), nil)
 
-	identite, trouvee := cours.IdentityOf("Mr-Commetuveux")
-	if !trouvee || strings.Join(identite.Accounts, ",") != "commetuveuxx,Mr-Commetuveux" {
+	identite, trouvee := cours.IdentityOf("Mr-Commeilfaut")
+	if !trouvee || strings.Join(identite.Accounts, ",") != "commeilfautt,Mr-Commeilfaut" {
 		t.Fatalf("identité = %+v", identite)
 	}
-	if comptes := cours.Accounts()["mr-commetuveux"]; len(comptes) != 2 {
+	if comptes := cours.Accounts()["mr-commeilfaut"]; len(comptes) != 2 {
 		t.Errorf("comptes = %v", comptes)
 	}
 }
@@ -47,8 +47,8 @@ func TestLesComptesReunisAuRegistreRejoignentLeGroupe(t *testing.T) {
 // n'est retiré d'aucune liste, et pourtant le groupe ne compte plus double.
 func TestDeuxInscriptionsReuniesNeFontQuUnePersonne(t *testing.T) {
 	cours := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Jean Commetuveux", Username: "commetuveuxx"},
-		{FullName: "Jean Commetuveux", Username: "Mr-Commetuveux"},
+		{FullName: "Jean Commeilfaut", Username: "commeilfautt"},
+		{FullName: "Jean Commeilfaut", Username: "Mr-Commeilfaut"},
 	}).Enrich(reunis(t), nil)
 
 	if identites := cours.Identities(); len(identites) != 1 {
@@ -64,7 +64,7 @@ func TestDeuxInscriptionsReuniesNeFontQuUnePersonne(t *testing.T) {
 func TestLaReunionNeSEcritPasDansLaListe(t *testing.T) {
 	magasin := classroom.Open(filepath.Join(t.TempDir(), classroom.FileName))
 	cours := groupe("a26", "5n6", "01", []roster.Person{
-		{FullName: "Jean Commetuveux", Username: "commetuveuxx", Also: []string{"jc-perso"}},
+		{FullName: "Jean Commeilfaut", Username: "commeilfautt", Also: []string{"jc-perso"}},
 	}).Enrich(reunis(t), nil)
 	if _, err := magasin.Save(cours); err != nil {
 		t.Fatal(err)

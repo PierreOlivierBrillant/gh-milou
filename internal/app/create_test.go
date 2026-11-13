@@ -134,7 +134,7 @@ func (h *harnais) cohorteSansCompte() string {
 	h.t.Helper()
 	chemin := filepath.Join(h.t.TempDir(), "cohorte.csv")
 	if err := os.WriteFile(chemin,
-		[]byte("nom_complet,matricule\nNaomi Chéry,2100456\nAminata Diallo,2100789\n"),
+		[]byte("nom_complet,matricule\nNadia Pépin,2100110\nAminata Diallo,2100789\n"),
 		0o644); err != nil {
 		h.t.Fatal(err)
 	}
@@ -153,8 +153,8 @@ func TestUneCohorteSansCompteRecoitSesDepots(t *testing.T) {
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	if noms := strings.Join(h.depots(), ","); noms != "tp1-aminata-diallo,tp1-naomi-chery" &&
-		noms != "tp1-naomi-chery,tp1-aminata-diallo" {
+	if noms := strings.Join(h.depots(), ","); noms != "tp1-aminata-diallo,tp1-nadia-pepin" &&
+		noms != "tp1-nadia-pepin,tp1-aminata-diallo" {
 		t.Fatalf("dépôts = %s\n%s", noms, h.texte())
 	}
 	// Le récapitulatif et la progression le disent comme la liste : un « @ »
@@ -163,7 +163,7 @@ func TestUneCohorteSansCompteRecoitSesDepots(t *testing.T) {
 	h.absent("@ ", "@\n")
 	recapitulee := false
 	for _, ligne := range strings.Split(h.texte(), "\n") {
-		if strings.Contains(ligne, "tp1-naomi-chery") && strings.Contains(ligne, "Naomi Chéry") {
+		if strings.Contains(ligne, "tp1-nadia-pepin") && strings.Contains(ligne, "Nadia Pépin") {
 			recapitulee = true
 			if !strings.HasSuffix(strings.TrimSpace(ligne), "à rattacher") {
 				t.Errorf("son compte reste à rattacher : %q", ligne)
@@ -187,7 +187,7 @@ func TestLeGabaritParCompteRefuseUneCohorteSansCompte(t *testing.T) {
 	if code := h.muet(); code == app.ExitOK {
 		t.Fatalf("un refus était attendu\n%s", h.texte())
 	}
-	h.contient("Naomi Chéry", "{name}")
+	h.contient("Nadia Pépin", "{name}")
 	h.absent("Collision")
 	if noms := h.depots(); len(noms) != 0 {
 		t.Fatalf("rien ne devait être créé : %v", noms)

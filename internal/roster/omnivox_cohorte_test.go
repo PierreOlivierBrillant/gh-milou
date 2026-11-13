@@ -33,7 +33,7 @@ func omnivox(lignes ...string) []byte {
 func TestUneListeSansCompteSeLitQuandMeme(t *testing.T) {
 	lue := roster.ParseBytes(omnivox(
 		"Numéro d'étudiant;Nom de l'étudiant;Prénom;Code permanent",
-		`="1680229";="Adam-Larocque";="Laurent";="ADAL01010101"`,
+		`="1600105";="Aube-Lachance";="Lorenzo";="AUBL01010101"`,
 		`="2100123";="Côté";="Émilie";="COTE03030303"`,
 	))
 
@@ -49,7 +49,7 @@ func TestUneListeSansCompteSeLitQuandMeme(t *testing.T) {
 	}
 	// Le prénom passe devant : c'est ainsi qu'on nomme quelqu'un, et ainsi que
 	// son nom entrera dans celui de ses dépôts.
-	if tous[0].FullName != "Laurent Adam-Larocque" || tous[0].StudentID != "1680229" {
+	if tous[0].FullName != "Lorenzo Aube-Lachance" || tous[0].StudentID != "1600105" {
 		t.Errorf("première personne : %+v", tous[0])
 	}
 	if tous[1].FullName != "Émilie Côté" || tous[1].Username != "" {

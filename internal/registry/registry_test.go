@@ -70,19 +70,19 @@ func TestCorrigerUnNomGardeLAncienSlug(t *testing.T) {
 // de groupe : le registre ne l'a peut-être jamais reçu, et c'est pourtant lui
 // qui a nommé ses dépôts. Ce qu'une liste dit d'un autre compte n'y entre pas.
 func TestNommerGardeLeSlugQueDonnaitUneListe(t *testing.T) {
-	change := registry.Name(personne("Aleksi Lepaj", "aleksilepaj"),
-		personne("Aleksi Lepa", "AleksiLepaj"), personne("Émilie Côté", "ecote"),
-		personne("", "aleksilepaj"))
+	change := registry.Name(personne("Aleksi Lesaj", "aleksilesaj"),
+		personne("Aleksi Lesa", "AleksiLesaj"), personne("Émilie Côté", "ecote"),
+		personne("", "aleksilesaj"))
 	set, _, err := appliquer(t, registry.Empty(), change)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fiche, _ := set.Find("aleksilepaj")
-	if fiche.FullName != "Aleksi Lepaj" {
+	fiche, _ := set.Find("aleksilesaj")
+	if fiche.FullName != "Aleksi Lesaj" {
 		t.Fatalf("nom = %q", fiche.FullName)
 	}
-	if strings.Join(fiche.Slugs, ",") != "aleksi-lepa,aleksi-lepaj" {
+	if strings.Join(fiche.Slugs, ",") != "aleksi-lesa,aleksi-lesaj" {
 		t.Fatalf("slugs = %v", fiche.Slugs)
 	}
 	if _, trouve := set.Resolve("emilie-cote"); trouve {
@@ -262,21 +262,21 @@ func TestUnRegistreVideNEstPasUneErreur(t *testing.T) {
 // orphelin. C'est ce qui permet ensuite de la nommer ou de la déplacer.
 func TestUneFicheSansNomDesigneQuandMemeQuelquun(t *testing.T) {
 	set, _, err := appliquer(t, registry.Empty(),
-		registry.Learn(personne("", "aleksilepaj")))
+		registry.Learn(personne("", "aleksilesaj")))
 	if err != nil {
 		t.Fatal(err)
 	}
-	trouvee, connue := set.Lookup("aleksilepaj")
+	trouvee, connue := set.Lookup("aleksilesaj")
 	if !connue {
 		t.Fatal("le compte doit se retrouver même sans nom complet")
 	}
-	if trouvee.Username != "aleksilepaj" || trouvee.FullName != "" {
+	if trouvee.Username != "aleksilesaj" || trouvee.FullName != "" {
 		t.Fatalf("personne = %+v", trouvee)
 	}
 	// La marque de doublon de GitHub n'en fait pas quelqu'un d'autre.
-	if trouvee, connue := set.Lookup("aleksilepaj-1"); !connue ||
-		trouvee.Username != "aleksilepaj" {
-		t.Errorf("« aleksilepaj-1 » = %+v, %v", trouvee, connue)
+	if trouvee, connue := set.Lookup("aleksilesaj-1"); !connue ||
+		trouvee.Username != "aleksilesaj" {
+		t.Errorf("« aleksilesaj-1 » = %+v, %v", trouvee, connue)
 	}
 	// Ce que le registre ignore reste ignoré : un slug n'invente personne.
 	if _, connue := set.Lookup("emilie-cote"); connue {
@@ -412,12 +412,12 @@ func TestUnRegistreEnVersion1SeRelit(t *testing.T) {
 // le portait — et, le nom manquant, plus rien ne rattachait ses dépôts à lui.
 func TestDeuxLignesPourUnMemeCompteSeReunissent(t *testing.T) {
 	set, soucis := registry.Decode([]byte(`{"version":2,"users":[
-		{"username":"1680229","added_at":"2026-08-01"},
-		{"username":"1680229","full_name":"Prénom Nom","slugs":["prenom-nom"],
-		 "is_teacher":true,"student_id":"1680229","added_at":"2026-09-01"}
+		{"username":"1600105","added_at":"2026-08-01"},
+		{"username":"1600105","full_name":"Prénom Nom","slugs":["prenom-nom"],
+		 "is_teacher":true,"student_id":"1600105","added_at":"2026-09-01"}
 	]}`))
 
-	if nom := set.Name("1680229"); nom != "Prénom Nom" {
+	if nom := set.Name("1600105"); nom != "Prénom Nom" {
 		t.Errorf("Name = %q : le nom de la seconde ligne est perdu", nom)
 	}
 	if set.Len() != 1 {
@@ -425,15 +425,15 @@ func TestDeuxLignesPourUnMemeCompteSeReunissent(t *testing.T) {
 	}
 	// Le slug de la seconde ligne rattache les dépôts déjà créés sous ce nom.
 	if personne, trouve := set.Lookup("prenom-nom"); !trouve ||
-		personne.Username != "1680229" {
+		personne.Username != "1600105" {
 		t.Errorf("Lookup(« prenom-nom ») = %+v, %v", personne, trouve)
 	}
 	// Ni le rôle ni le matricule ne s'oublient.
-	if !set.Teaches("1680229") {
+	if !set.Teaches("1600105") {
 		t.Error("le rôle déclaré sur la seconde ligne est perdu")
 	}
-	fiche, _ := set.Find("1680229")
-	if fiche.StudentID != "1680229" {
+	fiche, _ := set.Find("1600105")
+	if fiche.StudentID != "1600105" {
 		t.Errorf("StudentID = %q", fiche.StudentID)
 	}
 	// La plus ancienne date d'ajout l'emporte : c'est depuis elle qu'on connaît

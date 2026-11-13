@@ -95,16 +95,16 @@ func TestProfilIntrouvable(t *testing.T) {
 func TestOwnersLitLeCompteDansLesAcces(t *testing.T) {
 	client, serveur := monter(t)
 	// Le nom ne dit pas où finit le travail : « kickmyb-firebase » en fait
-	// partie, et le découper au jugé donnerait « firebase-Walid7Akk ».
-	serveur.State.AddRepo("acme", "kickmyb-firebase-Walid7Akk", true)
-	serveur.State.AddCollaborator("acme/kickmyb-firebase-Walid7Akk", "Walid7Akk", "push")
+	// partie, et le découper au jugé donnerait « firebase-Wasim7Zed ».
+	serveur.State.AddRepo("acme", "kickmyb-firebase-Wasim7Zed", true)
+	serveur.State.AddCollaborator("acme/kickmyb-firebase-Wasim7Zed", "Wasim7Zed", "push")
 	// L'enseignant a accès à tout : il n'est l'indice de rien.
-	serveur.State.AddCollaborator("acme/kickmyb-firebase-Walid7Akk", "prof", "admin")
+	serveur.State.AddCollaborator("acme/kickmyb-firebase-Wasim7Zed", "prof", "admin")
 
 	resolveur := identity.New(client, cache.NewIn(t.TempDir(), true), 4)
-	trouves := resolveur.Owners("acme", []string{"kickmyb-firebase-Walid7Akk"}, "prof", nil)
-	if trouves["kickmyb-firebase-Walid7Akk"].Login != "Walid7Akk" {
-		t.Fatalf("propriétaire = %+v", trouves["kickmyb-firebase-Walid7Akk"])
+	trouves := resolveur.Owners("acme", []string{"kickmyb-firebase-Wasim7Zed"}, "prof", nil)
+	if trouves["kickmyb-firebase-Wasim7Zed"].Login != "Wasim7Zed" {
+		t.Fatalf("propriétaire = %+v", trouves["kickmyb-firebase-Wasim7Zed"])
 	}
 }
 
