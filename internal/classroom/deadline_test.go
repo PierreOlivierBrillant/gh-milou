@@ -238,6 +238,31 @@ func TestTousLesMembresMuetsDUneEquipeSontNommes(t *testing.T) {
 	}
 }
 
+// L'enseignant membre d'une équipe n'est pas visé par son dépôt : qu'il n'y ait
+// rien écrit ne fait pas de lui un étudiant muet.
+func TestLEnseignantDUneEquipeNEstPasMuet(t *testing.T) {
+	cours := groupe("a26", "5n6", "01",
+		personnes("Émilie Côté", "ecote", "Jean-Luc Picard", "jlpicard")).
+		Staffing(equipeEnseignante{"prof": true})
+	repos := depots("a26.5n6.01.projet.eq1")
+	equipes := []teams.Team{{
+		Slug: "a26-5n6-01-eq1", Name: "a26.5n6.01.eq1", Short: "eq1",
+		Members: []string{"ecote", "jlpicard", "prof"},
+	}}
+	remises := map[string]groups.Handin{
+		"a26.5n6.01.projet.eq1": remise(5, instant("2026-11-01", "09:00"),
+			map[string]int{"ecote": 3, "jlpicard": 2}),
+	}
+
+	bilans := cours.Reviews("a26.5n6.01.projet", repos, equipes, remises)
+	if len(bilans) != 1 || bilans[0].Missing() {
+		t.Fatalf("bilans = %+v : personne ne devrait être muet", bilans)
+	}
+	if cibles := cours.Targets("a26.5n6.01.projet.eq1", equipes); len(cibles) != 2 {
+		t.Errorf("le dépôt vise ses deux étudiants, et eux seuls : %v", cibles)
+	}
+}
+
 func TestUnDepotNonReleveNEstPasUnDepotVide(t *testing.T) {
 	cours := groupe("a26", "5n6", "01",
 		personnes("Émilie Côté", "ecote", "Jean-Luc Picard", "jlpicard")).

@@ -106,10 +106,13 @@ func TestUnEtudiantNeReunitPas(t *testing.T) {
 	if reponse.StatusCode == http.StatusOK || !strings.Contains(string(contenu), "Seul un enseignant") {
 		t.Fatalf("statut %d — %s", reponse.StatusCode, contenu)
 	}
+	// Le geste se propose depuis la fiche, et d'elle seule : l'annuaire le
+	// répéterait sur chacune de ses centaines de lignes. C'est qui regarde qui
+	// en décide, quelle que soit la personne affichée.
 	var rendu struct {
 		MayDecide bool `json:"may_decide"`
 	}
-	h.json(http.MethodGet, "/api/users", nil, &rendu)
+	h.json(http.MethodGet, "/api/users/emilie-cote", nil, &rendu)
 	if rendu.MayDecide {
 		t.Error("la page ne doit pas proposer le geste à qui ne peut pas le faire")
 	}

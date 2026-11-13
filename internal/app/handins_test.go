@@ -209,6 +209,40 @@ func TestUnDepotSansRemiseLeDitSansNommerPersonne(t *testing.T) {
 	}
 }
 
+// L'enseignant membre d'une équipe n'est pas visé par son dépôt : le relevé ne
+// le dit pas muet quand ses étudiants ont remis sans lui.
+func TestLeReleveNeDitPasMuetLEnseignantDUneEquipe(t *testing.T) {
+	state := fakegh.NewState()
+	depot := state.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
+	depot.History = fakegh.Commits("2026-10-01T09:00:00Z")
+	state.AddContributors("acme/a26.5n6.01.projet.eq1", "emilie-cote")
+	state.AddTeam("acme", "a26.5n6.01.eq1", "emilie-cote", "prof")
+
+	h := nouveau(t, state)
+	h.declarer(classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{{FullName: "Émilie Côté", Username: "emilie-cote"}},
+	})
+	avant := *h.Options
+	h.Options.User = "prof"
+	h.Options.TeacherSet, h.Options.Teacher = true, true
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("cooptation : code %d\n%s", code, h.texte())
+	}
+	*h.Options = avant
+
+	h.Sortie.Reset()
+	h.Options.ManageRequested, h.Options.Manage = true, "a26.5n6.01.projet"
+	h.Options.Handins = true
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	h.contient("remis")
+	if strings.Contains(h.texte(), "rien de") || strings.Contains(h.texte(), "non remis") {
+		t.Errorf("l'enseignant est dit muet :\n%s", h.texte())
+	}
+}
+
 // groupeAvecInvitation monte un travail de deux dépôts : l'un remis, l'autre
 // dont l'étudiant n'a pas encore accepté son invitation.
 func groupeAvecInvitation(t *testing.T) *harnais {

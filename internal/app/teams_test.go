@@ -77,6 +77,36 @@ func TestSansEquipeNommeQuiNAPasDeCompte(t *testing.T) {
 	h.contient("Sans équipe : @jlpicard, Naomi Chéry")
 }
 
+// L'enseignant d'une équipe se dit enseignant, comme au navigateur, et non
+// « hors liste » comme un compte que rien ne connaît.
+func TestTerminalDitEnseignantLEnseignantDUneEquipe(t *testing.T) {
+	h := nouveau(t, nil)
+	h.declarer(classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{{FullName: "Émilie Côté", Username: "emilie-cote"}},
+	})
+	avant := *h.Options
+	h.Options.User = "prof"
+	h.Options.TeacherSet, h.Options.Teacher = true, true
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("cooptation : code %d\n%s", code, h.texte())
+	}
+	*h.Options = avant
+	h.State.AddTeam("acme", "a26.5n6.01.eq1", "emilie-cote", "prof", "inconnu-quelconque")
+
+	h.Sortie.Reset()
+	h.Options.ManageRequested, h.Options.Manage = true, "a26.5n6.01"
+	h.Options.Teams = true
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("code de retour %d :\n%s", code, h.texte())
+	}
+	h.contient("Émilie Côté (@emilie-cote)", "Professeure (@prof) (enseignant)",
+		"@inconnu-quelconque (hors liste)")
+	if strings.Contains(h.texte(), "(@prof) (hors liste)") {
+		t.Errorf("l'enseignant est dit hors liste :\n%s", h.texte())
+	}
+}
+
 func TestTerminalDeplaceUnEtudiantDEquipe(t *testing.T) {
 	h := nouveau(t, nil)
 	h.composer("a26.5n6.01", "eq1", "emilie-cote", "jlpicard")

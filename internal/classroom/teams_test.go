@@ -201,7 +201,7 @@ func TestDescribeSepareLesMembresConnusDesEtrangers(t *testing.T) {
 		Slug: "a26-5n6-01-eq1", Name: "a26.5n6.01.eq1",
 		Members: []string{"emilie-cote", "intrus"},
 	}})
-	fiches := cours.Describe(equipes)
+	fiches := cours.Describe(equipes, nil)
 	if len(fiches) != 1 {
 		t.Fatalf("une fiche attendue, %d", len(fiches))
 	}
@@ -210,6 +210,87 @@ func TestDescribeSepareLesMembresConnusDesEtrangers(t *testing.T) {
 	}
 	if len(fiches[0].Strangers) != 1 || fiches[0].Strangers[0].Username != "intrus" {
 		t.Fatalf("l'intrus devrait être signalé : %v", fiches[0].Strangers)
+	}
+}
+
+// Un enseignant membre d'une équipe n'est pas un inconnu : le ranger « hors
+// liste » inviterait à l'inscrire au groupe comme étudiant. Le registre dit
+// qu'il enseigne, et nomme au passage ceux que la liste du groupe ignore.
+func TestDescribeMetLesEnseignantsAPart(t *testing.T) {
+	cours, _, _ := avecEquipes()
+	cours = cours.Staffing(enseignants{"prof": true})
+	equipes := cours.Teams([]teams.Info{{
+		Slug: "a26-5n6-01-eq1", Name: "a26.5n6.01.eq1",
+		Members: []string{"emilie-cote", "Prof", "kjaneway"},
+	}})
+	registre := annuaire{
+		"prof":     {FullName: "Professeure", Username: "prof"},
+		"kjaneway": {FullName: "Kathryn Janeway", Username: "kjaneway"},
+	}
+	fiche := cours.Describe(equipes, registre)[0]
+
+	if len(fiche.People) != 1 || fiche.People[0].Username != "emilie-cote" {
+		t.Fatalf("membres de la liste = %+v", fiche.People)
+	}
+	// Le compte reste celui par lequel il est dans l'équipe : c'est lui qu'on
+	// en retirerait.
+	if len(fiche.Teachers) != 1 || fiche.Teachers[0].Username != "Prof" ||
+		fiche.Teachers[0].FullName != "Professeure" {
+		t.Fatalf("enseignants = %+v", fiche.Teachers)
+	}
+	if len(fiche.Strangers) != 1 || fiche.Strangers[0].Username != "kjaneway" ||
+		fiche.Strangers[0].FullName != "Kathryn Janeway" {
+		t.Fatalf("hors liste = %+v", fiche.Strangers)
+	}
+}
+
+// Un groupe qui ne sait pas qui enseigne ne le devine pas : l'enseignant reste
+// parmi ceux que rien ne rattache. Et la liste passe avant le registre : qui y
+// figure est de l'équipe à ce titre, même s'il enseigne ailleurs.
+func TestDescribeNeDevinePasQuiEnseigne(t *testing.T) {
+	cours, _, _ := avecEquipes()
+	equipes := cours.Teams([]teams.Info{{
+		Slug: "a26-5n6-01-eq1", Name: "a26.5n6.01.eq1",
+		Members: []string{"jlpicard", "prof"},
+	}})
+
+	sans := cours.Describe(equipes, nil)[0]
+	if len(sans.Teachers) != 0 || len(sans.Strangers) != 1 || sans.Strangers[0].Username != "prof" {
+		t.Fatalf("sans registre : enseignants = %+v, hors liste = %+v", sans.Teachers, sans.Strangers)
+	}
+
+	avec := cours.Staffing(enseignants{"prof": true, "jlpicard": true}).Describe(equipes, nil)[0]
+	if len(avec.People) != 1 || avec.People[0].Username != "jlpicard" {
+		t.Fatalf("inscrit au groupe, il en reste : %+v", avec.People)
+	}
+	if len(avec.Teachers) != 1 || avec.Teachers[0].Username != "prof" || len(avec.Strangers) != 0 {
+		t.Fatalf("enseignants = %+v, hors liste = %+v", avec.Teachers, avec.Strangers)
+	}
+}
+
+// Le dépôt d'une équipe ne concerne pas l'enseignant qui en est membre : il
+// n'est pas nommé parmi ceux à qui il est destiné. La liste passe avant le
+// registre, et un groupe qui ne sait pas qui enseigne ne le devine pas.
+func TestMembersNeNommePasLEnseignantDeLEquipe(t *testing.T) {
+	cours, _, _ := avecEquipes()
+	equipe := cours.Teams([]teams.Info{{
+		Slug: "a26-5n6-01-eq1", Name: "a26.5n6.01.eq1",
+		Members: []string{"emilie-cote", "jlpicard", "prof"},
+	}})[0]
+	comptes := func(gens []roster.Person) string {
+		noms := make([]string, 0, len(gens))
+		for _, personne := range gens {
+			noms = append(noms, personne.Username)
+		}
+		return strings.Join(noms, ",")
+	}
+
+	if tous := comptes(cours.Members(equipe)); tous != "emilie-cote,jlpicard,prof" {
+		t.Fatalf("sans registre, tous les comptes sont nommés : %s", tous)
+	}
+	vises := comptes(cours.Staffing(enseignants{"prof": true, "jlpicard": true}).Members(equipe))
+	if vises != "emilie-cote,jlpicard" {
+		t.Fatalf("membres visés = %s, attendu les deux étudiants de la liste", vises)
 	}
 }
 
