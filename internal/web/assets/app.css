@@ -1404,6 +1404,21 @@ dialog .corps-dialogue > * + * { margin-top: .75rem; }
 }
 
 .souple { flex: 1 1 18rem; min-width: 0; }
+
+/* Ce qui est comparé : une source par rangée, ce qu'elle apporte à gauche, le
+   geste qui l'enrichit à droite. Sur un écran étroit, le geste passe dessous
+   plutôt que d'écraser la liste. */
+.pl-source {
+  display: flex; flex-wrap: wrap; align-items: flex-start;
+  justify-content: space-between; gap: .5rem 1rem;
+}
+.pl-source + .pl-source { padding-top: .9rem; border-top: 1px solid var(--bord); }
+.pl-source > :first-child { flex: 1 1 18rem; min-width: 0; }
+.pl-source > :first-child > * + * { margin-top: .3rem; }
+.pl-source-ligne { display: flex; align-items: baseline; gap: .75rem; padding: .15rem 0; }
+.pl-source-ligne > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.pl-source-ligne .lien { flex: 0 0 auto; font-size: .875rem; }
+
 .pl-bascule { align-self: flex-end; padding-bottom: .4rem; }
 .pl-avance { margin-bottom: 1rem; }
 .pl-avance > summary {

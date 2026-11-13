@@ -111,8 +111,8 @@ func montrerDemandes(console *ui.Console, set *registry.Set,
 	console.Table([]string{"Demande", "À", "Travail", "Copie", "Mesuré",
 		"État", "Ce qui est dit"}, lignesDeDemandes(set, faites, false), 0)
 	console.Note("Une demande accordée ne fait rien apparaître ici : le " +
-		"propriétaire vous envoie l'archive, et « --import-zip » la verse dans " +
-		"l'analyse.")
+		"propriétaire vous envoie l'archive, que « Comparer les copies » verse dans " +
+		"l'analyse, sous « Copies reçues » (ou « --import-zip »).")
 }
 
 // lignesDeDemandes met des noms sur les comptes : un tableau qui ne parlerait
@@ -196,7 +196,8 @@ func (m *manageSession) deposerDemande() error {
 	if len(candidates) == 0 {
 		return valid.Errorf(
 			"Aucune copie dépistée dans les rapports de « %s » : comparez d'abord "+
-				"vos copies à l'index publié d'un collègue (« --against »).",
+				"vos copies à l'index publié d'un collègue (« Comparer les copies », "+
+				"ou « --against »).",
 			m.session.Options.ReportDir)
 	}
 

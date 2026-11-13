@@ -8920,16 +8920,8 @@ $('pl-regles-ecrire').addEventListener('click', () => tenter(async () => {
 // envoie les copies — et dans ce cas, ce sont des copies anonymisées qui
 // voyagent, jamais une liste de noms.
 
-const menuEchange = menuDeroulant('pl-menu-ouvrir', 'pl-menu');
-
-$('pl-envoyer').addEventListener('click', () => {
-  menuEchange.deplier(false);
-  demanderEnvoi();
-});
-$('pl-recevoir').addEventListener('click', () => {
-  menuEchange.deplier(false);
-  ajouterArchive();
-});
+$('pl-envoyer').addEventListener('click', () => demanderEnvoi());
+$('pl-recevoir').addEventListener('click', () => ajouterArchive());
 $('cmp-regles').addEventListener('click',
   () => tenter(() => ouvrirReglesPlagiat(), 'Règles de comparaison'));
 
@@ -9067,34 +9059,46 @@ async function ajouterArchive() {
   videApercu();
 }
 
+// dessinerArchives remplit, dans « Ce qui est comparé », la rangée des copies
+// reçues. Vide, elle dit ce qu'on pourrait y verser : une source qu'on ne voit
+// pas est une source dont on ignore qu'elle existe.
 function dessinerArchives() {
   const archives = etat.plagiat.archives || [];
   const zone = $('pl-archives');
   vider(zone);
-  if (!archives.length) return;
+  if (!archives.length) {
+    zone.append(el('p', {
+      classe: 'note',
+      texte: 'Aucune. Un ZIP de copies anonymisées, envoyé par un collègue, '
+        + 'entre dans l’analyse par le même chemin que vos copies.',
+    }));
+    return;
+  }
 
-  const corps = el('div', { classe: 'boite-corps' });
-  corps.append(el('p', {
+  for (const chemin of archives) {
+    zone.append(ligneDeSource(el('code', { texte: chemin }), chemin, () => {
+      etat.plagiat.archives = archives.filter((item) => item !== chemin);
+      dessinerArchives();
+      videApercu();
+    }));
+  }
+  zone.append(el('p', {
     classe: 'note',
     texte: 'Ces copies n’ont ni dépôt ni nom : seul leur expéditeur sait qui '
       + 'elles sont. Elles paraîtront sous leur jeton.',
   }));
-  for (const chemin of archives) {
-    corps.append(el('div', {},
-      el('code', { texte: chemin }),
-      el('button', {
-        type: 'button', classe: 'bouton petit', texte: 'Retirer',
-        onclick: () => {
-          etat.plagiat.archives = archives.filter((item) => item !== chemin);
-          dessinerArchives();
-          videApercu();
-        },
-      })));
-  }
-  zone.append(el('div', { classe: 'boite' },
-    el('div', { classe: 'boite-entete' },
-      el('strong', { texte: pluriel(archives.length, 'archive reçue', 'archives reçues') })),
-    corps));
+}
+
+// ligneDeSource est une entrée d'une source de l'analyse, qu'on peut retirer
+// avant de lancer. Le retrait suit l'entrée, en lien : un bouton de plus, au
+// bord de la rangée, se confondrait avec celui qui remplit la source.
+function ligneDeSource(contenu, nom, retirer) {
+  return el('div', { classe: 'pl-source-ligne' },
+    contenu,
+    el('button', {
+      type: 'button', classe: 'lien', texte: 'Retirer',
+      'aria-label': `Retirer ${nom}`, onclick: retirer,
+    }));
 }
 
 // ------------------------------------------------ comparer avec un collègue
@@ -9107,10 +9111,7 @@ function dessinerArchives() {
 // opaques. On mesure les ressemblances avec les copies d'en face sans en lire
 // une ligne — le cloisonnement tient pendant tout le dépistage.
 
-$('pl-contre').addEventListener('click', () => {
-  menuEchange.deplier(false);
-  tenter(() => choisirCollegue(), 'Catalogue');
-});
+$('pl-contre').addEventListener('click', () => tenter(() => choisirCollegue(), 'Catalogue'));
 
 async function choisirCollegue() {
   const catalogue = await api('GET', `/api/orgs/${encode(etat.organisation)}/catalog`);
@@ -9141,7 +9142,7 @@ async function choisirCollegue() {
         }))));
   }
 
-  const suite = await demander('Comparer avec un collègue',
+  const suite = await demander('Choisir des travaux de collègues',
     el('div', {},
       el('p', {
         texte: 'Ce qui traverse est un index d’empreintes : des hachés de '
@@ -9160,40 +9161,43 @@ async function choisirCollegue() {
   videApercu();
 }
 
+// dessinerCollegues remplit, dans « Ce qui est comparé », la rangée des
+// travaux de collègues.
 function dessinerCollegues() {
   const indexes = etat.plagiat.indexes || [];
   const zone = $('pl-collegues');
   vider(zone);
-  if (!indexes.length) return;
+  if (!indexes.length) {
+    zone.append(el('p', {
+      classe: 'note',
+      texte: 'Aucun. L’index d’empreintes qu’un collègue a publié se compare à '
+        + 'vos copies sans qu’on lise une ligne de son code.',
+    }));
+    return;
+  }
 
   const catalogue = etat.plagiat.catalogue || { teaching: [] };
-  const corps = el('div', { classe: 'boite-corps' });
-  corps.append(el('p', {
+  for (const id of indexes) {
+    const ligne = (catalogue.teaching || []).find((item) => item.id === id) || {};
+    zone.append(ligneDeSource(
+      el('span', {},
+        el('code', { texte: id }),
+        el('span', {
+          classe: 'note',
+          texte: ligne.teacher ? ` — ${ligne.teacher_name || '@' + ligne.teacher}` : '',
+        })),
+      id, () => {
+        etat.plagiat.indexes = indexes.filter((item) => item !== id);
+        dessinerCollegues();
+        videApercu();
+      }));
+  }
+  zone.append(el('p', {
     classe: 'note',
     texte: 'Des empreintes, jamais du code. Les copies d’en face paraîtront '
       + 'sous un jeton : pour savoir de qui il s’agit, il faudra le demander à '
       + 'qui les a publiées.',
   }));
-  for (const id of indexes) {
-    const ligne = (catalogue.teaching || []).find((item) => item.id === id) || {};
-    corps.append(el('div', {},
-      el('code', { texte: id }),
-      el('span', {
-        classe: 'note',
-        texte: ligne.teacher ? ` — ${ligne.teacher_name || '@' + ligne.teacher}` : '',
-      }),
-      el('button', {
-        type: 'button', classe: 'bouton petit', texte: 'Retirer',
-        onclick: () => {
-          etat.plagiat.indexes = indexes.filter((item) => item !== id);
-          dessinerCollegues();
-          videApercu();
-        },
-      })));
-  }
-  zone.append(el('div', { classe: 'boite' },
-    el('div', { classe: 'boite-entete' },
-      el('strong', { texte: `${indexes.length} travail(aux) d’un collègue` })), corps));
 }
 
 // ------------------------------------------------------ lever le voile
@@ -9280,8 +9284,8 @@ function ligneDeDemandeRecue(demande) {
 
 function ligneDeDemandeFaite(demande) {
   const suite = {
-    'accordée': 'Le collègue vous enverra l’archive de cette copie ; '
-      + '« Ajouter des copies reçues… » la versera dans l’analyse.',
+    'accordée': 'Le collègue vous enverra l’archive de cette copie ; dans la '
+      + 'comparaison du travail, « Copies reçues » la versera dans l’analyse.',
     'refusée': demande.reason ? `Motif : « ${demande.reason} »` : 'Sans motif donné.',
   }[demande.state] || 'En attente de sa décision.';
   return el('div', { classe: 'pl-demande' },

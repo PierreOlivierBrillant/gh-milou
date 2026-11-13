@@ -72,6 +72,13 @@ func (t Teaching) ID() string {
 // Key sert au rangement.
 func (t Teaching) Key() string { return strings.ToLower(t.ID()) }
 
+// GivenBy dit si le travail est celui de cet enseignant. Le navigateur et le
+// terminal en tirent la même frontière : ses travaux se publient, ceux des
+// autres se comparent.
+func (t Teaching) GivenBy(teacher string) bool {
+	return strings.EqualFold(t.Teacher, strings.TrimSpace(teacher))
+}
+
 // validate met une ligne en forme et refuse ce qui ne peut pas la désigner.
 func (t Teaching) validate() (Teaching, error) {
 	t.Scope = strings.ToLower(strings.TrimSpace(t.Scope))
@@ -160,15 +167,28 @@ func (c Catalog) With(entries []Teaching) (Catalog, bool, error) {
 
 // Of rend les travaux d'un enseignant, du plus récent au plus ancien.
 func (c Catalog) Of(teacher string) []Teaching {
-	teacher = strings.ToLower(strings.TrimSpace(teacher))
 	siens := make([]Teaching, 0, 8)
 	for _, ligne := range c.Teaching {
-		if ligne.Teacher == teacher {
+		if ligne.GivenBy(teacher) {
 			siens = append(siens, ligne)
 		}
 	}
 	byRecency(siens)
 	return siens
+}
+
+// Others rend les travaux que les collègues d'un enseignant ont annoncés, du
+// plus récent au plus ancien : ce à quoi il peut comparer ses copies quand
+// l'index en est publié, et ce dont il peut demander la publication sinon.
+func (c Catalog) Others(teacher string) []Teaching {
+	autres := make([]Teaching, 0, 8)
+	for _, ligne := range c.Teaching {
+		if !ligne.GivenBy(teacher) {
+			autres = append(autres, ligne)
+		}
+	}
+	byRecency(autres)
+	return autres
 }
 
 // Unindexed rend les travaux qu'un enseignant a annoncés sans en publier

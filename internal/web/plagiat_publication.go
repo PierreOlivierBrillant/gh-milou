@@ -65,7 +65,7 @@ func (s *Server) handleCatalog(writer http.ResponseWriter, request *http.Request
 			"teacher": ligne.Teacher, "teacher_name": set.Name(ligne.Teacher),
 			"copies": ligne.Copies, "last_handin": ligne.LastHandin,
 			"indexed": ligne.Indexed, "updated_at": ligne.UpdatedAt,
-			"mine": strings.EqualFold(ligne.Teacher, s.deps.Viewer),
+			"mine": ligne.GivenBy(s.deps.Viewer),
 		})
 	}
 	// Ce qui manque est nommé par le domaine plutôt que déduit de la liste :

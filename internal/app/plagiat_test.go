@@ -470,6 +470,54 @@ func TestLAssistantRefuseUneDemandeRecue(t *testing.T) {
 	liste.contient(demande, "refusée", "la direction")
 }
 
+// Au navigateur, les travaux d'un collègue et les copies reçues se choisissent
+// dans « Ce qui est comparé ». L'assistant pose les mêmes questions avant
+// d'analyser, sans passer par les drapeaux — et ne propose jamais ses propres
+// travaux comme ceux d'un collègue.
+func TestLAssistantDemandeCeQuiEstCompare(t *testing.T) {
+	h := groupeRemis(t)
+	h.Options.PublishIndex = true
+	h.Options.Manage = "a26.5n6.01.tp1"
+	h.Options.ManageRequested = true
+	h.Options.Yes = true
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("publication : code = %d\n%s", code, h.texte())
+	}
+
+	// Le collègue choisit l'index publié, sans archive : ses copies sont
+	// dépistées contre des empreintes, sans qu'il en lise une ligne.
+	collegue := nouveauDansLeMemeDossier(t, h)
+	collegue.State.Viewer = "collegue"
+	code, scripte := collegue.script("comparaisons", "plagiat",
+		"", "1", "", "o", "quitter")
+	if code != app.ExitOK {
+		t.Fatalf("assistant du collègue : code = %d\n%s", code, collegue.texte())
+	}
+	if reste := scripte.Remaining(); reste != 0 {
+		t.Fatalf("%d réponses inutilisées : une question attendue n'a pas été posée\n%s",
+			reste, collegue.texte())
+	}
+	if _, posee := scripte.MenuFor("Portée de la comparaison"); !posee {
+		t.Fatalf("la portée n'a pas été demandée : %v", scripte.Asked)
+	}
+	collegue.contient("Travaux de collègues : a26.5n6.01.tp1",
+		"contre un index publié")
+
+	// Celui qui l'a publié ne se le voit pas proposer : il n'y a aucun travail
+	// de collègue à choisir, et la question n'est pas posée.
+	prof := nouveauDansLeMemeDossier(t, h)
+	prof.State.Viewer = "prof"
+	code, scripte = prof.script("comparaisons", "plagiat", "", "", "o", "quitter")
+	if code != app.ExitOK {
+		t.Fatalf("assistant du propriétaire : code = %d\n%s", code, prof.texte())
+	}
+	if reste := scripte.Remaining(); reste != 0 {
+		t.Fatalf("%d réponses inutilisées\n%s", reste, prof.texte())
+	}
+	prof.contient("Aucun collègue n'a publié d'index")
+	prof.absent("Travaux de collègues :")
+}
+
 // La vue de comparaison n'a pas d'équivalent au terminal, mais la question
 // qu'on s'y pose en premier — qui a remis d'abord — doit y trouver sa réponse,
 // avec la même réserve qu'au navigateur.

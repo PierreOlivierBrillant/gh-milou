@@ -106,6 +106,35 @@ func TestLeCatalogueSeLitParEnseignantEtParCours(t *testing.T) {
 	}
 }
 
+// Ce qu'on peut comparer à ses copies, ce sont les travaux des autres : le
+// navigateur et le terminal en proposent la même liste, la plus récente
+// d'abord, index publié ou non — sans index, on sait au moins à qui le
+// demander.
+func TestLesTravauxDesCollèguesSontCeuxDesAutres(t *testing.T) {
+	valide, _ := catalogue().Validate()
+	ids := func(lignes []exchange.Teaching) []string {
+		rendus := make([]string, 0, len(lignes))
+		for _, ligne := range lignes {
+			rendus = append(rendus, ligne.ID())
+		}
+		return rendus
+	}
+	if autres := ids(valide.Others("Prof ")); !slices.Equal(autres,
+		[]string{"a26.5n6.02.tp1", "h25.5m6.01.tp1"}) {
+		t.Fatalf("travaux des collègues de prof : %v", autres)
+	}
+	if autres := ids(valide.Others("collegue")); !slices.Equal(autres,
+		[]string{"a26.5n6.01.tp1"}) {
+		t.Fatalf("travaux des collègues de collegue : %v", autres)
+	}
+	if autres := valide.Others("personne"); len(autres) != 3 {
+		t.Fatalf("quelqu'un qui n'a rien donné voit tout : %v", ids(autres))
+	}
+	if !valide.Teaching[0].GivenBy("PROF") || valide.Teaching[0].GivenBy("collegue") {
+		t.Fatalf("à qui est « %s » : %+v", valide.Teaching[0].ID(), valide.Teaching[0])
+	}
+}
+
 // Le fichier se modifie à la main sur github.com : une ligne mal écrite ne doit
 // pas priver toute l'organisation de son catalogue.
 func TestUneLigneMalEcriteNEmportePasLeCatalogue(t *testing.T) {
