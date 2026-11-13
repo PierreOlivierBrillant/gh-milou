@@ -7,6 +7,7 @@ import (
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/brand"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/complete"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/corpus"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/exchange"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
@@ -68,10 +69,16 @@ func (m *manageSession) plagiat(group *groups.Group) error {
 
 	console.Heading("Détection de plagiat — " + nom)
 	console.Note("%s", plagiarism.Disclaimer)
+	// Ce qui est comparé, dans l'ordre du navigateur : les copies de la portée,
+	// puis ce que des collègues apportent.
 	console.Printf("Portée : %s — %s, %s.",
 		corpus.ReachLabels[portee], valid.Plural(len(cibles), "copie"), placesDites(cibles))
+	if indexes := liste(m.session.Options.Against); len(indexes) > 0 {
+		console.Printf("Travaux de collègues : %s — des empreintes, jamais du code.",
+			strings.Join(indexes, ", "))
+	}
 	if archives := liste(m.session.Options.ImportZip); len(archives) > 0 {
-		console.Printf("Archives reçues : %s.", strings.Join(archives, ", "))
+		console.Printf("Copies reçues : %s.", strings.Join(archives, ", "))
 	}
 	console.Blank()
 
@@ -159,6 +166,127 @@ func (m *manageSession) plagiat(group *groups.Group) error {
 	console.Note("Pour comparer deux copies côte à côte, ouvrez l'interface web " +
 		"(" + brand.Command + ") : la vue de comparaison n'a pas d'équivalent au terminal.")
 	return nil
+}
+
+// demanderPlagiat demande ce qui est comparé, puis compare.
+//
+// Ce sont les sources que le navigateur réunit sous « Ce qui est comparé » : la
+// portée, les travaux de collègues, les copies reçues. Les drapeaux en donnent
+// les défauts, et les réponses deviennent ceux du geste suivant — l'envoi suit
+// la même portée —, comme le formulaire garde ce qu'on y a choisi.
+func (m *manageSession) demanderPlagiat(group *groups.Group) error {
+	// Un groupe entier n'est pas un travail : le refus vient avant les questions.
+	if _, _, reconnu := m.travail(group); !reconnu {
+		return m.plagiat(group)
+	}
+	options := m.session.Options
+
+	portee, err := corpus.ParseReach(options.Reach)
+	if err != nil {
+		return err
+	}
+	portees := make([]ui.Option, 0, len(corpus.Reaches))
+	for _, connue := range corpus.Reaches {
+		portees = append(portees, ui.Option{
+			Value: string(connue), Label: corpus.ReachLabels[connue]})
+	}
+	retenue, err := m.session.Prompt.Choose("Portée de la comparaison", portees, string(portee))
+	if err != nil {
+		return err
+	}
+	options.Reach = retenue
+
+	indexes, err := m.demanderCollegues(liste(options.Against))
+	if err != nil {
+		return err
+	}
+	options.Against = strings.Join(indexes, ",")
+
+	archives, err := m.session.Prompt.Ask(ui.Question{
+		Title:      "Copies reçues : archives ZIP, séparées par des virgules (vide : aucune)",
+		Default:    options.ImportZip,
+		AllowEmpty: true,
+		Complete:   complete.Path,
+	})
+	if err != nil {
+		return err
+	}
+	options.ImportZip = archives
+	return m.plagiat(group)
+}
+
+// demanderCollegues propose les travaux des collègues dont l'index est publié.
+// Les autres sont nommés sans se choisir : sans index, il n'y a rien à mesurer,
+// mais on sait à qui en demander la publication.
+func (m *manageSession) demanderCollegues(retenus []string) ([]string, error) {
+	console := m.session.Console
+	set, _ := m.session.names(m.org)
+	voulus := map[string]bool{}
+	for _, id := range retenus {
+		voulus[strings.ToLower(id)] = true
+	}
+
+	choix := make([]ui.Option, 0, 8)
+	coches := make([]bool, 0, 8)
+	sansIndex := make([]string, 0, 4)
+	for _, ligne := range set.Catalog().Others(m.session.Viewer) {
+		if !ligne.Indexed {
+			sansIndex = append(sansIndex, ligne.ID())
+			continue
+		}
+		choix = append(choix, ui.Option{Value: ligne.ID(), Label: travailDeCollegue(set, ligne)})
+		coches = append(coches, voulus[ligne.Key()])
+		delete(voulus, ligne.Key())
+	}
+	// Un travail que « --against » nommait et que le catalogue ne propose pas
+	// reste là, coché : le taire le retirerait sans qu'on l'ait décidé.
+	for _, id := range retenus {
+		if voulus[strings.ToLower(id)] {
+			choix = append(choix, ui.Option{Value: id, Label: id})
+			coches = append(coches, true)
+			delete(voulus, strings.ToLower(id))
+		}
+	}
+
+	if len(sansIndex) > 0 {
+		console.Note("%s sans index publié : %s. Demandez %s pour y comparer vos copies.",
+			valid.Plural(len(sansIndex), "travail de collègue annoncé",
+				"travaux de collègues annoncés"),
+			strings.Join(sansIndex, ", "),
+			valid.Agree(len(sansIndex), "qu'on le publie", "qu'on les publie"))
+	}
+	if len(choix) == 0 {
+		console.Note("Aucun collègue n'a publié d'index à comparer aux vôtres.")
+		return nil, nil
+	}
+	indices, err := m.session.Prompt.MultiSelect(
+		"Travaux de collègues à comparer aux vôtres (des empreintes, jamais du code)",
+		choix, coches)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(indices))
+	for _, index := range indices {
+		ids = append(ids, choix[index].Value)
+	}
+	return ids, nil
+}
+
+// travailDeCollegue dit d'un travail du catalogue ce qu'il faut pour le
+// choisir : combien de copies, de qui, et s'il est terminé.
+func travailDeCollegue(set *registry.Set, ligne exchange.Teaching) string {
+	qui := "@" + ligne.Teacher
+	if set != nil {
+		if nom := set.Name(ligne.Teacher); nom != "" {
+			qui = nom
+		}
+	}
+	libelle := fmt.Sprintf("%s — %s, donné par %s", ligne.ID(),
+		valid.Plural(ligne.Copies, "copie"), qui)
+	if ligne.LastHandin != "" {
+		libelle += ", dernière remise le " + ligne.LastHandin
+	}
+	return libelle
 }
 
 // reglesDeComparaison rend ce que l'organisation déclare, surchargé par le

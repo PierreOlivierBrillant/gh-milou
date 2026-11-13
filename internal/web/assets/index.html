@@ -130,19 +130,13 @@
           <button type="button" id="equipes-nouvelle" class="bouton vert">Nouvelle équipe</button>
         </div>
 
+        <!-- Les travaux d'un collègue et les copies reçues ne sont pas ici : ce
+             sont des sources de l'analyse, et elles se choisissent dans le
+             formulaire. L'envoi en est l'inverse — il exporte ce que
+             l'inspection retient —, et c'est bien un geste de la page. -->
         <div class="actions" data-pour="plagiat">
+          <button type="button" id="pl-envoyer" class="bouton">Envoyer ces copies à un collègue…</button>
           <button type="button" id="pl-apercu" class="bouton">Aperçu</button>
-          <div class="menu-ancre">
-            <button type="button" id="pl-menu-ouvrir" class="bouton deroulant"
-              aria-expanded="false" aria-haspopup="true"
-              aria-controls="pl-menu">Actions</button>
-            <div class="menu-flottant menu-liste" id="pl-menu" hidden role="menu">
-              <p class="menu-section">Avec un collègue</p>
-              <button type="button" id="pl-contre" role="menuitem">Comparer avec un collègue…</button>
-              <button type="button" id="pl-envoyer" role="menuitem">Envoyer ces copies à un collègue…</button>
-              <button type="button" id="pl-recevoir" role="menuitem">Ajouter des copies reçues…</button>
-            </div>
-          </div>
           <button type="button" id="pl-lancer" class="bouton vert">Analyser</button>
         </div>
 
@@ -1097,6 +1091,38 @@
     <div id="pl-analyses"></div>
 
     <h2 class="intertitre">Nouvelle comparaison</h2>
+    <!-- Ce qui entre dans l'analyse : les copies que la portée retient, et ce
+         que des collègues apportent. Ce sont des sources, pas des commandes :
+         elles se choisissent ici, avec le reste, et l'aperçu en tient compte. -->
+    <div class="boite">
+      <div class="boite-entete"><strong>Ce qui est comparé</strong></div>
+      <div class="boite-corps">
+        <div class="pl-source">
+          <div>
+            <label class="champ-bloc choix-etudiant">
+              <span class="etiquette">Portée</span>
+              <select id="pl-portee" class="champ"></select>
+            </label>
+            <p class="note" id="pl-portee-note"></p>
+          </div>
+        </div>
+        <div class="pl-source">
+          <div>
+            <span class="etiquette">Travaux de collègues</span>
+            <div id="pl-collegues"></div>
+          </div>
+          <button type="button" id="pl-contre" class="bouton petit">Choisir…</button>
+        </div>
+        <div class="pl-source">
+          <div>
+            <span class="etiquette">Copies reçues</span>
+            <div id="pl-archives"></div>
+          </div>
+          <button type="button" id="pl-recevoir" class="bouton petit">Ajouter une archive…</button>
+        </div>
+      </div>
+    </div>
+
     <div class="boite">
       <div class="boite-entete"><strong>Ce qui est inspecté</strong></div>
       <div class="boite-corps">
@@ -1104,10 +1130,6 @@
           <label class="champ-bloc choix-etudiant">
             <span class="etiquette">Profil d'inspection</span>
             <select id="pl-profil" class="champ"></select>
-          </label>
-          <label class="champ-bloc choix-etudiant">
-            <span class="etiquette">Portée</span>
-            <select id="pl-portee" class="champ"></select>
           </label>
           <label class="case pl-bascule">
             <input type="checkbox" id="pl-gabarit" checked>
@@ -1118,7 +1140,6 @@
           </label>
         </div>
         <p class="note" id="pl-profil-note"></p>
-        <p class="note" id="pl-portee-note"></p>
 
         <h3>Langages comparés</h3>
         <p class="note">Aucun coché : ceux du profil, et à défaut tous les langages reconnus.</p>
@@ -1163,8 +1184,6 @@
       </div>
     </details>
 
-    <div id="pl-collegues"></div>
-    <div id="pl-archives"></div>
     <div id="pl-envoi-resultat"></div>
     <div id="pl-apercu-resultat"></div>
   </section>

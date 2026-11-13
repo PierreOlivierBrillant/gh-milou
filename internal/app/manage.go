@@ -1930,7 +1930,7 @@ func (m *manageSession) dispatch(action string, group *groups.Group) error {
 	case "reunir":
 		return m.reunirEtranger(group)
 	case "plagiat":
-		return m.plagiat(group)
+		return m.demanderPlagiat(group)
 	case "envoi":
 		return m.demanderEnvoi(group)
 	case "publier":
