@@ -61,8 +61,9 @@ func (s *Server) handleTeams(writer http.ResponseWriter, request *http.Request) 
 			rendus[equipe.Short] = compte
 		}
 	}
+	set, _ := s.names(cours.Org)
 	writeJSON(writer, http.StatusOK, map[string]any{
-		"teams": cours.Describe(equipes), "unassigned": cours.Unassigned(equipes),
+		"teams": cours.Describe(equipes, set), "unassigned": cours.Unassigned(equipes),
 		"repos": rendus, "scope": cours.Scope(),
 	})
 }
@@ -503,8 +504,9 @@ func (s *Server) applyMembership(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 	apres := cours.Teams(infos)
+	set, _ := s.names(cours.Org)
 	writeJSON(writer, http.StatusOK, map[string]any{
-		"steps": applied, "teams": cours.Describe(apres),
+		"steps": applied, "teams": cours.Describe(apres, set),
 		"unassigned": cours.Unassigned(apres),
 	})
 }

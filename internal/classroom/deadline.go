@@ -166,7 +166,8 @@ type Review struct {
 func (r Review) Missing() bool { return len(r.Silent) > 0 }
 
 // Targets rend les personnes qu'un dépôt vise : l'étudiant à qui il appartient,
-// ou les membres de l'équipe quand le travail est d'équipe.
+// ou, quand le travail est d'équipe, ceux de ses membres qu'il concerne — ses
+// enseignants n'en sont pas (voir « Members »).
 //
 // C'est cette liste que le silence confronte. Elle peut être vide — un dépôt
 // hors liste, une équipe dont on ne connaît aucun membre —, et rien ne s'en

@@ -89,10 +89,17 @@ func (d *desk) show() {
 		return
 	}
 	lignes := make([][]string, 0, len(d.list))
-	for _, fiche := range d.cours.Describe(d.list) {
+	// Le registre nomme ceux que la liste du groupe ignore, et dit lesquels
+	// enseignent : sans lui, l'enseignant d'une équipe s'y lirait « hors
+	// liste », comme un compte que rien ne connaît.
+	set, _ := d.session.names(d.cours.Org)
+	for _, fiche := range d.cours.Staffing(set).Describe(d.list, set) {
 		membres := make([]string, 0, len(fiche.Members))
 		for _, personne := range fiche.People {
 			membres = append(membres, nommer(personne))
+		}
+		for _, enseignant := range fiche.Teachers {
+			membres = append(membres, nommer(enseignant)+" (enseignant)")
 		}
 		for _, etranger := range fiche.Strangers {
 			membres = append(membres, nommer(etranger)+" (hors liste)")

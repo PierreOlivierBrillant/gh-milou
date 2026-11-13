@@ -2243,9 +2243,11 @@ function destinataireDuDepot(repo) {
     return [el('strong', { texte: repo.full_name }),
       // Les membres se lisent par leur nom et par leur compte : un dépôt
       // d'équipe ne porte celui de personne, et c'est leur association
-      // qu'on vient vérifier ici.
+      // qu'on vient vérifier ici. Le serveur ne nomme que ceux que le dépôt
+      // concerne : une équipe où ne figure que son enseignant n'est pas vide,
+      // elle n'a encore aucun étudiant.
       (repo.members || []).length === 0
-        ? el('span', { classe: 'note', texte: ' — équipe vide' })
+        ? el('span', { classe: 'note', texte: ' — aucun étudiant' })
         : el('div', { classe: 'equipe-membres' },
             (repo.members || []).map((personne) => ligneDeMembre(personne, {
               invite: (repo.waiting || []).some((compte) =>
@@ -4018,10 +4020,6 @@ async function chargerAnnuaire(force) {
   if (!attente.fini(donnees, "L'annuaire n'a pas pu être chargé.")) return;
   etat.annuaire.lignes = donnees.users || [];
   etat.annuaire.deplies = new Set();
-  // Réunir deux comptes est une décision d'enseignant : le serveur dit si
-  // celui qui regarde peut la prendre, la page ne fait que le suivre.
-  etat.annuaire.decide = !!donnees.may_decide;
-  $('annuaire-actions').hidden = !etat.annuaire.decide;
 
   // Les sessions de l'annuaire servent aussi à nommer : « a26 » s'y lit
   // « Automne 2026 » même si aucun groupe n'a encore été ouvert.
@@ -4047,6 +4045,8 @@ function dessinerAnnuaire() {
   }
 }
 
+// ligneAnnuaire ne propose aucun geste : réunir deux comptes est rare, et une
+// ligne sur des centaines le répéterait. La fiche l'offre, à un clic du nom.
 function ligneAnnuaire(ligne) {
   return el('tr', {},
     // Le rôle se lit à côté du nom : c'est de la personne qu'il parle, pas
@@ -4082,15 +4082,7 @@ function ligneAnnuaire(ligne) {
           },
         })),
     el('td', ligne.pushed_at
-      ? { texte: dateLisible(ligne.pushed_at) } : { classe: 'vide', texte: 'jamais' }),
-    // Sans compte, il n'y a rien à réunir : c'est un compte qu'on réunit.
-    etat.annuaire.decide
-      ? el('td', {}, ligne.username && el('button', {
-          classe: 'bouton petit', type: 'button', texte: 'Réunir…',
-          title: `Dire que ${ligne.full_name || '@' + ligne.username} travaille aussi sous un autre compte`,
-          onclick: () => reunirDeuxComptes(ligne, () => chargerAnnuaire()),
-        }))
-      : null);
+      ? { texte: dateLisible(ligne.pushed_at) } : { classe: 'vide', texte: 'jamais' }));
 }
 
 // comptesDeLaLigne montre le compte qui désigne la personne, puis les autres :
@@ -4127,7 +4119,7 @@ function depotsAnnuaire(ligne) {
       el('span', { classe: 'frise-travaux' },
         inscription.assignments.map(puceDeTravail))));
   return el('tr', { classe: 'ligne-depliee' },
-    el('td', {}), el('td', { colspan: etat.annuaire.decide ? '5' : '4' },
+    el('td', {}), el('td', { colspan: '4' },
       el('div', { classe: 'depots' }, blocs)));
 }
 
@@ -4862,11 +4854,19 @@ function dessinerEquipes() {
         invite: attente.has(personne.username),
         horsListe: true,
         action: { texte: 'Inscrire…', faire: () => inscrireUnMembre(personne) },
+      })),
+      // L'enseignant vient en dernier : l'équipe est celle de ses étudiants.
+      // Qui enseigne, c'est le serveur qui le dit, d'après le registre.
+      equipe.teachers.map((personne) => ligneDeMembre(personne, {
+        invite: attente.has(personne.username),
+        enseignant: true,
       })));
+    // Une équipe où ne figure que son enseignant n'a encore aucun étudiant :
+    // c'est cela qu'il faut lire, et non qu'elle est vide.
     if (equipe.people.length === 0 && equipe.strangers.length === 0) {
-      vider(membres);
-      membres.append(el('p', { classe: 'note vide',
-        texte: "Aucun membre. « Composer » dit qui en fait partie." }));
+      membres.prepend(el('p', { classe: 'note vide', texte: equipe.teachers.length === 0
+        ? "Aucun membre. « Composer » dit qui en fait partie."
+        : "Aucun étudiant. « Composer » dit qui en fait partie." }));
     }
     conteneur.append(el('div', { classe: 'equipe-rangee' },
       el('div', { classe: 'equipe-entete' },
@@ -4928,15 +4928,21 @@ function ligneDeMembre(personne, etats = {}) {
     ligne.append(el('span', { classe: 'jeton orange', texte: 'hors liste',
       title: "Ce compte n'est dans la liste d'aucun groupe." }));
   }
+  if (etats.enseignant) {
+    ligne.append(el('span', { classe: 'jeton enseignant', texte: 'enseignant',
+      title: "Déclaré enseignant au registre de l'organisation : il n'a pas à être " +
+        'inscrit au groupe.' }));
+  }
   ligne.append(el('span', { classe: 'espace' }));
   // Ce qu'il y a à faire est écrit, pas deviné : rien n'indiquait qu'on pouvait
-  // cliquer sur un membre pour le nommer.
+  // cliquer sur un membre pour le nommer. Un enseignant n'a rien à régler ici :
+  // son nom ne nomme aucun dépôt du groupe.
   if (etats.action) {
     ligne.append(el('button', {
       classe: 'bouton petit', type: 'button', texte: etats.action.texte,
       onclick: etats.action.faire,
     }));
-  } else if (!personne.full_name) {
+  } else if (!personne.full_name && !etats.enseignant) {
     ligne.append(el('button', {
       classe: 'bouton petit', type: 'button', texte: 'Nommer…',
       title: "C'est le nom complet qui nomme ses dépôts.",
@@ -5215,7 +5221,8 @@ async function renommerEquipe(equipe) {
 // seule : ses membres et tout ce qu'ils ont rendu changent de groupe avec elle.
 async function deplacerEquipe(equipe) {
   const { bloc, destination, preparer } = await choixDeGroupe();
-  const membres = (equipe.people || []).length + (equipe.strangers || []).length;
+  const membres = (equipe.people || []).length + (equipe.strangers || []).length +
+    (equipe.teachers || []).length;
   const depots = (etat.depotsDEquipe || {})[equipe.short] || 0;
 
   const confirme = await demander(`Déplacer ${equipe.short}`, el('div', {},

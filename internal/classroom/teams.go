@@ -105,9 +105,10 @@ func TeamTargets(equipes []teams.Team) []plan.TeamTarget {
 }
 
 // TeamRoster décrit une équipe pour l'affichage : ses membres nommés d'après la
-// liste du groupe, et ceux qui n'y figurent pas. Une équipe peut contenir
-// quelqu'un qui a quitté le cours, ou que la liste n'a jamais connu : le taire
-// laisserait croire que l'équipe est plus petite qu'elle n'est.
+// liste du groupe, ses enseignants, et ceux qui ne sont ni l'un ni l'autre.
+// Une équipe peut contenir quelqu'un qui a quitté le cours, ou que la liste
+// n'a jamais connu : le taire laisserait croire que l'équipe est plus petite
+// qu'elle n'est.
 type TeamRoster struct {
 	teams.Team
 	// People nomme les membres que la liste du groupe connaît.
@@ -115,22 +116,42 @@ type TeamRoster struct {
 	// Waiting nomme ceux, parmi tous, qui n'ont pas encore accepté leur
 	// invitation. Ils sont bien de l'équipe : ils ne l'ont pas encore su.
 	Waiting []string `json:"waiting,omitempty"`
-	// Strangers rassemble les comptes de l'équipe qui ne sont pas du groupe.
-	// Ils portent le nom que le registre de l'organisation leur donne, quand
-	// il en connaît un : un compte qu'on sait nommer doit être nommé, même
-	// s'il n'est inscrit nulle part.
+	// Teachers nomme les membres que le registre déclare enseignants. Ils ne
+	// sont pas de la liste sans être des inconnus pour autant : les mêler aux
+	// autres inviterait à inscrire au groupe, comme étudiant, celui qui
+	// l'enseigne.
+	Teachers []roster.Person `json:"teachers"`
+	// Strangers rassemble les comptes de l'équipe que rien ne rattache au
+	// groupe. Ils portent le nom que le registre de l'organisation leur donne,
+	// quand il en connaît un : un compte qu'on sait nommer doit être nommé,
+	// même s'il n'est inscrit nulle part.
 	Strangers []roster.Person `json:"strangers"`
 }
 
-// Describe habille les équipes du groupe de ce que sa liste sait de leurs
-// membres, dans l'ordre des équipes.
-func (c Classroom) Describe(equipes []teams.Team) []TeamRoster {
+// Describe habille les équipes du groupe de ce que sa liste et le registre de
+// l'organisation savent de leurs membres, dans l'ordre des équipes. Le
+// registre nomme ceux que la liste ne connaît pas ; sans lui, ils n'ont que
+// leur compte. Qui enseigne, c'est ce que « Staffing » a versé dans le groupe :
+// un groupe qui n'en sait rien range ses enseignants parmi les inconnus.
+func (c Classroom) Describe(equipes []teams.Team, names Names) []TeamRoster {
 	nommes := c.Named()
+	nommer := func(compte string) string {
+		if nom := nommes[strings.ToLower(compte)]; nom != "" {
+			return nom
+		}
+		if names != nil {
+			if connue, trouvee := names.Lookup(compte); trouvee {
+				return connue.FullName
+			}
+		}
+		return ""
+	}
 	fiches := make([]TeamRoster, 0, len(equipes))
 	for _, equipe := range equipes {
 		fiche := TeamRoster{
 			Team:      equipe,
 			People:    make([]roster.Person, 0, len(equipe.Members)),
+			Teachers:  make([]roster.Person, 0),
 			Strangers: make([]roster.Person, 0),
 		}
 		// Une personne dont deux comptes sont dans l'équipe n'y est qu'une
@@ -138,11 +159,16 @@ func (c Classroom) Describe(equipes []teams.Team) []TeamRoster {
 		// lit comme deux personnes.
 		vues := map[string]bool{}
 		for _, membre := range equipe.Members {
+			// La liste passe avant le registre : quelqu'un qu'elle porte est de
+			// l'équipe à ce titre, qu'il enseigne ailleurs ou non.
 			personne, inscrit := c.Find(membre)
 			if !inscrit {
-				fiche.Strangers = append(fiche.Strangers, roster.Person{
-					FullName: nommes[strings.ToLower(membre)], Username: membre,
-				})
+				hors := roster.Person{FullName: nommer(membre), Username: membre}
+				if c.enseigne(membre) {
+					fiche.Teachers = append(fiche.Teachers, hors)
+				} else {
+					fiche.Strangers = append(fiche.Strangers, hors)
+				}
 				continue
 			}
 			if vues[strings.ToLower(personne.Username)] {
@@ -157,6 +183,7 @@ func (c Classroom) Describe(equipes []teams.Team) []TeamRoster {
 			})
 		}
 		SortPeople(fiche.People)
+		SortPeople(fiche.Teachers)
 		SortPeople(fiche.Strangers)
 		for _, membre := range equipe.Members {
 			if equipe.Waiting(membre) {
@@ -168,21 +195,37 @@ func (c Classroom) Describe(equipes []teams.Team) []TeamRoster {
 	return fiches
 }
 
-// Members nomme les membres d'une équipe : leur nom complet quand le groupe ou
-// le registre le connaît, leur compte sinon. Un dépôt d'équipe ne porte le nom
-// de personne ; dire qui il concerne n'a d'intérêt qu'en le disant par leur nom.
+// Members nomme ceux que le dépôt d'une équipe concerne : leur nom complet quand
+// le groupe ou le registre le connaît, leur compte sinon. Un dépôt d'équipe ne
+// porte le nom de personne ; dire qui il concerne n'a d'intérêt qu'en le disant
+// par leur nom.
+//
+// Un enseignant que la liste du groupe ne porte pas n'en est pas, même inscrit
+// à l'équipe : le dépôt ne lui est pas destiné, et son silence s'y lirait comme
+// celui d'un étudiant. La composition entière, enseignants compris, c'est
+// « Describe » qui la donne.
 func (c Classroom) Members(equipe teams.Team) []roster.Person {
 	nommes := c.Named()
 	membres := make([]roster.Person, 0, len(equipe.Members))
 	for _, compte := range equipe.Members {
+		personne, inscrit := c.Find(compte)
+		if !inscrit && c.enseigne(compte) {
+			continue
+		}
 		nom := nommes[strings.ToLower(compte)]
-		if personne, inscrit := c.Find(compte); inscrit && personne.FullName != "" {
+		if inscrit && personne.FullName != "" {
 			nom = personne.FullName
 		}
 		membres = append(membres, roster.Person{FullName: nom, Username: compte})
 	}
 	SortPeople(membres)
 	return membres
+}
+
+// enseigne dit qu'un compte est déclaré enseignant. Un groupe que « Staffing »
+// n'a pas branché sur le registre ne le sait pas, et ne le devine pas.
+func (c Classroom) enseigne(compte string) bool {
+	return c.enseignants != nil && c.enseignants.Teaches(compte)
 }
 
 // autresDansLEquipe rend les autres comptes d'une personne que l'équipe porte

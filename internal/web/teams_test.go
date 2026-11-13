@@ -15,21 +15,22 @@ import (
 // faux GitHub, et c'est son état qu'on interroge ensuite — jamais une fiche
 // locale, puisqu'il n'y en a pas.
 
+// membreRendu est un membre d'équipe tel que l'API le nomme.
+type membreRendu struct {
+	FullName string `json:"full_name"`
+	Username string `json:"username"`
+}
+
 // ficheEquipe est une équipe telle que l'API la rend.
 type ficheEquipe struct {
-	Slug      string   `json:"slug"`
-	Name      string   `json:"name"`
-	Short     string   `json:"short"`
-	Members   []string `json:"members"`
-	Waiting   []string `json:"waiting"`
-	Strangers []struct {
-		FullName string `json:"full_name"`
-		Username string `json:"username"`
-	} `json:"strangers"`
-	People []struct {
-		FullName string `json:"full_name"`
-		Username string `json:"username"`
-	} `json:"people"`
+	Slug      string        `json:"slug"`
+	Name      string        `json:"name"`
+	Short     string        `json:"short"`
+	Members   []string      `json:"members"`
+	Waiting   []string      `json:"waiting"`
+	Strangers []membreRendu `json:"strangers"`
+	Teachers  []membreRendu `json:"teachers"`
+	People    []membreRendu `json:"people"`
 }
 
 type listeEquipes struct {
@@ -161,6 +162,44 @@ func TestUneEquipeNAccueillePasQuiNEstPasDuGroupe(t *testing.T) {
 	}
 	if !strings.Contains(string(contenu), "inscrivez-le au groupe") {
 		t.Fatalf("message peu explicite : %s", contenu)
+	}
+}
+
+// Un enseignant membre d'une équipe n'est pas un compte « hors liste » : le
+// serveur le dit enseignant, à part, sous le nom que le registre lui donne.
+// Ce que le registre sait nommer l'est aussi parmi les comptes hors liste.
+func TestLesEnseignantsDUneEquipeSontDitsAPart(t *testing.T) {
+	h := nouveau(t, nil)
+	place := h.groupe("a26", "5n6", "01", "Émilie Côté", "emilie-cote")
+	h.groupe("a26", "5n6", "02", "Jean-Luc Picard", "jlpicard")
+	if reponse, contenu := h.coopter("prof", true); reponse.StatusCode != http.StatusOK {
+		t.Fatalf("cooptation : statut %d — %s", reponse.StatusCode, contenu)
+	}
+	// L'équipe vient de GitHub : rien n'empêche d'y être sans être du groupe.
+	h.State.AddTeam("acme", "a26.5n6.01.eq1", "emilie-cote", "prof", "jlpicard", "inconnu-quelconque")
+
+	var liste listeEquipes
+	h.json(http.MethodGet, "/api/classrooms/"+place+"/teams?refresh=1", nil, &liste)
+	if len(liste.Teams) != 1 {
+		t.Fatalf("une équipe attendue : %+v", liste.Teams)
+	}
+	equipe := liste.Teams[0]
+	if len(equipe.People) != 1 || equipe.People[0].Username != "emilie-cote" {
+		t.Fatalf("membres de la liste = %+v", equipe.People)
+	}
+	if len(equipe.Teachers) != 1 || equipe.Teachers[0].Username != "prof" ||
+		equipe.Teachers[0].FullName != "Professeure" {
+		t.Fatalf("enseignants = %+v", equipe.Teachers)
+	}
+	hors := map[string]string{}
+	for _, membre := range equipe.Strangers {
+		hors[membre.Username] = membre.FullName
+	}
+	if _, enseignant := hors["prof"]; enseignant || len(hors) != 2 {
+		t.Fatalf("hors liste = %+v", equipe.Strangers)
+	}
+	if hors["jlpicard"] != "Jean-Luc Picard" || hors["inconnu-quelconque"] != "" {
+		t.Fatalf("le registre doit nommer qui il connaît, et lui seul : %+v", equipe.Strangers)
 	}
 }
 
@@ -336,6 +375,45 @@ func TestLeDepotDUneEquipeNommeSesMembresEtCeuxQuiAttendent(t *testing.T) {
 	}
 	if strings.Join(detail.Repos[0].Waiting, ",") != "hugolevacher" {
 		t.Fatalf("l'invitation en attente devrait être dite : %v", detail.Repos[0].Waiting)
+	}
+}
+
+// Le dépôt d'une équipe n'est pas destiné à l'enseignant qui en est membre : il
+// ne le nomme pas parmi ceux qu'il concerne, et ne le dit pas muet quand ses
+// étudiants ont remis sans lui.
+func TestLeDepotDUneEquipeNeVisePasSonEnseignant(t *testing.T) {
+	state := fakegh.NewState()
+	depot := state.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
+	depot.History = []fakegh.HistoryEntry{{At: "2026-10-01T09:00:00Z", Login: "emilie-cote"}}
+	state.AddContributors("acme/a26.5n6.01.projet.eq1", "emilie-cote")
+	// L'équipe est là avant que le serveur ne lise celles de l'organisation.
+	state.AddTeam("acme", "a26.5n6.01.eq1", "emilie-cote", "prof")
+	h := nouveau(t, state)
+	place := h.groupe("a26", "5n6", "01", "Émilie Côté", "emilie-cote")
+	if reponse, contenu := h.coopter("prof", true); reponse.StatusCode != http.StatusOK {
+		t.Fatalf("cooptation : statut %d — %s", reponse.StatusCode, contenu)
+	}
+	h.travail(http.MethodPost, "/api/classrooms/"+place+"/assignments/projet/handins", nil)
+
+	var detail struct {
+		Repos []struct {
+			Team    string        `json:"team"`
+			State   string        `json:"state"`
+			Members []membreRendu `json:"members"`
+			Silent  []membreRendu `json:"silent"`
+		} `json:"repos"`
+	}
+	h.json(http.MethodGet, "/api/classrooms/"+place+"/assignments/projet", nil, &detail)
+	if len(detail.Repos) != 1 || detail.Repos[0].Team != "eq1" {
+		t.Fatalf("un dépôt d'équipe attendu : %+v", detail.Repos)
+	}
+	depotRendu := detail.Repos[0]
+	if len(depotRendu.Members) != 1 || depotRendu.Members[0].Username != "emilie-cote" {
+		t.Fatalf("le dépôt ne concerne que l'étudiante : %+v", depotRendu.Members)
+	}
+	if len(depotRendu.Silent) != 0 || depotRendu.State != "remis" {
+		t.Fatalf("l'enseignant est dit muet : état %q, silencieux %+v",
+			depotRendu.State, depotRendu.Silent)
 	}
 }
 

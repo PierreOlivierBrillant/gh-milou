@@ -88,7 +88,7 @@ func (s *Server) handleDirectory(writer http.ResponseWriter, request *http.Reque
 		fail(writer, err)
 		return
 	}
-	toutes, set := annuaire.rows, annuaire.set
+	toutes := annuaire.rows
 	retenues := users.Apply(toutes, filtre, tri, decroissant)
 
 	lignes := make([]directoryRow, 0, len(retenues))
@@ -108,9 +108,6 @@ func (s *Server) handleDirectory(writer http.ResponseWriter, request *http.Reque
 		// se lirait comme si elle était entière.
 		"unmatched": users.Unmatched(annuaire.visibles, annuaire.repos, annuaire.equipes),
 		"org":       org, "source": annuaire.source, "notice": annuaire.avis,
-		// Réunir deux comptes est une décision d'enseignant : la page n'a pas
-		// à deviner la règle pour savoir si elle le propose.
-		"may_decide": users.MayDecide(set, s.deps.Viewer),
 	})
 }
 
