@@ -256,13 +256,13 @@ func TestLesDepotsDeQuiNAPasDeCompteSontLesSiens(t *testing.T) {
 	cours := classroom.Classroom{
 		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
 		Students: []roster.Person{
-			{FullName: "Naomi Chéry", StudentID: "2100456"},
+			{FullName: "Nadia Pépin", StudentID: "2100110"},
 			{FullName: "Claire Otis", StudentID: "2100789"},
 		},
 		Defaults: classroom.DefaultsFrom(config.Default()),
 	}
 	inventaire := []groups.RepoInfo{
-		{Name: "a26.5n6.01.tp1.naomi-chery", PushedAt: "2026-09-12T08:00:00Z"},
+		{Name: "a26.5n6.01.tp1.nadia-pepin", PushedAt: "2026-09-12T08:00:00Z"},
 		{Name: "a26.5n6.01.tp2.claire-otis"},
 	}
 
@@ -270,10 +270,10 @@ func TestLesDepotsDeQuiNAPasDeCompteSontLesSiens(t *testing.T) {
 	for _, ligne := range build(cours, inventaire) {
 		trouve[ligne.FullName] = ligne
 	}
-	naomi, claire := trouve["Naomi Chéry"], trouve["Claire Otis"]
-	if len(naomi.Repos) != 1 || naomi.Repos[0].Name != "a26.5n6.01.tp1.naomi-chery" ||
-		naomi.PushedAt != envoi("2026-09-12T08:00:00Z") {
-		t.Errorf("Naomi : %+v", naomi)
+	nadia, claire := trouve["Nadia Pépin"], trouve["Claire Otis"]
+	if len(nadia.Repos) != 1 || nadia.Repos[0].Name != "a26.5n6.01.tp1.nadia-pepin" ||
+		nadia.PushedAt != envoi("2026-09-12T08:00:00Z") {
+		t.Errorf("Nadia : %+v", nadia)
 	}
 	if len(claire.Repos) != 1 || claire.Repos[0].Name != "a26.5n6.01.tp2.claire-otis" {
 		t.Errorf("Claire : %+v", claire)

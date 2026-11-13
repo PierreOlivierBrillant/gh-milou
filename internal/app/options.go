@@ -303,8 +303,8 @@ Utilisation :
   gh milou --students --role enseignant     les enseignants de l'organisation
   gh milou --user ecote                     la fiche de @ecote et son passage
   gh milou --user jdupont --teacher         reconnaître @jdupont comme enseignant
-  gh milou --user aleksilepaj --full-name "Aleksi Lepaj"
-  gh milou --user Mr-Commetuveux --same-as commetuveuxx --dry-run
+  gh milou --user aleksilesaj --full-name "Aleksi Lesaj"
+  gh milou --user Mr-Commeilfaut --same-as commeilfautt --dry-run
   gh milou --manage a26.5n6.01 --student ecote --full-name "Émilie Côté" --rename-repos -y
   gh milou --manage a26.5n6.01 --teachers "prof,jdupont" -y
   gh milou --import                         reprendre des dépôts nommés autrement

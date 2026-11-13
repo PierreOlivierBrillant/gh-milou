@@ -327,8 +327,8 @@ func suit(name, prefix string) bool {
 // ------------------------------------------ à qui un dépôt appartient-il ?
 
 // Un nom de dépôt ne dit pas de façon fiable où finit le travail et où commence
-// la personne : « kickmyb-firebase-Walid7Akk » se lit aussi bien « kickmyb » +
-// « firebase-Walid7Akk ». Le découper au jugé donne alors un compte GitHub qui
+// la personne : « kickmyb-firebase-Wasim7Zed » se lit aussi bien « kickmyb » +
+// « firebase-Wasim7Zed ». Le découper au jugé donne alors un compte GitHub qui
 // n'existe pas, et le nom qu'on rapproche ensuite est faux.
 //
 // Les accès, eux, ne se devinent pas : la personne qui travaille dans un dépôt
@@ -337,7 +337,7 @@ func suit(name, prefix string) bool {
 
 // Split retire d'un nom de dépôt le compte qui le termine et rend le travail
 // qui précède. Le compte doit finir le nom et être détaché par un séparateur :
-// « kickmyb-firebase-Walid7Akk » et « Walid7Akk » donnent « kickmyb-firebase ».
+// « kickmyb-firebase-Wasim7Zed » et « Wasim7Zed » donnent « kickmyb-firebase ».
 //
 // Les séparateurs en trop sont retirés avec lui. GitHub Classroom nomme parfois
 // « TP3-H23-4204N6-KickMyB--alice » : deux tirets, dont un seul sépare. Garder
@@ -368,7 +368,7 @@ func Split(name, login string) (string, bool) {
 //
 // Le nom tranche en premier : un dépôt qui finit par le compte de quelqu'un est
 // le sien, et cela reste vrai quand l'enseignant ou un correcteur figure aussi
-// dans les accès. Le compte le plus long gagne, pour que « walid7akk » l'emporte
+// dans les accès. Le compte le plus long gagne, pour que « wasim7zed » l'emporte
 // sur un « akk » qui terminerait le même nom.
 //
 // Sans cet indice, un accès unique suffit : c'est le cas d'un dépôt que rien

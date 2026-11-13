@@ -16,11 +16,11 @@ import (
 // l'outil : deux dépôts, deux ou trois personnes dans chacun.
 func equipeOrg() *fakegh.State {
 	state := fakegh.NewState()
-	state.Users["walid"] = "Walid Hakkani"
-	state.Users["etienne-l"] = "Étienne Lyonnais"
+	state.Users["wasim"] = "Wasim Hakkani"
+	state.Users["edouard-l"] = "Édouard Loiselle"
 	for nom, membres := range map[string][]string{
 		"projet-alpha": {"emilie-cote", "jlpicard"},
-		"projet-beta":  {"aminata-d", "walid", "etienne-l"},
+		"projet-beta":  {"aminata-d", "wasim", "edouard-l"},
 	} {
 		state.AddRepo("acme", nom, true)
 		for _, compte := range membres {
@@ -97,7 +97,7 @@ func TestRepriseEnEquipeLitLesMembresDansLesAcces(t *testing.T) {
 	if strings.Join(trouve["alpha"], ",") != "emilie-cote,jlpicard" {
 		t.Fatalf("membres d'alpha = %v", trouve["alpha"])
 	}
-	if strings.Join(trouve["beta"], ",") != "aminata-d,etienne-l,walid" {
+	if strings.Join(trouve["beta"], ",") != "aminata-d,edouard-l,wasim" {
 		t.Fatalf("membres de beta = %v", trouve["beta"])
 	}
 	// L'enseignant a accès à tout : il n'est d'aucune équipe.
@@ -261,16 +261,16 @@ func TestRepriseEnEquipeRespecteLaSelection(t *testing.T) {
 // avec une équipe.
 func classroomEquipes() *fakegh.State {
 	state := fakegh.NewState()
-	state.Users["walid"] = "Walid Hakkani"
-	state.AddRepo("acme", "backend-gunners", true)
-	state.AddRepo("acme", "backend-mcdev", true)
-	state.AddTeam("acme", "Gunners", "emilie-cote", "jlpicard")
-	state.AddTeam("acme", "McDev", "aminata-d", "walid")
-	state.ShareRepo("acme", fakegh.TeamSlug("Gunners"), "acme/backend-gunners", "push")
-	state.ShareRepo("acme", fakegh.TeamSlug("McDev"), "acme/backend-mcdev", "push")
+	state.Users["wasim"] = "Wasim Hakkani"
+	state.AddRepo("acme", "backend-castors", true)
+	state.AddRepo("acme", "backend-mccoy", true)
+	state.AddTeam("acme", "Castors", "emilie-cote", "jlpicard")
+	state.AddTeam("acme", "McCoy", "aminata-d", "wasim")
+	state.ShareRepo("acme", fakegh.TeamSlug("Castors"), "acme/backend-castors", "push")
+	state.ShareRepo("acme", fakegh.TeamSlug("McCoy"), "acme/backend-mccoy", "push")
 	// L'équipe enseignante voit tout : elle n'est l'équipe de personne.
-	state.ShareRepo("acme", "enseignants", "acme/backend-gunners", "push")
-	state.ShareRepo("acme", "enseignants", "acme/backend-mcdev", "push")
+	state.ShareRepo("acme", "enseignants", "acme/backend-castors", "push")
+	state.ShareRepo("acme", "enseignants", "acme/backend-mccoy", "push")
 	return state
 }
 
@@ -288,15 +288,15 @@ func TestRepriseEnEquipeLitLEquipeGitHubDuDepot(t *testing.T) {
 		trouve[equipe.Short] = equipe.Members
 		sources[equipe.Short] = equipe.Sources
 	}
-	if strings.Join(trouve["gunners"], ",") != "emilie-cote,jlpicard" {
-		t.Fatalf("membres de gunners = %v", trouve["gunners"])
+	if strings.Join(trouve["castors"], ",") != "emilie-cote,jlpicard" {
+		t.Fatalf("membres de castors = %v", trouve["castors"])
 	}
-	if strings.Join(trouve["mcdev"], ",") != "aminata-d,walid" {
-		t.Fatalf("membres de mcdev = %v", trouve["mcdev"])
+	if strings.Join(trouve["mccoy"], ",") != "aminata-d,wasim" {
+		t.Fatalf("membres de mccoy = %v", trouve["mccoy"])
 	}
 	// Et l'écran doit pouvoir dire d'où ils viennent.
-	if sources["gunners"]["emilie-cote"] != "équipe" {
-		t.Fatalf("sources de gunners = %v", sources["gunners"])
+	if sources["castors"]["emilie-cote"] != "équipe" {
+		t.Fatalf("sources de castors = %v", sources["castors"])
 	}
 	if len(vue.Silent) != 0 {
 		t.Fatalf("aucune équipe ne devrait être vide : %v", vue.Silent)
@@ -439,8 +439,8 @@ func TestRepriseEnEquipeNommeLesMembres(t *testing.T) {
 
 	vue := h.apercuEquipe(map[string]any{
 		"prefix": "backend", "scope": "a25.5w5.1010",
-		"content": []byte("nom_complet;no étudiant\nÉmilie Côté;1680229\n" +
-			"Jean-Luc Picard;2143020\nÉtienne Lyonnais;1983429\n"),
+		"content": []byte("nom_complet;no étudiant\nÉmilie Côté;1600105\n" +
+			"Jean-Luc Picard;2100106\nÉdouard Loiselle;1900107\n"),
 	})
 	noms := map[string]string{}
 	for _, personne := range vue.Students {
@@ -450,8 +450,8 @@ func TestRepriseEnEquipeNommeLesMembres(t *testing.T) {
 		t.Fatalf("les membres devraient être nommés : %+v", vue.Students)
 	}
 	// Une personne de la liste qu'aucune équipe ne réclame est signalée.
-	if len(vue.Absent) != 1 || vue.Absent[0] != "Étienne Lyonnais" {
-		t.Fatalf("Étienne n'est dans aucune équipe : %v", vue.Absent)
+	if len(vue.Absent) != 1 || vue.Absent[0] != "Édouard Loiselle" {
+		t.Fatalf("Édouard n'est dans aucune équipe : %v", vue.Absent)
 	}
 	// Et le rapprochement se montre, compte par compte.
 	if len(vue.Pairings) == 0 {
@@ -471,7 +471,7 @@ func TestRepriseEnEquipeInscritUnCompteSansNom(t *testing.T) {
 	for _, personne := range vue.Students {
 		comptes[personne.Username] = true
 	}
-	for _, compte := range []string{"emilie-cote", "jlpicard", "aminata-d", "walid"} {
+	for _, compte := range []string{"emilie-cote", "jlpicard", "aminata-d", "wasim"} {
 		if !comptes[compte] {
 			t.Fatalf("@%s devrait rejoindre le groupe : %+v", compte, vue.Students)
 		}

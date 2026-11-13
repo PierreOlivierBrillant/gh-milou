@@ -8,13 +8,13 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 )
 
-// deuxComptes est le cas de l'issue : une même personne, @Mr-Commetuveux à une
-// session, @commetuveuxx à la suivante — chacun connu du registre sous son nom.
+// deuxComptes est le cas de l'issue : une même personne, @Mr-Commeilfaut à une
+// session, @commeilfautt à la suivante — chacun connu du registre sous son nom.
 func deuxComptes(t *testing.T) *registry.Set {
 	t.Helper()
 	set, _, err := appliquer(t, registry.Empty(), registry.Learn(
-		personne("Jean Commetuveux", "Mr-Commetuveux"),
-		roster.Person{FullName: "Jean Comme-Tu-Veux", Username: "commetuveuxx",
+		personne("Jean Commeilfaut", "Mr-Commeilfaut"),
+		roster.Person{FullName: "Jean Comme-Tu-Veux", Username: "commeilfautt",
 			StudentID: "2412345"}))
 	if err != nil {
 		t.Fatal(err)
@@ -27,34 +27,34 @@ func deuxComptes(t *testing.T) *registry.Set {
 // deux mènent à elle.
 func TestReunirDeuxComptesEnFaitUnePersonne(t *testing.T) {
 	set, bouge, err := appliquer(t, deuxComptes(t),
-		registry.Join("Mr-Commetuveux", "commetuveuxx"))
+		registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	if err != nil || !bouge {
 		t.Fatalf("bouge = %v, err = %v", bouge, err)
 	}
 
-	if comptes := strings.Join(set.Accounts("mr-commetuveux"), ","); comptes != "commetuveuxx,Mr-Commetuveux" {
+	if comptes := strings.Join(set.Accounts("mr-commeilfaut"), ","); comptes != "commeilfautt,Mr-Commeilfaut" {
 		t.Fatalf("comptes = %s", comptes)
 	}
-	personne, _ := set.PersonOf("Mr-Commetuveux")
-	if personne.Username != "commetuveuxx" || personne.FullName != "Jean Comme-Tu-Veux" ||
+	personne, _ := set.PersonOf("Mr-Commeilfaut")
+	if personne.Username != "commeilfautt" || personne.FullName != "Jean Comme-Tu-Veux" ||
 		personne.StudentID != "2412345" {
 		t.Fatalf("personne = %+v", personne)
 	}
 	// Aucun dépôt ne se détache : ceux créés sous l'ancien nom mènent à elle.
-	for _, slug := range []string{"jean-commetuveux", "jean-comme-tu-veux", "mr-commetuveux"} {
+	for _, slug := range []string{"jean-commeilfaut", "jean-comme-tu-veux", "mr-commeilfaut"} {
 		trouvee, trouve := set.Resolve(slug)
-		if !trouve || trouvee.Username != "commetuveuxx" {
+		if !trouve || trouvee.Username != "commeilfautt" {
 			t.Errorf("%s → %+v", slug, trouvee)
 		}
 	}
 	// « classroom » apprend l'autre compte par là.
-	lue, _ := set.Lookup("jean-commetuveux")
-	if lue.Username != "commetuveuxx" || strings.Join(lue.Also, ",") != "Mr-Commetuveux" {
+	lue, _ := set.Lookup("jean-commeilfaut")
+	if lue.Username != "commeilfautt" || strings.Join(lue.Also, ",") != "Mr-Commeilfaut" {
 		t.Errorf("lookup = %+v", lue)
 	}
 	// Rien n'est effacé : chaque fiche garde ce qu'elle portait.
-	if fiche, _ := set.Find("Mr-Commetuveux"); fiche.FullName != "Jean Commetuveux" ||
-		fiche.SameAs != "commetuveuxx" {
+	if fiche, _ := set.Find("Mr-Commeilfaut"); fiche.FullName != "Jean Commeilfaut" ||
+		fiche.SameAs != "commeilfautt" {
 		t.Errorf("fiche = %+v", fiche)
 	}
 }
@@ -62,12 +62,12 @@ func TestReunirDeuxComptesEnFaitUnePersonne(t *testing.T) {
 // La fusion se défait, et chaque fiche retrouve exactement ce qu'elle portait.
 func TestSeparerDefaitLaReunion(t *testing.T) {
 	avant := deuxComptes(t)
-	reunis, _, err := appliquer(t, avant, registry.Join("Mr-Commetuveux", "commetuveuxx"))
+	reunis, _, err := appliquer(t, avant, registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Séparer depuis l'un ou l'autre compte revient au même.
-	for _, compte := range []string{"Mr-Commetuveux", "commetuveuxx"} {
+	for _, compte := range []string{"Mr-Commeilfaut", "commeilfautt"} {
 		separes, bouge, err := appliquer(t, reunis, registry.Split(compte))
 		if err != nil || !bouge {
 			t.Fatalf("%s : bouge = %v, err = %v", compte, bouge, err)
@@ -77,8 +77,8 @@ func TestSeparerDefaitLaReunion(t *testing.T) {
 		if string(attendu) != string(obtenu) {
 			t.Errorf("%s :\n%s\nau lieu de\n%s", compte, obtenu, attendu)
 		}
-		if separes.Name("Mr-Commetuveux") != "Jean Commetuveux" {
-			t.Errorf("%s : nom = %q", compte, separes.Name("Mr-Commetuveux"))
+		if separes.Name("Mr-Commeilfaut") != "Jean Commeilfaut" {
+			t.Errorf("%s : nom = %q", compte, separes.Name("Mr-Commeilfaut"))
 		}
 	}
 }
@@ -86,19 +86,19 @@ func TestSeparerDefaitLaReunion(t *testing.T) {
 // Redire une réunion qui existe, ou défaire une qui n'existe plus, n'écrit
 // rien : c'est ce qui rend le rejeu sûr.
 func TestReunirDeuxFoisNeBougePas(t *testing.T) {
-	set, _, err := appliquer(t, deuxComptes(t), registry.Join("Mr-Commetuveux", "commetuveuxx"))
+	set, _, err := appliquer(t, deuxComptes(t), registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, change := range []registry.Change{
-		registry.Join("Mr-Commetuveux", "commetuveuxx"),
-		registry.Join("commetuveuxx", "Mr-Commetuveux"),
+		registry.Join("Mr-Commeilfaut", "commeilfautt"),
+		registry.Join("commeilfautt", "Mr-Commeilfaut"),
 	} {
 		if _, bouge, err := appliquer(t, set, change); err != nil || bouge {
 			t.Errorf("%s : bouge = %v, err = %v", change.Reason, bouge, err)
 		}
 	}
-	if _, bouge, err := appliquer(t, deuxComptes(t), registry.Split("commetuveuxx")); err != nil || bouge {
+	if _, bouge, err := appliquer(t, deuxComptes(t), registry.Split("commeilfautt")); err != nil || bouge {
 		t.Errorf("séparer un compte seul : bouge = %v, err = %v", bouge, err)
 	}
 }
@@ -118,25 +118,25 @@ func TestReunirUnCompteInconnuLeFaitConnaitre(t *testing.T) {
 // Si l'un des comptes enseigne, la personne enseigne ; retirer le rôle
 // l'atteint sous tous ses comptes.
 func TestLeRoleEstCeluiDeLaPersonne(t *testing.T) {
-	set, _, err := appliquer(t, deuxComptes(t), registry.SetRole("Mr-Commetuveux", true))
+	set, _, err := appliquer(t, deuxComptes(t), registry.SetRole("Mr-Commeilfaut", true))
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, _, err = appliquer(t, set, registry.Join("Mr-Commetuveux", "commetuveuxx"))
+	set, _, err = appliquer(t, set, registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !set.Teaches("commetuveuxx") {
+	if !set.Teaches("commeilfautt") {
 		t.Fatal("la personne enseigne : l'un de ses comptes le fait")
 	}
-	if enseignants := set.Teachers(); len(enseignants) != 1 || enseignants[0].Username != "commetuveuxx" {
+	if enseignants := set.Teachers(); len(enseignants) != 1 || enseignants[0].Username != "commeilfautt" {
 		t.Fatalf("enseignants = %+v", enseignants)
 	}
-	set, _, err = appliquer(t, set, registry.SetRole("commetuveuxx", false))
+	set, _, err = appliquer(t, set, registry.SetRole("commeilfautt", false))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if set.Teaches("Mr-Commetuveux") {
+	if set.Teaches("Mr-Commeilfaut") {
 		t.Error("retirer le rôle doit atteindre tous ses comptes")
 	}
 }
@@ -213,15 +213,15 @@ func TestUnRenvoiEcritALaMainSeRelit(t *testing.T) {
 	if !strings.Contains(string(seul), `"version": 2`) {
 		t.Errorf("sans renvoi :\n%s", seul)
 	}
-	reunis, _, _ := appliquer(t, deuxComptes(t), registry.Join("Mr-Commetuveux", "commetuveuxx"))
+	reunis, _, _ := appliquer(t, deuxComptes(t), registry.Join("Mr-Commeilfaut", "commeilfautt"))
 	avec, _ := reunis.Encode()
 	if !strings.Contains(string(avec), `"version": 3`) ||
-		!strings.Contains(string(avec), `"same_as": "commetuveuxx"`) {
+		!strings.Contains(string(avec), `"same_as": "commeilfautt"`) {
 		t.Errorf("avec renvoi :\n%s", avec)
 	}
 	relu, soucis := registry.Decode(avec)
-	if len(soucis) != 0 || len(relu.Accounts("commetuveuxx")) != 2 {
-		t.Errorf("relu : %v, %v", relu.Accounts("commetuveuxx"), soucis)
+	if len(soucis) != 0 || len(relu.Accounts("commeilfautt")) != 2 {
+		t.Errorf("relu : %v, %v", relu.Accounts("commeilfautt"), soucis)
 	}
 }
 
@@ -236,9 +236,9 @@ func TestApprendreNePoseAucunRenvoi(t *testing.T) {
 	if fiche, _ := set.Find("x"); fiche.SameAs != "" {
 		t.Errorf("fiche = %+v", fiche)
 	}
-	reunis, _, _ := appliquer(t, deuxComptes(t), registry.Join("Mr-Commetuveux", "commetuveuxx"))
-	reappris, _, _ := appliquer(t, reunis, registry.Learn(personne("Jean Commetuveux", "Mr-Commetuveux")))
-	if len(reappris.Accounts("Mr-Commetuveux")) != 2 {
+	reunis, _, _ := appliquer(t, deuxComptes(t), registry.Join("Mr-Commeilfaut", "commeilfautt"))
+	reappris, _, _ := appliquer(t, reunis, registry.Learn(personne("Jean Commeilfaut", "Mr-Commeilfaut")))
+	if len(reappris.Accounts("Mr-Commeilfaut")) != 2 {
 		t.Error("réapprendre quelqu'un ne doit pas défaire sa réunion")
 	}
 }

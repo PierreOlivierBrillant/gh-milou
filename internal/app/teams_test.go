@@ -68,13 +68,13 @@ func TestSansEquipeNommeQuiNAPasDeCompte(t *testing.T) {
 		Students: []roster.Person{
 			{FullName: "Émilie Côté", Username: "emilie-cote"},
 			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-			{FullName: "Naomi Chéry", StudentID: "2100456"},
+			{FullName: "Nadia Pépin", StudentID: "2100110"},
 		},
 	})
 	if code := h.composer("a26.5n6.01", "eq1", "emilie-cote"); code != app.ExitOK {
 		t.Fatalf("code de retour %d :\n%s", code, h.texte())
 	}
-	h.contient("Sans équipe : @jlpicard, Naomi Chéry")
+	h.contient("Sans équipe : @jlpicard, Nadia Pépin")
 }
 
 // L'enseignant d'une équipe se dit enseignant, comme au navigateur, et non

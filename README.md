@@ -270,7 +270,7 @@ restent pourtant propres au navigateur, faute d'équivalent au terminal.
 
 | Geste | Web | Assistant | Ligne de commande |
 | --- | :-: | :-: | :-: |
-| Déclarer un groupe, tenir sa liste, déplacer une personne | ✓ | lecture seule | lecture seule |
+| Déclarer un groupe, tenir sa liste, déplacer une personne | ✓ | corriger une fiche | corriger une fiche (`--student`) |
 | Renommer ou déplacer un groupe entier | ✓ | — | — |
 | Retenir les réglages par défaut d'un groupe | ✓ | — | pour un lancement |
 | Lire deux copies, puis deux fichiers, côte à côte | ✓ | — | — |

@@ -161,9 +161,9 @@ func TestAjouterReconnaitQuiADejaSonDepotDuTravail(t *testing.T) {
 		{"par son compte", "a26.5n6.01.tp1.jean-luc-picard",
 			"nom_complet,github_username\nJean-Luc Picard,jlpicard\n",
 			"Jean-Luc Picard (@jlpicard)", []string{"oui"}}, // vérifier le compte
-		{"par son matricule", "a26.5n6.01.tp1.naomi-chery",
-			"nom_complet,matricule\nNaomi Chéry,2100456\n",
-			"Naomi Chéry (2100456)", nil},
+		{"par son matricule", "a26.5n6.01.tp1.nadia-pepin",
+			"nom_complet,matricule\nNadia Pépin,2100110\n",
+			"Nadia Pépin (2100110)", nil},
 	} {
 		t.Run(cas.nom, func(t *testing.T) {
 			state := fakegh.NewState()

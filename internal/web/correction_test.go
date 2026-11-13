@@ -17,15 +17,15 @@ import (
 // registre ne l'a jamais reçu, et c'est pourtant lui qui a nommé ses dépôts.
 func TestCorrigerSansLesDepotsNeLesDetachePas(t *testing.T) {
 	state := fakegh.NewState()
-	state.AddRepo("acme", "h27.5n6.02.tp1.aleksi-lepa", true)
-	h := avantLeRegistre(t, state, cohorte("h27", "5n6", "02", "Aleksi Lepa", "aleksilepaj"))
+	state.AddRepo("acme", "h27.5n6.02.tp1.aleksi-lesa", true)
+	h := avantLeRegistre(t, state, cohorte("h27", "5n6", "02", "Aleksi Lesa", "aleksilesaj"))
 
 	h.json(http.MethodPost, "/api/classrooms/h27.5n6.02/students/rename", map[string]any{
-		"username": "aleksilepaj", "full_name": "Aleksi Lepaj", "repos": false,
+		"username": "aleksilesaj", "full_name": "Aleksi Lesaj", "repos": false,
 	}, nil)
 
-	fiche := h.fiche("aleksilepaj")
-	if fiche.User.FullName != "Aleksi Lepaj" || fiche.User.Repos != 1 {
+	fiche := h.fiche("aleksilesaj")
+	if fiche.User.FullName != "Aleksi Lesaj" || fiche.User.Repos != 1 {
 		t.Fatalf("fiche = %q, %d dépôt(s) : le dépôt s'est détaché",
 			fiche.User.FullName, fiche.User.Repos)
 	}
@@ -86,11 +86,11 @@ func TestRenommerLesDepotsApresUneCorrectionDepuisLaFiche(t *testing.T) {
 // le compte, comme au terminal.
 func TestRenommerRattacheUnPremierCompteParLeMatricule(t *testing.T) {
 	state := fakegh.NewState()
-	state.Users["nchery"] = "Naomi Chéry"
+	state.Users["npepin"] = "Nadia Pépin"
 	h := nouveau(t, state)
 	place := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
 	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
-		inscritParMatricule("Naomi Chéry", "2100456"))
+		inscritParMatricule("Nadia Pépin", "2100110"))
 
 	var liste struct {
 		Students []struct {
@@ -102,26 +102,26 @@ func TestRenommerRattacheUnPremierCompteParLeMatricule(t *testing.T) {
 	h.json(http.MethodGet, "/api/classrooms/"+place+"/students", nil, &liste)
 	designee := ""
 	for _, ligne := range liste.Students {
-		if ligne.FullName == "Naomi Chéry" {
+		if ligne.FullName == "Nadia Pépin" {
 			designee = ligne.Username
 			if designee == "" {
 				designee = ligne.StudentID
 			}
 		}
 	}
-	if designee != "2100456" {
-		t.Fatalf("la ligne de Naomi doit porter son matricule : %+v", liste.Students)
+	if designee != "2100110" {
+		t.Fatalf("la ligne de Nadia doit porter son matricule : %+v", liste.Students)
 	}
 
 	reponse, contenu := h.requete(http.MethodPost, "/api/classrooms/"+place+"/students/rename",
-		map[string]any{"username": designee, "full_name": "Naomi Chéry", "new_username": "nchery"})
+		map[string]any{"username": designee, "full_name": "Nadia Pépin", "new_username": "npepin"})
 	if reponse.StatusCode != http.StatusOK {
 		t.Fatalf("statut %d — %s", reponse.StatusCode, contenu)
 	}
 	set, _ := registry.Decode([]byte(
 		h.State.Files("acme/"+registry.RepoName, registry.Branch)[registry.UsersFile]))
-	if fiche, connue := set.PersonOf("nchery"); !connue || fiche.StudentID != "2100456" ||
-		fiche.FullName != "Naomi Chéry" {
+	if fiche, connue := set.PersonOf("npepin"); !connue || fiche.StudentID != "2100110" ||
+		fiche.FullName != "Nadia Pépin" {
 		t.Fatalf("le registre doit apprendre le matricule avec le compte : %+v", fiche)
 	}
 }

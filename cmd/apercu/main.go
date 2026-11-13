@@ -33,17 +33,17 @@ func main() {
 		"a26.5n6.01.tp2.emilie-cote":         "",
 		"a26.4w6.01.projet.emilie-cote":      "2026-11-05T10:00:00Z",
 		"h27.5n6.02.tp1.emilie-cote":         "2027-02-10T10:00:00Z",
-		"h27.5n6.02.tp1.aleksilepaj":         "2027-02-11T10:00:00Z",
-		"a26.4w6.01.projet.jean-commetuveux": "2026-11-02T10:00:00Z",
-		"h27.5n6.02.tp1.jean-commetuveux":    "2027-02-09T10:00:00Z",
+		"h27.5n6.02.tp1.aleksilesaj":         "2027-02-11T10:00:00Z",
+		"a26.4w6.01.projet.jean-commeilfaut": "2026-11-02T10:00:00Z",
+		"h27.5n6.02.tp1.jean-commeilfaut":    "2027-02-09T10:00:00Z",
 	} {
 		state.AddRepo("acme", nom, true).PushedAt = envoi
 	}
 	garnirPourLaComparaison(state)
 	garnirLesInvitations(state)
-	// Naomi Chéry n'est inscrite que par son matricule, mais son compte existe
+	// Nadia Pépin n'est inscrite que par son matricule, mais son compte existe
 	// sur GitHub : c'est ce qui permet de le lui rattacher depuis la liste.
-	state.Users["nchery"] = "Naomi Chéry"
+	state.Users["npepin"] = "Nadia Pépin"
 	faux := fakegh.New(state)
 	defer faux.Close()
 
@@ -75,20 +75,20 @@ func main() {
 				// Inscrite depuis la liste du collège : on a son matricule,
 				// pas encore son compte. C'est l'état de toute une cohorte au
 				// lendemain d'un import de Léa.
-				{FullName: "Naomi Chéry", StudentID: "2100456"},
+				{FullName: "Nadia Pépin", StudentID: "2100110"},
 			}},
 		{Org: "acme", Session: "a26", Course: "4w6", Group: "01", Students: []roster.Person{
 			{FullName: "Émilie Côté", Username: "emilie-cote", StudentID: "2100123"},
 			// La même personne qu'à l'hiver, sous un autre compte : rien ne le
 			// dit tant qu'on ne les a pas réunis depuis l'annuaire.
-			{FullName: "Jean Commetuveux", Username: "Mr-Commetuveux"},
+			{FullName: "Jean Commeilfaut", Username: "Mr-Commeilfaut"},
 		}},
 		{Org: "acme", Session: "h27", Course: "5n6", Group: "02", Students: []roster.Person{
 			{FullName: "Émilie Côté", Username: "emilie-cote", StudentID: "2100123"},
 			{FullName: "Aminata Diallo", Username: "aminata-d"},
-			{FullName: "Jean Commetuveux", Username: "commetuveuxx"},
+			{FullName: "Jean Commeilfaut", Username: "commeilfautt"},
 			// Un compte repris de dépôts hérités : personne ne l'a jamais nommé.
-			{Username: "aleksilepaj"},
+			{Username: "aleksilesaj"},
 		}},
 	} {
 		valide, err := cours.Validate()

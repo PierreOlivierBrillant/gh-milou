@@ -484,13 +484,13 @@ func ExpandPath(path string) (string, error) {
 // personne, ou deux groupes qui nomment leur travail pareil —, il ajoute
 // « -1 », puis « -2 ». La marque se pose à la fin du nom du dépôt, donc sur le
 // compte quand c'est lui qui le termine, et adopter une organisation la lisait
-// comme si elle en faisait partie : « aleksilepaj-1 » n'est le compte de
+// comme si elle en faisait partie : « aleksilesaj-1 » n'est le compte de
 // personne.
 var duplicateMarker = regexp.MustCompile(`-[0-9]+$`)
 
 // WithoutDuplicateMarker retire d'un compte la marque de doublon de GitHub. Le
-// booléen dit qu'il y en avait une, rien de plus : « LT-9 » est un vrai compte
-// et « aleksilepaj-1 » n'en est pas un, or les deux se terminent pareil. Seul
+// booléen dit qu'il y en avait une, rien de plus : « CO-7 » est un vrai compte
+// et « aleksilesaj-1 » n'en est pas un, or les deux se terminent pareil. Seul
 // ce qui atteste le compte sans la marque les distingue, et c'est à l'appelant
 // de le dire.
 func WithoutDuplicateMarker(username string) (string, bool) {

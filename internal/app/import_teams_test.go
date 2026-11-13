@@ -18,10 +18,10 @@ import (
 func equipeOrg(t *testing.T) *fakegh.State {
 	t.Helper()
 	state := fakegh.NewState()
-	state.Users["walid"] = "Walid Hakkani"
+	state.Users["wasim"] = "Wasim Hakkani"
 	for nom, membres := range map[string][]string{
 		"projet-alpha": {"emilie-cote", "jlpicard"},
-		"projet-beta":  {"aminata-d", "walid"},
+		"projet-beta":  {"aminata-d", "wasim"},
 	} {
 		state.AddRepo("acme", nom, true)
 		for _, compte := range membres {
@@ -103,8 +103,8 @@ func TestAssistantDemandeSiLeTravailEstEnEquipe(t *testing.T) {
 	h.Options.Import = "projet"
 	h.Options.Into = "a26.5n6.01"
 	h.Options.Roster = listeOmnivox(t, t.TempDir(),
-		`="1680229";="1010";="Côté";="Émilie";="COTE20059908";`,
-		`="2143020";="1010";="Picard";="Jean-Luc";="PICJ68040412";`,
+		`="1600105";="1010";="Côté";="Émilie";="COTE20059908";`,
+		`="2100106";="1010";="Picard";="Jean-Luc";="PICJ68040412";`,
 	)
 
 	code, scripte := h.script(
@@ -145,7 +145,7 @@ func TestAssistantNeDemandeRienSurUnTravailIndividuel(t *testing.T) {
 	h.Options.Into = "a26.5n6.01"
 
 	h.Options.Roster = listeOmnivox(t, t.TempDir(),
-		`="1680229";="1010";="Côté";="Émilie";="COTE20059908";`,
+		`="1600105";="1010";="Côté";="Émilie";="COTE20059908";`,
 	)
 	_, scripte := h.script(
 		"tous", // reprendre tous les dépôts

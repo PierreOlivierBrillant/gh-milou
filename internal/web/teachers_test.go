@@ -300,9 +300,9 @@ func TestUnCoursDonneFigureDansLaFiche(t *testing.T) {
 // pour tous les cours de la personne.
 func TestNommerDepuisLaFiche(t *testing.T) {
 	h := college(t)
-	h.sansNoms("h27", "5n6", "02", "aleksilepaj")
+	h.sansNoms("h27", "5n6", "02", "aleksilesaj")
 
-	avant := h.fiche("aleksilepaj")
+	avant := h.fiche("aleksilesaj")
 	if avant.User.FullName != "" {
 		t.Fatalf("nom = %q", avant.User.FullName)
 	}
@@ -311,19 +311,19 @@ func TestNommerDepuisLaFiche(t *testing.T) {
 		Username string `json:"username"`
 		FullName string `json:"full_name"`
 	}
-	h.json(http.MethodPut, "/api/users/aleksilepaj/name",
-		map[string]any{"full_name": "Aleksi Lepaj"}, &rendu)
-	if rendu.FullName != "Aleksi Lepaj" {
+	h.json(http.MethodPut, "/api/users/aleksilesaj/name",
+		map[string]any{"full_name": "Aleksi Lesaj"}, &rendu)
+	if rendu.FullName != "Aleksi Lesaj" {
 		t.Fatalf("réponse = %+v", rendu)
 	}
 
-	apres := h.fiche("aleksilepaj")
-	if apres.User.FullName != "Aleksi Lepaj" || !apres.User.Known {
+	apres := h.fiche("aleksilesaj")
+	if apres.User.FullName != "Aleksi Lesaj" || !apres.User.Known {
 		t.Fatalf("fiche = %+v", apres.User)
 	}
 	// Le nom vaut partout : l'annuaire le montre sans qu'on ait rien publié.
 	for _, ligne := range h.annuaire("").Users {
-		if ligne.Username == "aleksilepaj" && ligne.FullName != "Aleksi Lepaj" {
+		if ligne.Username == "aleksilesaj" && ligne.FullName != "Aleksi Lesaj" {
 			t.Errorf("annuaire = %+v", ligne)
 		}
 	}
@@ -333,17 +333,17 @@ func TestNommerDepuisLaFiche(t *testing.T) {
 // la personne portait, et ce qui existe reste à elle.
 func TestNommerNeRenommeAucunDepot(t *testing.T) {
 	h := college(t)
-	h.sansNoms("h27", "5n6", "02", "aleksilepaj")
+	h.sansNoms("h27", "5n6", "02", "aleksilesaj")
 	avant := h.depots()
 
-	h.json(http.MethodPut, "/api/users/aleksilepaj/name",
-		map[string]any{"full_name": "Aleksi Lepaj"}, nil)
+	h.json(http.MethodPut, "/api/users/aleksilesaj/name",
+		map[string]any{"full_name": "Aleksi Lesaj"}, nil)
 
 	if apres := h.depots(); strings.Join(apres, ",") != strings.Join(avant, ",") {
 		t.Fatalf("dépôts :\navant %v\naprès %v", avant, apres)
 	}
 	// Et le dépôt qu'il portait déjà reste le sien.
-	if fiche := h.fiche("aleksilepaj"); fiche.User.Repos != avant0(fiche) {
+	if fiche := h.fiche("aleksilesaj"); fiche.User.Repos != avant0(fiche) {
 		t.Errorf("dépôts de la personne = %d", fiche.User.Repos)
 	}
 }
@@ -381,28 +381,28 @@ func TestCorrigerUnNomDepuisLaFiche(t *testing.T) {
 // dépôt nommé d'après l'ancien reste le sien.
 func TestUneListeLocaleNeMasquePasLeNomCorrige(t *testing.T) {
 	state := fakegh.NewState()
-	state.AddRepo("acme", "h27.5n6.02.tp1.aleksi-lepa", true)
-	h := avantLeRegistre(t, state, cohorte("h27", "5n6", "02", "Aleksi Lepa", "aleksilepaj"))
+	state.AddRepo("acme", "h27.5n6.02.tp1.aleksi-lesa", true)
+	h := avantLeRegistre(t, state, cohorte("h27", "5n6", "02", "Aleksi Lesa", "aleksilesaj"))
 
-	h.json(http.MethodPut, "/api/users/aleksilepaj/name",
-		map[string]any{"full_name": "Aleksi Lepaj"}, nil)
+	h.json(http.MethodPut, "/api/users/aleksilesaj/name",
+		map[string]any{"full_name": "Aleksi Lesaj"}, nil)
 
-	fiche := h.fiche("aleksilepaj")
-	if fiche.User.FullName != "Aleksi Lepaj" {
+	fiche := h.fiche("aleksilesaj")
+	if fiche.User.FullName != "Aleksi Lesaj" {
 		t.Fatalf("nom = %q : la liste locale masque la correction", fiche.User.FullName)
 	}
 	if fiche.User.Repos != 1 {
 		t.Errorf("dépôts de la personne = %d : l'ancien slug l'a perdue", fiche.User.Repos)
 	}
-	if ligne, present := ligneDe(h.annuaire(""), "aleksilepaj"); !present ||
-		ligne.FullName != "Aleksi Lepaj" {
+	if ligne, present := ligneDe(h.annuaire(""), "aleksilesaj"); !present ||
+		ligne.FullName != "Aleksi Lesaj" {
 		t.Errorf("annuaire = %+v", ligne)
 	}
 	contenu, err := os.ReadFile(h.Groupes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(contenu), "Aleksi Lepa\"") {
+	if strings.Contains(string(contenu), "Aleksi Lesa\"") {
 		t.Errorf("l'ancien nom est resté dans la liste locale :\n%s", contenu)
 	}
 }
@@ -420,9 +420,9 @@ func avant0(fiche ficheRendu) int {
 // Un nom vide ne nomme personne : le refus est dit, pas avalé.
 func TestUnNomVideEstRefuse(t *testing.T) {
 	h := college(t)
-	h.sansNoms("h27", "5n6", "02", "aleksilepaj")
+	h.sansNoms("h27", "5n6", "02", "aleksilesaj")
 
-	reponse, contenu := h.requete(http.MethodPut, "/api/users/aleksilepaj/name",
+	reponse, contenu := h.requete(http.MethodPut, "/api/users/aleksilesaj/name",
 		map[string]any{"full_name": "   "})
 	if reponse.StatusCode == http.StatusOK {
 		t.Fatalf("un nom vide devait être refusé — %s", contenu)

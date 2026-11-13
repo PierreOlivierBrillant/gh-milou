@@ -173,8 +173,8 @@ func note(login, profil string, entree Entry) (int, string) {
 	}
 
 	prenom := tokens[0]
-	// Chaque nom de famille est essayé, pas seulement le plus long : « Diego
-	// Garcia Rioja » peut se faire appeler « drioja » comme « dgarcia ». Le
+	// Chaque nom de famille est essayé, pas seulement le plus long : « Dante
+	// Gaspar Rivas » peut se faire appeler « drivas » comme « dgaspar ». Le
 	// meilleur indice l'emporte.
 	meilleur, raison := 0, ""
 	retenir := func(score int, motif string) {
@@ -229,7 +229,7 @@ func note(login, profil string, entree Entry) (int, string) {
 // autrement.
 //
 // Le registre d'une organisation retient le nom du profil GitHub, la liste
-// d'Omnivox le nom officiel : « Ahmad Loudin » d'un côté, « Ahmad Walid Loudin »
+// d'Omnivox le nom officiel : « Anwar Lamari » d'un côté, « Anwar Wasim Lamari »
 // de l'autre. C'est la même personne, et l'égalité stricte des deux écritures la
 // comptait deux fois — associée sous l'une, absente sous l'autre.
 //
@@ -287,7 +287,7 @@ func memePersonne(gauche, droite []string) bool {
 }
 
 // nameTokens découpe un nom en mots comparables, accents et traits d'union
-// effacés : « Sauvé-Labonté » donne « sauve » et « labonte ».
+// effacés : « Sicard-Legris » donne « sicard » et « legris ».
 func nameTokens(name string) []string {
 	slug := valid.Slugify(name)
 	tokens := make([]string, 0, 4)

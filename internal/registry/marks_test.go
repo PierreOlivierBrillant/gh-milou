@@ -29,36 +29,36 @@ func jeton(t *testing.T) string {
 func TestUneMarqueDelivreeParMatriculeResteAttribuable(t *testing.T) {
 	sienne := jeton(t)
 	set, _, err := appliquer(t, registry.Empty(), registry.Mark(signature.Issued{
-		Assignment: "a26.5n6.01.tp1", StudentID: "2100456", Token: sienne,
+		Assignment: "a26.5n6.01.tp1", StudentID: "2100110", Token: sienne,
 	}))
 	if err != nil {
 		t.Fatalf("versement : %v", err)
 	}
 
 	titulaire, connu := set.Holder(sienne)
-	if !connu || titulaire.StudentID != "2100456" || titulaire.Username != "" {
+	if !connu || titulaire.StudentID != "2100110" || titulaire.Username != "" {
 		t.Fatalf("titulaire : %+v", titulaire)
 	}
 	if phrase := titulaire.Phrase(); phrase !=
-		"délivrée au matricule 2100456 pour « a26.5n6.01.tp1 »" {
+		"délivrée au matricule 2100110 pour « a26.5n6.01.tp1 »" {
 		t.Fatalf("phrase : %q", phrase)
 	}
 
 	set, _, err = appliquer(t, set, registry.Learn(roster.Person{
-		FullName: "Naomi Chéry", Username: "nchery", StudentID: "2100456",
+		FullName: "Nadia Pépin", Username: "npepin", StudentID: "2100110",
 	}))
 	if err != nil {
 		t.Fatalf("apprentissage : %v", err)
 	}
 	titulaire, _ = set.Holder(sienne)
-	if titulaire.Username != "nchery" || titulaire.FullName != "Naomi Chéry" {
+	if titulaire.Username != "npepin" || titulaire.FullName != "Nadia Pépin" {
 		t.Fatalf("une fois son compte connu, la marque doit la nommer : %+v", titulaire)
 	}
 	if phrase := titulaire.Phrase(); phrase !=
-		"délivrée à Naomi Chéry pour « a26.5n6.01.tp1 »" {
+		"délivrée à Nadia Pépin pour « a26.5n6.01.tp1 »" {
 		t.Fatalf("phrase : %q", phrase)
 	}
-	if ligne, _ := set.Marks().Who(sienne); ligne.Username != "" || ligne.StudentID != "2100456" {
+	if ligne, _ := set.Marks().Who(sienne); ligne.Username != "" || ligne.StudentID != "2100110" {
 		t.Fatalf("la ligne a été réécrite : %+v", ligne)
 	}
 }
@@ -100,7 +100,7 @@ func TestUneMarqueSansCompteSeRelitDUnPosteALAutre(t *testing.T) {
 	store, serveur := magasin(t, nil)
 	sienne := jeton(t)
 	if _, err := store.Apply(registry.Mark(signature.Issued{
-		Assignment: "a26.5n6.01.tp1", StudentID: "2100456", Token: sienne,
+		Assignment: "a26.5n6.01.tp1", StudentID: "2100110", Token: sienne,
 		IssuedAt: "2026-09-01T10:00:00Z",
 	})); err != nil {
 		t.Fatalf("Apply : %v", err)
@@ -120,7 +120,7 @@ func TestUneMarqueSansCompteSeRelitDUnPosteALAutre(t *testing.T) {
 			t.Fatalf("lecture %s : %v", lecture, snapshot.Issues)
 		}
 		titulaire, connu := snapshot.Set.Holder(sienne)
-		if !connu || titulaire.StudentID != "2100456" ||
+		if !connu || titulaire.StudentID != "2100110" ||
 			titulaire.Issued.IssuedAt != "2026-09-01T10:00:00Z" {
 			t.Fatalf("lecture %s : %+v", lecture, titulaire)
 		}
@@ -143,7 +143,7 @@ func TestUnCacheDAvantLesMarquesParMatriculeEstIgnore(t *testing.T) {
 	tete := state.SeedCommit("acme/"+registry.RepoName, map[string]string{
 		registry.UsersFile: `{"version": 2, "users": []}`,
 		registry.MarksFile: `{"version": 1, "issued": [{"assignment": "a26.5n6.01.tp1", ` +
-			`"student_id": "2100456", "token": "` + sienne + `"}]}`,
+			`"student_id": "2100110", "token": "` + sienne + `"}]}`,
 	}, registry.Branch)
 	store, stockage := cacheEt(t, state)
 

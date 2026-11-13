@@ -193,37 +193,37 @@ func TestUnCoursDonneRemonteDansLaFicheAuTerminal(t *testing.T) {
 func TestNommerUnUtilisateurAuTerminal(t *testing.T) {
 	h := college(t)
 	// Un compte repris de dépôts hérités : personne ne l'a jamais nommé.
-	h.State.AddRepo("acme", "h27.5n6.02.tp1.aleksilepaj", true)
+	h.State.AddRepo("acme", "h27.5n6.02.tp1.aleksilesaj", true)
 	h.declarer(classroom.Classroom{
 		Org: "acme", Session: "h27", Course: "5n6", Group: "02",
 		Students: []roster.Person{
 			{FullName: "Émilie Côté", Username: "emilie-cote"},
 			{FullName: "Aminata Diallo", Username: "aminata-d"},
-			{Username: "aleksilepaj"},
+			{Username: "aleksilesaj"},
 		},
 	})
 	avant := h.State.RepoNames("acme")
 
 	h.Options.StudentsRequested = false
-	h.Options.User = "aleksilepaj"
-	h.Options.FullName = "Aleksi Lepaj"
+	h.Options.User = "aleksilesaj"
+	h.Options.FullName = "Aleksi Lesaj"
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("@aleksilepaj s'appelle « Aleksi Lepaj »", "Aleksi Lepaj — @aleksilepaj")
+	h.contient("@aleksilesaj s'appelle « Aleksi Lesaj »", "Aleksi Lesaj — @aleksilesaj")
 
 	// Le nom est au registre, et vaut donc pour tout le monde.
 	contenu := h.State.Files("acme/"+registry.RepoName, registry.Branch)[registry.UsersFile]
 	set, _ := registry.Decode([]byte(contenu))
-	if set.Name("aleksilepaj") != "Aleksi Lepaj" {
+	if set.Name("aleksilesaj") != "Aleksi Lesaj" {
 		t.Fatalf("registre = %+v", set.All())
 	}
 	// Et le slug de son nouveau nom s'y ajoute sans détacher ses dépôts.
-	if trouve, connu := set.Lookup("aleksilepaj"); !connu || trouve.FullName != "Aleksi Lepaj" {
+	if trouve, connu := set.Lookup("aleksilesaj"); !connu || trouve.FullName != "Aleksi Lesaj" {
 		t.Errorf("son compte doit toujours le désigner : %+v, %v", trouve, connu)
 	}
-	if trouve, connu := set.Lookup("aleksi-lepaj"); !connu ||
-		trouve.Username != "aleksilepaj" {
+	if trouve, connu := set.Lookup("aleksi-lesaj"); !connu ||
+		trouve.Username != "aleksilesaj" {
 		t.Errorf("le slug du nom doit le désigner aussi : %+v, %v", trouve, connu)
 	}
 	// Aucun dépôt d'étudiant n'a bougé. Le dépôt de service « .cohorte », lui,
@@ -239,24 +239,24 @@ func TestNommerUnUtilisateurAuTerminal(t *testing.T) {
 // d'après l'ancien nom reste le sien.
 func TestCorrigerUnNomAuTerminal(t *testing.T) {
 	h := college(t)
-	h.State.AddRepo("acme", "h27.5n6.02.tp1.aleksi-lepa", true)
+	h.State.AddRepo("acme", "h27.5n6.02.tp1.aleksi-lesa", true)
 	h.declarer(classroom.Classroom{
 		Org: "acme", Session: "h27", Course: "5n6", Group: "02",
-		Students: []roster.Person{{FullName: "Aleksi Lepa", Username: "aleksilepaj"}},
+		Students: []roster.Person{{FullName: "Aleksi Lesa", Username: "aleksilesaj"}},
 	})
 
 	h.Options.StudentsRequested = false
-	h.Options.User = "aleksilepaj"
-	h.Options.FullName = "Aleksi Lepaj"
+	h.Options.User = "aleksilesaj"
+	h.Options.FullName = "Aleksi Lesaj"
 	if code := h.muet(); code != app.ExitOK {
 		t.Fatalf("code = %d\n%s", code, h.texte())
 	}
-	h.contient("Aleksi Lepaj — @aleksilepaj", "tp1")
-	h.absent("Aleksi Lepa —")
+	h.contient("Aleksi Lesaj — @aleksilesaj", "tp1")
+	h.absent("Aleksi Lesa —")
 
 	contenu := h.State.Files("acme/"+registry.RepoName, registry.Branch)[registry.UsersFile]
 	set, _ := registry.Decode([]byte(contenu))
-	if trouve, connu := set.Lookup("aleksi-lepa"); !connu || trouve.Username != "aleksilepaj" {
+	if trouve, connu := set.Lookup("aleksi-lesa"); !connu || trouve.Username != "aleksilesaj" {
 		t.Errorf("l'ancien slug doit toujours le désigner : %+v, %v", trouve, connu)
 	}
 }

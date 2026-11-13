@@ -11,12 +11,12 @@ import (
 // traits d'union, accents, particules, noms composés en deux mots.
 func cohorte() []roster.Entry {
 	return []roster.Entry{
-		{FullName: "Laurent Adam-Larocque", StudentID: "1680229", Permanent: "ADAL20059908"},
-		{FullName: "Félix Bourassa", StudentID: "2143020", Permanent: "BOUF68040412"},
-		{FullName: "Étienne Lyonnais", StudentID: "1983429", Permanent: "LYOE78040203"},
-		{FullName: "Jacob Sauvé-Labonté", StudentID: "1944451", Permanent: "SAUJ87030203"},
-		{FullName: "Ilyas El Haddadi", StudentID: "2115470", Permanent: "ELHI69100106"},
-		{FullName: "Diego Garcia Rioja", StudentID: "1932943", Permanent: "GARD93080202"},
+		{FullName: "Lorenzo Aube-Lachance", StudentID: "1600105", Permanent: "AUBL10109901"},
+		{FullName: "Félix Boisvert", StudentID: "2100106", Permanent: "BOIF10109902"},
+		{FullName: "Édouard Loiselle", StudentID: "1900107", Permanent: "LOIE10109903"},
+		{FullName: "Jacob Sicard-Legris", StudentID: "1900108", Permanent: "SICJ10109904"},
+		{FullName: "Idris El Hamdani", StudentID: "2100103", Permanent: "ELHI10109905"},
+		{FullName: "Dante Gaspar Rivas", StudentID: "1900102", Permanent: "GASD10109906"},
 	}
 }
 
@@ -39,15 +39,15 @@ func TestRapprochementDesFormesCourantes(t *testing.T) {
 		nom     string
 		minimum int
 	}{
-		{"laurent-adam-larocque", "Laurent Adam-Larocque", roster.Certain},
-		{"felixbourassa", "Félix Bourassa", roster.Probable},
-		{"ladamlarocque", "Laurent Adam-Larocque", roster.Probable},
-		{"lyonnais", "Étienne Lyonnais", roster.Probable},
-		{"jsauvelabonte", "Jacob Sauvé-Labonté", roster.Probable},
-		// La particule « El » ne compte pas : c'est « haddadi » qui désigne.
-		{"ihaddadi", "Ilyas El Haddadi", roster.Probable},
+		{"lorenzo-aube-lachance", "Lorenzo Aube-Lachance", roster.Certain},
+		{"felixboisvert", "Félix Boisvert", roster.Probable},
+		{"laubelachance", "Lorenzo Aube-Lachance", roster.Probable},
+		{"loiselle", "Édouard Loiselle", roster.Probable},
+		{"jsicardlegris", "Jacob Sicard-Legris", roster.Probable},
+		// La particule « El » ne compte pas : c'est « hamdani » qui désigne.
+		{"ihamdani", "Idris El Hamdani", roster.Probable},
 		// Un nom en deux mots : le plus long tranche.
-		{"drioja", "Diego Garcia Rioja", roster.Probable},
+		{"drivas", "Dante Gaspar Rivas", roster.Probable},
 	}
 	for _, essai := range cas {
 		t.Run(essai.login, func(t *testing.T) {
@@ -69,9 +69,9 @@ func TestRapprochementDesFormesCourantes(t *testing.T) {
 // Le numéro d'étudiant dans un pseudonyme n'est pas une coïncidence : c'est
 // l'indice le plus sûr, et il l'emporte même quand le nom ne dit rien.
 func TestLeNumeroDEtudiantTrancheSeul(t *testing.T) {
-	rapprochements := roster.Match(cohorte(), []string{"xyz1680229"}, nil)
-	trouvee := trouve(t, rapprochements, "xyz1680229")
-	if trouvee.Entry.FullName != "Laurent Adam-Larocque" || trouvee.Score != 100 {
+	rapprochements := roster.Match(cohorte(), []string{"xyz1600105"}, nil)
+	trouvee := trouve(t, rapprochements, "xyz1600105")
+	if trouvee.Entry.FullName != "Lorenzo Aube-Lachance" || trouvee.Score != 100 {
 		t.Fatalf("rapprochement = %+v", trouvee)
 	}
 	if !strings.Contains(trouvee.Reason, "numéro") {
@@ -81,10 +81,10 @@ func TestLeNumeroDEtudiantTrancheSeul(t *testing.T) {
 
 // Le nom du profil GitHub, quand on le connaît, vaut mieux que le pseudonyme.
 func TestLeProfilGitHubTrancheQuandLePseudoNeDitRien(t *testing.T) {
-	profils := map[string]string{"xkcd42": "Étienne Lyonnais"}
+	profils := map[string]string{"xkcd42": "Édouard Loiselle"}
 	rapprochements := roster.Match(cohorte(), []string{"xkcd42"}, profils)
 	trouvee := trouve(t, rapprochements, "xkcd42")
-	if trouvee.Entry.FullName != "Étienne Lyonnais" || trouvee.Score < roster.Certain {
+	if trouvee.Entry.FullName != "Édouard Loiselle" || trouvee.Score < roster.Certain {
 		t.Fatalf("rapprochement = %+v", trouvee)
 	}
 }
@@ -120,17 +120,17 @@ func TestDeuxPersonnesQuiSeValentSontSignalees(t *testing.T) {
 // prend : un pseudonyme vague ne vole pas la place d'un pseudonyme explicite.
 func TestUnePersonneNEstRetenueQuUneFois(t *testing.T) {
 	gens := []roster.Entry{
-		{FullName: "Félix Bourassa", StudentID: "2143020"},
-		{FullName: "Olivier Bournival", StudentID: "2162536"},
+		{FullName: "Félix Boisvert", StudentID: "2100106"},
+		{FullName: "Olivier Boisclair", StudentID: "2100109"},
 	}
-	// « bour » ressemble aux deux ; « felixbourassa2143020 » ne ressemble qu'à un.
-	rapprochements := roster.Match(gens, []string{"bourassa", "felixbourassa2143020"}, nil)
-	sur := trouve(t, rapprochements, "felixbourassa2143020")
-	if sur.Entry.FullName != "Félix Bourassa" || sur.Score != 100 {
+	// « boisvert » ressemble aux deux ; « felixboisvert2100106 » ne ressemble qu'à un.
+	rapprochements := roster.Match(gens, []string{"boisvert", "felixboisvert2100106"}, nil)
+	sur := trouve(t, rapprochements, "felixboisvert2100106")
+	if sur.Entry.FullName != "Félix Boisvert" || sur.Score != 100 {
 		t.Fatalf("le compte le plus explicite = %+v", sur)
 	}
-	vague := trouve(t, rapprochements, "bourassa")
-	if vague.Entry.FullName == "Félix Bourassa" {
+	vague := trouve(t, rapprochements, "boisvert")
+	if vague.Entry.FullName == "Félix Boisvert" {
 		t.Fatalf("la même personne a été retenue deux fois : %+v", vague)
 	}
 }
@@ -138,7 +138,7 @@ func TestUnePersonneNEstRetenueQuUneFois(t *testing.T) {
 // Deux exécutions disent la même chose : l'ordre ne dépend pas du hasard des
 // tables de hachage.
 func TestLeRapprochementEstStable(t *testing.T) {
-	logins := []string{"ladamlarocque", "lyonnais", "drioja", "inconnu"}
+	logins := []string{"laubelachance", "loiselle", "drivas", "inconnu"}
 	premier := roster.Match(cohorte(), logins, nil)
 	for essai := 0; essai < 5; essai++ {
 		suivant := roster.Match(cohorte(), logins, nil)
@@ -150,26 +150,26 @@ func TestLeRapprochementEstStable(t *testing.T) {
 		}
 	}
 	// L'ordre rendu est celui des comptes fournis.
-	if premier[0].Login != "ladamlarocque" || premier[3].Login != "inconnu" {
+	if premier[0].Login != "laubelachance" || premier[3].Login != "inconnu" {
 		t.Fatalf("ordre = %+v", premier)
 	}
 }
 
 func TestFindNameReconnaitDeuxEcrituresDunMemeNom(t *testing.T) {
 	liste := []roster.Entry{
-		{FullName: "Ahmad Walid Loudin", StudentID: "111"},
-		{FullName: "Guillaume Gobeil-Bouchard", StudentID: "222"},
-		{FullName: "Félix Bourassa", StudentID: "333"},
+		{FullName: "Anwar Wasim Lamari", StudentID: "111"},
+		{FullName: "Guillermo Gosselin-Brault", StudentID: "222"},
+		{FullName: "Félix Boisvert", StudentID: "333"},
 	}
 	cas := []struct {
 		cherche, attendu string
 	}{
 		// Le registre garde le nom du profil GitHub, plus court que l'officiel.
-		{"Ahmad Loudin", "Ahmad Walid Loudin"},
-		{"Guillaume Bouchard", "Guillaume Gobeil-Bouchard"},
+		{"Anwar Lamari", "Anwar Wasim Lamari"},
+		{"Guillermo Brault", "Guillermo Gosselin-Brault"},
 		// L'écriture exacte, à l'accent et à la casse près.
-		{"FELIX BOURASSA", "Félix Bourassa"},
-		{"Felix Bourassa", "Félix Bourassa"},
+		{"FELIX BOISVERT", "Félix Boisvert"},
+		{"Felix Boisvert", "Félix Boisvert"},
 	}
 	for _, essai := range cas {
 		trouve, dans := roster.FindName(liste, essai.cherche)
@@ -194,8 +194,8 @@ func TestFindNameNeTranchePasDansLeDoute(t *testing.T) {
 		t.Fatalf("FindName = %q : deux personnes s'y prêtaient", trouve.FullName)
 	}
 	// Un prénom seul ne désigne personne.
-	if trouve, dans := roster.FindName([]roster.Entry{{FullName: "Ahmad Walid Loudin"}},
-		"Ahmad"); dans {
+	if trouve, dans := roster.FindName([]roster.Entry{{FullName: "Anwar Wasim Lamari"}},
+		"Anwar"); dans {
 		t.Fatalf("FindName = %q : un mot seul ne suffit pas", trouve.FullName)
 	}
 	if _, dans := roster.FindName(liste, ""); dans {

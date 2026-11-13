@@ -734,7 +734,7 @@ func cacheEt(t *testing.T, state *fakegh.State) (*registry.Store, *cache.Cache) 
 func registreSeme(state *fakegh.State) string {
 	state.AddRepo("acme", registry.RepoName, true)
 	return state.SeedCommit("acme/"+registry.RepoName, map[string]string{
-		registry.UsersFile: `{"version":2,"users":[{"username":"1680229",` +
+		registry.UsersFile: `{"version":2,"users":[{"username":"1600105",` +
 			`"full_name":"Prénom Nom","slugs":["prenom-nom"]}]}`,
 	}, registry.Branch)
 }
@@ -754,7 +754,7 @@ func TestUnCacheDUneFormeInconnueEstIgnore(t *testing.T) {
 	stockage.Set(cache.RegistryKey("acme"), map[string]any{
 		"head": tete,
 		"students": []map[string]any{
-			{"username": "1680229", "full_name": "Prénom Nom"},
+			{"username": "1600105", "full_name": "Prénom Nom"},
 		},
 	})
 
@@ -762,7 +762,7 @@ func TestUnCacheDUneFormeInconnueEstIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load : %v", err)
 	}
-	if nom := snapshot.Set.Name("1680229"); nom != "Prénom Nom" {
+	if nom := snapshot.Set.Name("1600105"); nom != "Prénom Nom" {
 		t.Errorf("Name = %q : le cache périmé s'est fait passer pour le registre", nom)
 	}
 }
@@ -782,7 +782,7 @@ func TestUnCacheDeLaFormeCouranteEviteDeRelireLeFichier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load : %v", err)
 	}
-	if nom := snapshot.Set.Name("1680229"); nom != "Prénom Nom" {
+	if nom := snapshot.Set.Name("1600105"); nom != "Prénom Nom" {
 		t.Errorf("Name = %q depuis le cache", nom)
 	}
 	if apres := state.CallCount("/contents/" + registry.UsersFile); apres != lectures {
@@ -805,7 +805,7 @@ func TestUnAvertissementDuRegistreSurvitAuCache(t *testing.T) {
 		// Une version que cet outil ne connaît pas, et des fiches rangées là
 		// où il ne les cherche pas : c'est exactement ce qu'il a fait subir à
 		// ses propres versions antérieures.
-		registry.UsersFile: `{"version":99,"personnes":[{"username":"1680229"}]}`,
+		registry.UsersFile: `{"version":99,"personnes":[{"username":"1600105"}]}`,
 	}, registry.Branch)
 	store, _ := cacheEt(t, state)
 

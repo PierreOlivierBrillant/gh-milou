@@ -41,8 +41,8 @@ func omnivox(lignes ...string) []byte {
 
 var exportDeLea = omnivox(
 	"Numéro d'étudiant;Nom de l'étudiant;Prénom;Code permanent",
-	`="1680229";="Adam-Larocque";="Laurent";="ADAL01010101"`,
-	`="1256639";="Rolleston-Chase";="Patrick";="ROLP02020202"`,
+	`="1600105";="Aube-Lachance";="Lorenzo";="AUBL01010101"`,
+	`="1200101";="Rowlinson-Hayes";="Preston";="ROWP02020202"`,
 	`="2100123";="Côté";="Émilie";="COTE03030303"`,
 )
 
@@ -67,8 +67,8 @@ func TestLaLectureDUnExportDeLeaRendLesPersonnes(t *testing.T) {
 	if len(lue.People) != 3 {
 		t.Fatalf("%d personne(s) rendues, 3 attendues : %+v", len(lue.People), lue.People)
 	}
-	if lue.People[0].FullName != "Laurent Adam-Larocque" ||
-		lue.People[0].StudentID != "1680229" || lue.People[0].Username != "" {
+	if lue.People[0].FullName != "Lorenzo Aube-Lachance" ||
+		lue.People[0].StudentID != "1600105" || lue.People[0].Username != "" {
 		t.Errorf("première personne : %+v", lue.People[0])
 	}
 }
@@ -110,7 +110,7 @@ func TestUnExportDeLeaInscritLaCohorteEntiere(t *testing.T) {
 func TestUnDepotEstCreePourQuiNAPasEncoreDeCompte(t *testing.T) {
 	state := fakegh.NewState()
 	state.Users["ecote"] = "Émilie Côté"
-	state.Users["ladamlarocque"] = "Laurent Adam-Larocque"
+	state.Users["laubelachance"] = "Lorenzo Aube-Lachance"
 	h := nouveau(t, state)
 	place := h.groupe("a26", "5n6", "1010", "Émilie Côté", "ecote")
 
@@ -122,9 +122,9 @@ func TestUnDepotEstCreePourQuiNAPasEncoreDeCompte(t *testing.T) {
 	h.json(http.MethodPost, "/api/classrooms/"+place+"/students",
 		map[string]any{"people": lue.People}, nil)
 
-	// Laurent a créé son compte depuis : on le lui rattache, et son matricule
+	// Lorenzo a créé son compte depuis : on le lui rattache, et son matricule
 	// est tout ce qu'on a pour le désigner.
-	if reponse, contenu := h.rattacher(place, "1680229", "ladamlarocque"); reponse.StatusCode >= 300 {
+	if reponse, contenu := h.rattacher(place, "1600105", "laubelachance"); reponse.StatusCode >= 300 {
 		t.Fatalf("rattachement par matricule refusé : %d — %s", reponse.StatusCode, contenu)
 	}
 
@@ -140,20 +140,20 @@ func TestUnDepotEstCreePourQuiNAPasEncoreDeCompte(t *testing.T) {
 	sort.Strings(noms)
 	attendus := []string{
 		"a26.5n6.1010.tp1.emilie-cote",
-		"a26.5n6.1010.tp1.laurent-adam-larocque",
-		"a26.5n6.1010.tp1.patrick-rolleston-chase",
+		"a26.5n6.1010.tp1.lorenzo-aube-lachance",
+		"a26.5n6.1010.tp1.preston-rowlinson-hayes",
 	}
 	if strings.Join(noms, ",") != strings.Join(attendus, ",") {
 		t.Fatalf("un dépôt par personne attendu :\n  %v\n  %v", noms, attendus)
 	}
-	// Laurent, à qui l'on vient de rattacher un compte, est invité sur le sien.
-	invites := h.State.Invitations["acme/a26.5n6.1010.tp1.laurent-adam-larocque"]
-	if len(invites) != 1 || !strings.EqualFold(invites[0].Login, "ladamlarocque") {
-		t.Errorf("Laurent devrait être invité sous son compte : %+v", invites)
+	// Lorenzo, à qui l'on vient de rattacher un compte, est invité sur le sien.
+	invites := h.State.Invitations["acme/a26.5n6.1010.tp1.lorenzo-aube-lachance"]
+	if len(invites) != 1 || !strings.EqualFold(invites[0].Login, "laubelachance") {
+		t.Errorf("Lorenzo devrait être invité sous son compte : %+v", invites)
 	}
-	// Patrick n'en a toujours pas : son dépôt existe, et personne n'y est
+	// Preston n'en a toujours pas : son dépôt existe, et personne n'y est
 	// invité. C'est un fait, pas un échec.
-	if invites := h.State.Invitations["acme/a26.5n6.1010.tp1.patrick-rolleston-chase"]; len(invites) != 0 {
+	if invites := h.State.Invitations["acme/a26.5n6.1010.tp1.preston-rowlinson-hayes"]; len(invites) != 0 {
 		t.Errorf("personne n'était à inviter : %+v", invites)
 	}
 	// Et le bilan le dit, plutôt que de laisser la case vide : une case vide se
@@ -211,19 +211,19 @@ func TestLaSelectionDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
 	h := nouveau(t, fakegh.NewState())
 	place := h.groupe("a26", "5n6", "1010", "Jean-Luc Picard", "jlpicard")
 	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
-		inscritParMatricule("Naomi Chéry", "2100456"))
+		inscritParMatricule("Nadia Pépin", "2100110"))
 
 	depots, _ := h.apercuDeDistribution(place, map[string]any{
-		"name": "tp1", "usernames": []string{"jlpicard", "2100456"},
+		"name": "tp1", "usernames": []string{"jlpicard", "2100110"},
 	})
-	attendus := []string{"a26.5n6.1010.tp1.jean-luc-picard", "a26.5n6.1010.tp1.naomi-chery"}
+	attendus := []string{"a26.5n6.1010.tp1.jean-luc-picard", "a26.5n6.1010.tp1.nadia-pepin"}
 	if strings.Join(depots, ",") != strings.Join(attendus, ",") {
 		t.Fatalf("aperçu :\n  %v\nattendu :\n  %v", depots, attendus)
 	}
 
 	h.travail(http.MethodPost, "/api/classrooms/"+place+"/assignments",
-		map[string]any{"name": "tp1", "usernames": []string{"2100456"}})
-	if noms := h.depots(); len(noms) != 1 || noms[0] != "a26.5n6.1010.tp1.naomi-chery" {
+		map[string]any{"name": "tp1", "usernames": []string{"2100110"}})
+	if noms := h.depots(); len(noms) != 1 || noms[0] != "a26.5n6.1010.tp1.nadia-pepin" {
 		t.Fatalf("dépôts créés : %v", noms)
 	}
 }
@@ -233,11 +233,11 @@ func TestLaSelectionDesigneParSonMatriculeQuiNAPasDeCompte(t *testing.T) {
 // servait de clé — si bien que « Distribuer aux manquants » en oubliait.
 func TestLeDepotDUneInscriteSansCompteNeServPasLesAutres(t *testing.T) {
 	state := fakegh.NewState()
-	state.AddRepo("acme", "a26.5n6.1010.tp1.naomi-chery", true)
+	state.AddRepo("acme", "a26.5n6.1010.tp1.nadia-pepin", true)
 	h := nouveau(t, state)
 	place := h.groupe("a26", "5n6", "1010", "Jean-Luc Picard", "jlpicard")
 	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
-		inscritParMatricule("Naomi Chéry", "2100456"),
+		inscritParMatricule("Nadia Pépin", "2100110"),
 		inscritParMatricule("Aminata Diallo", "2100789"))
 
 	depots, servis := h.apercuDeDistribution(place, map[string]any{"name": "tp1"})
@@ -245,8 +245,8 @@ func TestLeDepotDUneInscriteSansCompteNeServPasLesAutres(t *testing.T) {
 	if strings.Join(depots, ",") != strings.Join(attendus, ",") {
 		t.Errorf("aperçu :\n  %v\nattendu :\n  %v", depots, attendus)
 	}
-	if strings.Join(servis, ",") != "Naomi Chéry" {
-		t.Errorf("seule Naomi a déjà son dépôt : %v", servis)
+	if strings.Join(servis, ",") != "Nadia Pépin" {
+		t.Errorf("seule Nadia a déjà son dépôt : %v", servis)
 	}
 }
 
@@ -277,25 +277,25 @@ func (h *harnais) marquesAuRegistre() []ligneDeMarque {
 	return lu.Issued
 }
 
-// distribuerANaomi distribue « tp1 » à un groupe où Naomi Chéry n'a encore que
+// distribuerANadia distribue « tp1 » à un groupe où Nadia Pépin n'a encore que
 // son matricule, et rend la marque déposée dans son dépôt.
-func distribuerANaomi(t *testing.T) (*harnais, string, string) {
+func distribuerANadia(t *testing.T) (*harnais, string, string) {
 	t.Helper()
 	state := fakegh.NewState()
 	state.Users["jlpicard"] = "Jean-Luc Picard"
-	state.Users["nchery"] = "Naomi Chéry"
+	state.Users["npepin"] = "Nadia Pépin"
 	h := nouveau(t, state)
 	place := h.groupe("a26", "5n6", "1010", "Jean-Luc Picard", "jlpicard")
 	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
-		inscritParMatricule("Naomi Chéry", "2100456"))
+		inscritParMatricule("Nadia Pépin", "2100110"))
 
 	h.travail(http.MethodPost, "/api/classrooms/"+place+"/assignments",
 		map[string]any{"name": "tp1"})
 
-	readme := h.State.Files("acme/a26.5n6.1010.tp1.naomi-chery", "main")["README.md"]
+	readme := h.State.Files("acme/a26.5n6.1010.tp1.nadia-pepin", "main")["README.md"]
 	token, signe := signature.First([]byte(readme))
 	if !signe {
-		t.Fatalf("le dépôt de Naomi n'est pas signé : %q", readme)
+		t.Fatalf("le dépôt de Nadia n'est pas signé : %q", readme)
 	}
 	return h, place, signature.Text(token)
 }
@@ -305,7 +305,7 @@ func distribuerANaomi(t *testing.T) (*harnais, string, string) {
 // hasard, et ce qui ne monte pas est perdu pour de bon — lui rattacher un
 // compte ensuite n'y changeait rien.
 func TestLaMarqueDUneInscriteSansCompteMonteAuRegistre(t *testing.T) {
-	h, _, marque := distribuerANaomi(t)
+	h, _, marque := distribuerANadia(t)
 
 	marques := h.marquesAuRegistre()
 	var sienne, siennes = ligneDeMarque{}, 0
@@ -315,9 +315,9 @@ func TestLaMarqueDUneInscriteSansCompteMonteAuRegistre(t *testing.T) {
 		}
 	}
 	if siennes != 1 {
-		t.Fatalf("la marque de Naomi (%s) n'est pas au registre : %+v", marque, marques)
+		t.Fatalf("la marque de Nadia (%s) n'est pas au registre : %+v", marque, marques)
 	}
-	if sienne.StudentID != "2100456" || sienne.Username != "" ||
+	if sienne.StudentID != "2100110" || sienne.Username != "" ||
 		sienne.Assignment != "a26.5n6.1010.tp1" {
 		t.Errorf("sa marque doit être rattachée à son matricule : %+v", sienne)
 	}
@@ -333,16 +333,16 @@ func TestLaMarqueDUneInscriteSansCompteMonteAuRegistre(t *testing.T) {
 }
 
 // Et elle reste attribuable : une copie qui la porte se nomme par son matricule
-// tant que Naomi n'a pas de compte, puis par son nom dès qu'on lui en rattache
+// tant que Nadia n'a pas de compte, puis par son nom dès qu'on lui en rattache
 // un. Le registre apprend le matricule avec le compte : c'est ce qui les relie,
 // et sans lui la marque ne désignerait plus qu'un matricule que rien ne nomme.
 func TestSaMarqueResteAttribuableUneFoisSonCompteRattache(t *testing.T) {
-	h, place, marque := distribuerANaomi(t)
+	h, place, marque := distribuerANadia(t)
 
-	// Jean-Luc a recopié le travail de Naomi, README compris : la marque a
+	// Jean-Luc a recopié le travail de Nadia, README compris : la marque a
 	// suivi.
-	readme := h.State.Files("acme/a26.5n6.1010.tp1.naomi-chery", "main")["README.md"]
-	for _, depot := range []string{"a26.5n6.1010.tp1.naomi-chery", "a26.5n6.1010.tp1.jean-luc-picard"} {
+	readme := h.State.Files("acme/a26.5n6.1010.tp1.nadia-pepin", "main")["README.md"]
+	for _, depot := range []string{"a26.5n6.1010.tp1.nadia-pepin", "a26.5n6.1010.tp1.jean-luc-picard"} {
 		h.State.SeedCommit("acme/"+depot, map[string]string{
 			"README.md": readme, "src/Solution.java": solutionJava,
 		}, "main")
@@ -366,17 +366,17 @@ func TestSaMarqueResteAttribuableUneFoisSonCompteRattache(t *testing.T) {
 	}
 
 	avant := porteur()
-	if phrase, _ := avant["phrase"].(string); !strings.Contains(phrase, "matricule 2100456") ||
+	if phrase, _ := avant["phrase"].(string); !strings.Contains(phrase, "matricule 2100110") ||
 		!strings.Contains(phrase, "a26.5n6.1010.tp1") {
 		t.Fatalf("sans compte, la marque se nomme par son matricule : %+v", avant)
 	}
 
-	if reponse, contenu := h.rattacher(place, "2100456", "nchery"); reponse.StatusCode >= 300 {
+	if reponse, contenu := h.rattacher(place, "2100110", "npepin"); reponse.StatusCode >= 300 {
 		t.Fatalf("rattachement refusé : %d — %s", reponse.StatusCode, contenu)
 	}
 	apres := porteur()
-	if phrase, _ := apres["phrase"].(string); !strings.Contains(phrase, "Naomi Chéry") ||
-		apres["username"] != "nchery" {
+	if phrase, _ := apres["phrase"].(string); !strings.Contains(phrase, "Nadia Pépin") ||
+		apres["username"] != "npepin" {
 		t.Fatalf("une fois son compte rattaché, la marque la nomme : %+v", apres)
 	}
 }

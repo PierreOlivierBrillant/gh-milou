@@ -29,14 +29,14 @@ func (h *harnais) marqueDuDepot(depot string) string {
 // dépôt était signé, mais rien ne disait à qui.
 func TestAjouterUnePersonneVerseLesMarquesDeSesDepots(t *testing.T) {
 	state := fakegh.NewState()
-	state.Users["nchery"] = "Naomi Chéry"
+	state.Users["npepin"] = "Nadia Pépin"
 	state.AddRepo("acme", "a26.5n6.01.tp1.jean-luc-picard", true)
 	h := nouveau(t, state)
 	place := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
 
 	bilan := h.travail(http.MethodPost, "/api/classrooms/"+place+"/students/add",
 		map[string]any{
-			"full_name": "Naomi Chéry", "username": "nchery",
+			"full_name": "Nadia Pépin", "username": "npepin",
 			"assignments": []string{"tp1"},
 		})
 	if bilan["status"] != "terminé" {
@@ -45,8 +45,8 @@ func TestAjouterUnePersonneVerseLesMarquesDeSesDepots(t *testing.T) {
 
 	marques := h.marquesAuRegistre()
 	attendue := ligneDeMarque{
-		Assignment: "a26.5n6.01.tp1", Username: "nchery",
-		Token: h.marqueDuDepot("a26.5n6.01.tp1.naomi-chery"),
+		Assignment: "a26.5n6.01.tp1", Username: "npepin",
+		Token: h.marqueDuDepot("a26.5n6.01.tp1.nadia-pepin"),
 	}
 	if len(marques) != 1 || marques[0] != attendue {
 		t.Fatalf("registre des marques : %+v, attendu %+v", marques, attendue)

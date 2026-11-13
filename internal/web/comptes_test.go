@@ -168,8 +168,8 @@ func TestLeMatriculeReunitDeuxComptes(t *testing.T) {
 	h.json(http.MethodPost, "/api/classrooms", map[string]any{
 		"session": "a26", "course": "5n6", "group": "01",
 		"students": []map[string]string{
-			{"full_name": "Émilie Côté", "username": "emilie-cote", "student_id": "1680229"},
-			{"full_name": "Émilie Côté", "username": "ecote", "student_id": "1680229"},
+			{"full_name": "Émilie Côté", "username": "emilie-cote", "student_id": "1600105"},
+			{"full_name": "Émilie Côté", "username": "ecote", "student_id": "1600105"},
 		},
 	}, &cree)
 
@@ -253,8 +253,8 @@ func TestLeMatriculeArriveDeLaListe(t *testing.T) {
 	}
 	h.json(http.MethodPost, "/api/roster/parse", map[string]any{
 		"content": listeAvecMatricules(
-			"1680229;Émilie Côté;emilie-cote",
-			"1680229;Émilie Côté;ecote",
+			"1600105;Émilie Côté;emilie-cote",
+			"1600105;Émilie Côté;ecote",
 		),
 	}, &lue)
 	if len(lue.People) != 2 {
@@ -263,7 +263,7 @@ func TestLeMatriculeArriveDeLaListe(t *testing.T) {
 	h.json(http.MethodPost, "/api/classrooms/"+place+"/students",
 		map[string]any{"people": lue.People}, &bilan)
 	for _, personne := range bilan.Classroom.Students {
-		if personne.StudentID != "1680229" {
+		if personne.StudentID != "1600105" {
 			t.Fatalf("le matricule devrait suivre : %+v", personne)
 		}
 	}
@@ -303,23 +303,23 @@ func TestPlacerUnCompteDansUneEquipeOuLAutreEstDeja(t *testing.T) {
 // ferait croire que rien ne s'est passé — c'est ce qui arrivait.
 func TestUnMembreInviteApparaitQuandMeme(t *testing.T) {
 	state := fakegh.NewState()
-	state.Users["hugolevacher"] = "Hugo Levacher"
+	state.Users["hugolamarche"] = "Hugo Lamarche"
 	// Hugo n'est pas encore membre de l'organisation : GitHub l'invitera.
-	state.OutsideOrg["hugolevacher"] = true
+	state.OutsideOrg["hugolamarche"] = true
 	h := nouveau(t, state)
-	place := h.groupe("a26", "5n6", "01", "Hugo Levacher", "hugolevacher")
-	h.creerEquipe(place, "jerkkings")
+	place := h.groupe("a26", "5n6", "01", "Hugo Lamarche", "hugolamarche")
+	h.creerEquipe(place, "voyageurs")
 
 	var bilan listeEquipes
 	h.json(http.MethodPost, "/api/classrooms/"+place+"/teams/members",
-		map[string]any{"team": "jerkkings", "usernames": []string{"hugolevacher"}}, &bilan)
+		map[string]any{"team": "voyageurs", "usernames": []string{"hugolamarche"}}, &bilan)
 
 	// GitHub ne l'a pas mis dans l'équipe : il l'y a invité.
-	if membres := h.State.TeamMembers("acme", fakegh.TeamSlug("a26.5n6.01.jerkkings")); len(membres) != 0 {
+	if membres := h.State.TeamMembers("acme", fakegh.TeamSlug("a26.5n6.01.voyageurs")); len(membres) != 0 {
 		t.Fatalf("aucun membre actif attendu : %v", membres)
 	}
-	invites := h.State.TeamPending("acme", fakegh.TeamSlug("a26.5n6.01.jerkkings"))
-	if strings.Join(invites, ",") != "hugolevacher" {
+	invites := h.State.TeamPending("acme", fakegh.TeamSlug("a26.5n6.01.voyageurs"))
+	if strings.Join(invites, ",") != "hugolamarche" {
 		t.Fatalf("il devrait être invité : %v", invites)
 	}
 
@@ -330,10 +330,10 @@ func TestUnMembreInviteApparaitQuandMeme(t *testing.T) {
 		t.Fatalf("une équipe attendue : %+v", liste.Teams)
 	}
 	if len(liste.Teams[0].People) != 1 ||
-		liste.Teams[0].People[0].Username != "hugolevacher" {
+		liste.Teams[0].People[0].Username != "hugolamarche" {
 		t.Fatalf("Hugo devrait figurer dans l'équipe : %+v", liste.Teams[0])
 	}
-	if strings.Join(liste.Teams[0].Waiting, ",") != "hugolevacher" {
+	if strings.Join(liste.Teams[0].Waiting, ",") != "hugolamarche" {
 		t.Fatalf("son attente devrait être dite : %+v", liste.Teams[0].Waiting)
 	}
 	// Et il ne doit plus être compté « sans équipe ».

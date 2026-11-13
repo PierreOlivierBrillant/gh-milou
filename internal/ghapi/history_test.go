@@ -11,7 +11,7 @@ import (
 // page plutôt que de dérouler tout l'historique.
 func TestLePremierCommitEstAuBoutDeLHistorique(t *testing.T) {
 	state := fakegh.NewState()
-	repo := state.AddRepo("acme", "tp1-lyonnais", true)
+	repo := state.AddRepo("acme", "tp1-loiselle", true)
 	repo.History = fakegh.Commits(
 		"2026-11-02T09:15:00Z",
 		"2026-10-18T14:00:00Z",
@@ -20,7 +20,7 @@ func TestLePremierCommitEstAuBoutDeLHistorique(t *testing.T) {
 	client, faux := client(t, state)
 	defer faux.Close()
 
-	moment, err := client.FirstCommit("acme", "tp1-lyonnais")
+	moment, err := client.FirstCommit("acme", "tp1-loiselle")
 	if err != nil {
 		t.Fatalf("premier commit : %v", err)
 	}

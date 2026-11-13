@@ -44,9 +44,9 @@ const entete = "No étudiant;Groupe;Nom de l'étudiant;Prénom de l'étudiant;Co
 
 func TestListeOmnivoxSeLitTelleQuelle(t *testing.T) {
 	chemin := fichierOmnivox(t, entete,
-		`="1680229";="1030";="Adam-Larocque";="Laurent";="ADAL20059908";`,
-		`="2143020";="1030";="Bourassa";="Félix";="BOUF68040412";`,
-		`="1983429";="1030";="Lyonnais";="Étienne";="LYOE78040203";`,
+		`="1600105";="1030";="Aube-Lachance";="Lorenzo";="AUBL10109901";`,
+		`="2100106";="1030";="Boisvert";="Félix";="BOIF10109902";`,
+		`="1900107";="1030";="Loiselle";="Édouard";="LOIE10109903";`,
 	)
 	liste, err := roster.Load(chemin)
 	if err != nil {
@@ -62,17 +62,17 @@ func TestListeOmnivoxSeLitTelleQuelle(t *testing.T) {
 	// Le prénom passe devant : c'est ainsi qu'on nomme une personne, et ainsi
 	// que son nom entrera dans celui de ses dépôts.
 	premiere := liste.Entries[0]
-	if premiere.FullName != "Laurent Adam-Larocque" {
+	if premiere.FullName != "Lorenzo Aube-Lachance" {
 		t.Fatalf("nom composé = %q", premiere.FullName)
 	}
 	// L'armure « ="…" » est retirée, les zéros de tête survivent.
-	if premiere.StudentID != "1680229" || premiere.Permanent != "ADAL20059908" ||
+	if premiere.StudentID != "1600105" || premiere.Permanent != "AUBL10109901" ||
 		premiere.Group != "1030" {
 		t.Fatalf("entrée = %+v", premiere)
 	}
 	// Les accents ont traversé l'encodage.
-	if liste.Entries[1].FullName != "Félix Bourassa" ||
-		liste.Entries[2].FullName != "Étienne Lyonnais" {
+	if liste.Entries[1].FullName != "Félix Boisvert" ||
+		liste.Entries[2].FullName != "Édouard Loiselle" {
 		t.Fatalf("accents perdus : %+v", liste.Entries[1:])
 	}
 
@@ -90,8 +90,8 @@ func TestListeOmnivoxSeLitTelleQuelle(t *testing.T) {
 func TestListeOmnivoxAvecComptesGitHub(t *testing.T) {
 	chemin := fichierOmnivox(t,
 		"No étudiant;Groupe;Nom de l'étudiant;Prénom de l'étudiant;Code perm.;GitHub",
-		`="1680229";="1030";="Adam-Larocque";="Laurent";="ADAL20059908";ladam`,
-		`="2143020";="1030";="Bourassa";="Félix";="BOUF68040412";="felixb"`,
+		`="1600105";="1030";="Aube-Lachance";="Lorenzo";="AUBL10109901";laube`,
+		`="2100106";="1030";="Boisvert";="Félix";="BOIF10109902";="felixb"`,
 	)
 	liste, err := roster.Load(chemin)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestListeOmnivoxAvecComptesGitHub(t *testing.T) {
 	if !liste.Named() || len(liste.People) != 2 {
 		t.Fatalf("comptes = %+v", liste.People)
 	}
-	if liste.People[0].Username != "ladam" || liste.People[0].FullName != "Laurent Adam-Larocque" {
+	if liste.People[0].Username != "laube" || liste.People[0].FullName != "Lorenzo Aube-Lachance" {
 		t.Fatalf("première personne = %+v", liste.People[0])
 	}
 	// La colonne ajoutée à la main peut être blindée comme les autres, ou non.
@@ -117,8 +117,8 @@ func TestListeOmnivoxAvecComptesGitHub(t *testing.T) {
 func TestUnCompteManquantEstSignaleQuandLaColonneExiste(t *testing.T) {
 	chemin := fichierOmnivox(t,
 		"No étudiant;Nom de l'étudiant;Prénom de l'étudiant;GitHub",
-		`="1680229";="Adam-Larocque";="Laurent";ladam`,
-		`="2143020";="Bourassa";="Félix";`,
+		`="1600105";="Aube-Lachance";="Lorenzo";laube`,
+		`="2100106";="Boisvert";="Félix";`,
 	)
 	liste, err := roster.Load(chemin)
 	if err != nil {

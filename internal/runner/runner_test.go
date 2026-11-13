@@ -619,7 +619,7 @@ func TestLaMarqueDUneInscriteSansCompteSeVerseSousSonMatricule(t *testing.T) {
 	settings.NamePattern = "{assignment}-{name}"
 	gens := []roster.Person{
 		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 	}
 
 	rapport, err := runner.New(client, settings, squelette(t)).Run(
@@ -640,7 +640,7 @@ func TestLaMarqueDUneInscriteSansCompteSeVerseSousSonMatricule(t *testing.T) {
 		// défaut son matricule — jamais les deux, rien ne change pour qui a un
 		// compte.
 		parCompte := delivree.Username == "jlpicard" && delivree.StudentID == ""
-		parMatricule := delivree.Username == "" && delivree.StudentID == "2100456"
+		parMatricule := delivree.Username == "" && delivree.StudentID == "2100110"
 		if !parCompte && !parMatricule {
 			t.Fatalf("marque mal rattachée : %+v", delivree)
 		}
@@ -728,7 +728,7 @@ func TestLesMarquesMontentAuRegistreAvecLaDistribution(t *testing.T) {
 	settings := travailDuGroupe("tp1")
 	gens := []roster.Person{
 		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-		{FullName: "Naomi Chéry", StudentID: "2100456"},
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
 	}
 
 	rapport, err := runner.New(client, settings, squelette(t)).Run(
@@ -814,7 +814,7 @@ func TestUneMarqueQueRienNeDesigneSeDit(t *testing.T) {
 	settings := travailDuGroupe("tp1")
 	gens := []roster.Person{
 		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
-		{FullName: "Naomi Chéry"},
+		{FullName: "Nadia Pépin"},
 	}
 
 	rapport, err := runner.New(client, settings, squelette(t)).Run(
@@ -824,7 +824,7 @@ func TestUneMarqueQueRienNeDesigneSeDit(t *testing.T) {
 		t.Fatalf("Run : %v", err)
 	}
 	if rapport.Marks.Signed != 2 || rapport.Marks.Recorded != 1 ||
-		!strings.HasPrefix(rapport.Marks.Problem, "Naomi Chéry n'a ni compte ni matricule") {
+		!strings.HasPrefix(rapport.Marks.Problem, "Nadia Pépin n'a ni compte ni matricule") {
 		t.Fatalf("versement : %+v", rapport.Marks)
 	}
 }

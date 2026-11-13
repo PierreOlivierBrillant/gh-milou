@@ -17,8 +17,8 @@ func TestUneCohorteSansCompteSurvitALEnregistrement(t *testing.T) {
 	cours := classroom.Classroom{
 		Org: "acme", Session: "a26", Course: "5n6", Group: "1010",
 		Students: []roster.Person{
-			{FullName: "Laurent Adam-Larocque", StudentID: "1680229"},
-			{FullName: "Patrick Rolleston-Chase", StudentID: "1256639"},
+			{FullName: "Lorenzo Aube-Lachance", StudentID: "1600105"},
+			{FullName: "Preston Rowlinson-Hayes", StudentID: "1200101"},
 			{FullName: "Émilie Côté", Username: "ecote", StudentID: "2100123"},
 		},
 	}
@@ -42,8 +42,8 @@ func TestLeMatriculeReunitDeuxLignesEnUnePersonne(t *testing.T) {
 	cours := classroom.Classroom{
 		Org: "acme", Session: "a26", Course: "5n6", Group: "1010",
 		Students: []roster.Person{
-			{FullName: "Laurent Adam-Larocque", StudentID: "1680229"},
-			{Username: "ladamlarocque", StudentID: "1680229"},
+			{FullName: "Lorenzo Aube-Lachance", StudentID: "1600105"},
+			{Username: "laubelachance", StudentID: "1600105"},
 		},
 	}
 	valide, err := cours.Validate()
@@ -58,10 +58,10 @@ func TestLeMatriculeReunitDeuxLignesEnUnePersonne(t *testing.T) {
 	if len(identites) != 1 {
 		t.Fatalf("%d personne(s), une seule attendue : %+v", len(identites), identites)
 	}
-	if identites[0].FullName != "Laurent Adam-Larocque" {
+	if identites[0].FullName != "Lorenzo Aube-Lachance" {
 		t.Errorf("le nom s'est perdu : %+v", identites[0])
 	}
-	if !identites[0].Has("ladamlarocque") {
+	if !identites[0].Has("laubelachance") {
 		t.Errorf("le compte de la seconde ligne n'a pas rejoint la personne : %+v",
 			identites[0])
 	}

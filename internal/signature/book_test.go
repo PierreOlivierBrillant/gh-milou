@@ -138,16 +138,16 @@ func TestUneMarqueSeDelivreAQuiNAQueSonMatricule(t *testing.T) {
 	sienne := marque(t)
 
 	apres, bouge, err := book.With([]signature.Issued{
-		{Assignment: "a26.5n6.01.tp1", StudentID: "2100456", Token: sienne},
+		{Assignment: "a26.5n6.01.tp1", StudentID: "2100110", Token: sienne},
 	})
 	if err != nil || !bouge {
 		t.Fatalf("une marque sans compte doit se verser : %v", err)
 	}
 	ligne, trouve := apres.Who(sienne)
-	if !trouve || ligne.StudentID != "2100456" || ligne.Username != "" {
+	if !trouve || ligne.StudentID != "2100110" || ligne.Username != "" {
 		t.Fatalf("recherche par marque : %+v", ligne)
 	}
-	if ligne, trouve := apres.Of("a26.5n6.01.tp1", "2100456"); !trouve || ligne.Token != sienne {
+	if ligne, trouve := apres.Of("a26.5n6.01.tp1", "2100110"); !trouve || ligne.Token != sienne {
 		t.Fatalf("recherche par matricule : %+v", ligne)
 	}
 
@@ -155,7 +155,7 @@ func TestUneMarqueSeDelivreAQuiNAQueSonMatricule(t *testing.T) {
 	// la règle est celle d'un compte.
 	nouvelle := marque(t)
 	apres, _, err = apres.With([]signature.Issued{
-		{Assignment: "a26.5n6.01.tp1", StudentID: "2100456", Token: nouvelle},
+		{Assignment: "a26.5n6.01.tp1", StudentID: "2100110", Token: nouvelle},
 	})
 	if err != nil || len(apres.Issued) != 3 {
 		t.Fatalf("redistribution : %v, %+v", err, apres.Issued)
@@ -170,14 +170,14 @@ func TestUneMarqueSeDelivreAQuiNAQueSonMatricule(t *testing.T) {
 func TestUnCompteEtUnMatriculeNeSeConfondentPas(t *testing.T) {
 	duCompte, duMatricule := marque(t), marque(t)
 	book, err := signature.Book{Issued: []signature.Issued{
-		{Assignment: "a26.5n6.01.tp1", Username: "2100456", Token: duCompte},
-		{Assignment: "a26.5n6.01.tp1", StudentID: "2100456", Token: duMatricule},
+		{Assignment: "a26.5n6.01.tp1", Username: "2100110", Token: duCompte},
+		{Assignment: "a26.5n6.01.tp1", StudentID: "2100110", Token: duMatricule},
 	}}.Validate()
 	if err != nil || len(book.Issued) != 2 {
 		t.Fatalf("deux personnes, deux marques : %v, %+v", err, book.Issued)
 	}
 	// Le compte passe d'abord, comme partout où l'on désigne quelqu'un.
-	if ligne, _ := book.Of("a26.5n6.01.tp1", "2100456"); ligne.Token != duCompte {
+	if ligne, _ := book.Of("a26.5n6.01.tp1", "2100110"); ligne.Token != duCompte {
 		t.Fatalf("le compte doit l'emporter sur le matricule : %+v", ligne)
 	}
 }
@@ -216,7 +216,7 @@ func TestUnRegistreDejaEcritSeRelitEtSeReecritALIdentique(t *testing.T) {
 
 	sienne := marque(t)
 	avecMatricule, _, err := relu.With([]signature.Issued{
-		{Assignment: "a26.5n6.01.tp1", StudentID: "2100456", Token: sienne},
+		{Assignment: "a26.5n6.01.tp1", StudentID: "2100110", Token: sienne},
 	})
 	if err != nil {
 		t.Fatalf("versement : %v", err)
@@ -227,7 +227,7 @@ func TestUnRegistreDejaEcritSeRelitEtSeReecritALIdentique(t *testing.T) {
 	}
 	texte := string(contenu)
 	if !strings.Contains(texte, `"version": 1`) ||
-		!strings.Contains(texte, `"student_id": "2100456"`) ||
+		!strings.Contains(texte, `"student_id": "2100110"`) ||
 		strings.Contains(texte, `"username": ""`) {
 		t.Fatalf("une ligne sans compte s'écrit sous son matricule, en version 1 :\n%s", texte)
 	}
