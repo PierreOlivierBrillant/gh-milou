@@ -228,6 +228,11 @@ main { padding: 1.5rem; }
   background: var(--fond-doux);
 }
 
+/* « Annuler » et « Enregistrer » concluent la boîte : ils passent à la ligne
+   d'un bloc, et restent à droite. Sous une note trop longue, l'espaceur reste
+   sur la ligne d'avant, et seule une marge automatique les y pousse encore. */
+.boite-pied > .gestes { display: flex; gap: .5rem; margin-left: auto; }
+
 .boite-vide { padding: 1.5rem .9rem; text-align: center; color: var(--texte-doux); font-size: .875rem; }
 
 /* Un intertitre sépare deux parties d'une même page — les comparaisons déjà

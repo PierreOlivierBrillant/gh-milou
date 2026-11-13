@@ -150,7 +150,8 @@
         <button type="button" id="cmp-regles" class="bouton">Règles de comparaison</button>
       </div>
 
-      <div class="actions" data-pour="plagiat-regles">
+        <div class="actions" data-pour="plagiat-regles">
+          <button type="button" id="pl-regles-annuler" class="bouton" disabled>Annuler</button>
           <button type="button" id="pl-regles-ecrire" class="bouton vert">Enregistrer</button>
         </div>
 
@@ -1007,7 +1008,10 @@
       </div>
       <div class="boite-pied">
         <span class="espace"></span>
-        <button type="button" id="gr-enregistrer" class="bouton vert">Enregistrer</button>
+        <span class="gestes">
+          <button type="button" id="gr-annuler" class="bouton" disabled>Annuler</button>
+          <button type="button" id="gr-enregistrer" class="bouton vert">Enregistrer</button>
+        </span>
       </div>
     </div>
 
@@ -1030,7 +1034,10 @@
       </div>
       <div class="boite-pied">
         <span class="espace"></span>
-        <button type="button" id="cloison-enregistrer" class="bouton vert">Enregistrer</button>
+        <span class="gestes">
+          <button type="button" id="cloison-annuler" class="bouton" disabled>Annuler</button>
+          <button type="button" id="cloison-enregistrer" class="bouton vert">Enregistrer</button>
+        </span>
       </div>
     </div>
 
@@ -1412,7 +1419,10 @@
       <div class="boite-pied">
         <span class="note" id="reglages-etat"></span>
         <span class="espace"></span>
-        <button type="button" id="reglages-enregistrer" class="bouton vert">Enregistrer</button>
+        <span class="gestes">
+          <button type="button" id="reglages-annuler" class="bouton" disabled>Annuler</button>
+          <button type="button" id="reglages-enregistrer" class="bouton vert">Enregistrer</button>
+        </span>
       </div>
     </div>
 
@@ -1438,7 +1448,10 @@
         <button type="button" id="cache-vider" class="bouton">Vider le cache local</button>
         <span class="espace"></span>
         <span class="note" id="reglages-poste-etat"></span>
-        <button type="button" id="reglages-enregistrer-poste" class="bouton vert">Enregistrer</button>
+        <span class="gestes">
+          <button type="button" id="reglages-poste-annuler" class="bouton" disabled>Annuler</button>
+          <button type="button" id="reglages-enregistrer-poste" class="bouton vert">Enregistrer</button>
+        </span>
       </div>
     </div>
   </section>

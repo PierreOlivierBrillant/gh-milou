@@ -100,6 +100,57 @@ func TestChaqueGesteNaQuUnNom(t *testing.T) {
 	}
 }
 
+// Ce qui s'enregistre se défait aussi : sans « Annuler », une modification
+// regrettée ne se défaisait qu'en rechargeant la page, et rien ne disait
+// qu'elle attendait encore d'être enregistrée. Il se tient juste à gauche
+// d'« Enregistrer » — le geste qui détruit, s'il y en a un, reste à l'autre
+// bout de la boîte —, éteint tant que rien n'a bougé, et suivreModifications
+// l'allume : un « Annuler » que rien ne suit resterait éteint pour toujours.
+func TestChaqueEnregistrerASonAnnuler(t *testing.T) {
+	page := sansCommentaires(lireActif(t, "index.html"))
+	script := sansCommentaires(lireActif(t, "app.js"))
+	enregistrer := regexp.MustCompile(`<button[^>]*>Enregistrer</button>`)
+	annulerAGauche := regexp.MustCompile(`<button([^>]*)>Annuler</button>\s*$`)
+	eteint := regexp.MustCompile(`\sdisabled\b`)
+	identifiant := regexp.MustCompile(`\bid="([^"]+)"`)
+
+	positions := enregistrer.FindAllStringIndex(page, -1)
+	if len(positions) == 0 {
+		t.Fatal("la page n'a aucun « Enregistrer »")
+	}
+	for _, position := range positions {
+		bouton := page[position[0]:position[1]]
+		voisin := annulerAGauche.FindStringSubmatch(page[:position[0]])
+		if voisin == nil {
+			t.Errorf("%s n'a pas d'« Annuler » juste à sa gauche", bouton)
+			continue
+		}
+		if !eteint.MatchString(voisin[1]) {
+			t.Errorf("l'« Annuler » de %s n'est pas éteint d'avance", bouton)
+		}
+		id := identifiant.FindStringSubmatch(voisin[1])
+		if id == nil {
+			t.Errorf("l'« Annuler » de %s n'a pas d'id : rien ne peut le suivre", bouton)
+			continue
+		}
+		suivi := regexp.MustCompile(`suivreModifications\([^;]*\$\('` + regexp.QuoteMeta(id[1]) + `'\)`)
+		if !suivi.MatchString(script) {
+			t.Errorf("« %s » n'est confié à aucun suivreModifications : il resterait éteint", id[1])
+		}
+	}
+
+	// Un dialogue enregistre aussi — une date cible, un nom. Son « Annuler »
+	// reste allumé : rien n'est écrit avant qu'on confirme, et c'est aussi par
+	// lui qu'on sort.
+	premier := regexp.MustCompile(`<button[^>]*>([^<]*)</button>`)
+	for _, menu := range regexp.MustCompile(`(?s)<menu>(.*?)</menu>`).FindAllStringSubmatch(page, -1) {
+		bouton := premier.FindStringSubmatch(menu[1])
+		if bouton == nil || bouton[1] != "Annuler" {
+			t.Errorf("un dialogue ne commence pas par « Annuler » : %s", strings.TrimSpace(menu[1]))
+		}
+	}
+}
+
 // Une date s'écrit d'une seule façon, par « dateLisible() ». Une date coupée
 // à la main — « 2026-11-11 à 15:59 » — se lisait autrement que sa voisine.
 func TestLesDatesPassentParUneSeuleFonction(t *testing.T) {
