@@ -99,7 +99,9 @@ func (s *Server) paths() []pathInfo {
 	}
 }
 
-// handleSaveSettings retient les réglages et les écrit sur le disque.
+// handleSaveSettings retient les réglages et les écrit sur le disque. Il rend
+// ce qu'il a retenu, une fois nettoyé : c'est la dernière valeur enregistrée,
+// celle que la page doit montrer, et à laquelle « Annuler » la ramène.
 func (s *Server) handleSaveSettings(writer http.ResponseWriter, request *http.Request) {
 	var incoming config.Settings
 	if err := decode(request, &incoming); err != nil {
@@ -116,14 +118,16 @@ func (s *Server) handleSaveSettings(writer http.ResponseWriter, request *http.Re
 	s.mutex.Unlock()
 
 	if !s.deps.SaveConfig {
-		writeJSON(writer, http.StatusOK, map[string]any{"saved": false})
+		writeJSON(writer, http.StatusOK, map[string]any{"saved": false, "settings": incoming})
 		return
 	}
 	if err := incoming.Save(s.deps.ConfigFile); err != nil {
 		fail(writer, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{"saved": true, "path": s.deps.ConfigFile})
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"saved": true, "path": s.deps.ConfigFile, "settings": incoming,
+	})
 }
 
 // handleClearCache vide le cache local et oublie l'inventaire en mémoire.

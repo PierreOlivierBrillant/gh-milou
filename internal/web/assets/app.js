@@ -609,6 +609,44 @@ async function montrer(titre, contenu) {
   }
 }
 
+// -------------------------------------------------------------- formulaires
+
+// suivreModifications tient une boîte qui enregistre. Son « Annuler » reste
+// éteint tant qu'aucun champ n'a bougé depuis le dernier enregistrement, et
+// ramène la boîte à ce qui a été enregistré : sans lui, une modification
+// regrettée ne se défaisait qu'en rechargeant la page, et rien ne disait
+// qu'elle attendait encore d'être enregistrée.
+//
+// La comparaison porte sur ce que les champs montrent, et non sur ce
+// qu'« Enregistrer » en tirerait : une rangée ajoutée, même vide, est une
+// modification aux yeux de qui vient de l'ajouter.
+//
+// « remettre » écrit dans la boîte ce qui a été enregistré. Personne d'autre
+// ne la remplit : « remplir », rendu ici, la remet puis retient ce qu'elle
+// montre comme la nouvelle référence — à l'ouverture, après un enregistrement,
+// et sur « Annuler ». Une boîte remplie par un autre chemin garderait une
+// référence périmée, et son « Annuler » s'allumerait sans raison.
+function suivreModifications(boite, annuler, remettre) {
+  const releve = () => JSON.stringify([...boite.querySelectorAll('input, select, textarea')]
+    .map((champ) => (champ.type === 'checkbox' || champ.type === 'radio'
+      ? champ.checked : champ.value)));
+  let retenu = releve();
+  const comparer = () => { annuler.disabled = releve() === retenu; };
+  // Un champ qu'on tape, une case qu'on coche, un dossier qu'on choisit, une
+  // rangée qu'on ajoute ou qu'on retire : l'un de ces trois événements suit
+  // chaque geste et remonte jusqu'à la boîte — même le clic qui retire une
+  // rangée, dont le chemin était tracé avant qu'elle disparaisse.
+  for (const type of ['input', 'change', 'click']) boite.addEventListener(type, comparer);
+  const remplir = () => {
+    remettre();
+    retenu = releve();
+    annuler.disabled = true;
+  };
+  annuler.addEventListener('click', remplir);
+  annuler.disabled = true;
+  return { remplir };
+}
+
 // --------------------------------------------------------------------- vues
 
 // L'onglet que chaque vue allume. Les vues d'un groupe partagent les siens —
@@ -4673,7 +4711,7 @@ async function chargerCloisonnement() {
     'GET', `/api/classrooms/${encode(etat.groupe.scope)}/teachers`), 'Équipe enseignante');
   if (!donnees || !etat.groupe || donnees.scope !== etat.groupe.scope) return;
   etat.cloisonnement = donnees;
-  dessinerCloisonnement();
+  suiviCloison.remplir();
 }
 
 function dessinerCloisonnement() {
@@ -4711,6 +4749,11 @@ function dessinerCloisonnement() {
     zone.append(el('div', { classe: 'avis alerte', texte: donnees.exposure }));
   }
 }
+
+// L'équipe se relit à l'ouverture et après chaque écriture : ce que GitHub en
+// sait alors est ce qu'« Annuler » rétablit.
+const suiviCloison = suivreModifications($('cloison-annuler').closest('.boite'),
+  $('cloison-annuler'), dessinerCloisonnement);
 
 $('cloison-enregistrer').addEventListener('click', async () => {
   if (!etat.groupe) return;
@@ -5318,6 +5361,17 @@ const champsGroupe = {
   permission: 'gr-permission',
 };
 
+// Les réglages par défaut se remettent seuls : la migration partage la vue, et
+// « Annuler » n'a pas à toucher aux noms qu'on était en train d'y composer.
+const suiviDefauts = suivreModifications($('gr-annuler').closest('.boite'),
+  $('gr-annuler'), () => {
+    const defauts = (etat.groupe && etat.groupe.defaults) || {};
+    for (const [cle, id] of Object.entries(champsGroupe)) {
+      $(id).value = defauts[cle] || '';
+    }
+    $('gr-collaborateur').checked = defauts.add_collaborator !== false;
+  });
+
 function ecrireReglagesGroupe() {
   const groupe = etat.groupe;
   const nomenclature = $('groupe-nomenclature');
@@ -5326,11 +5380,7 @@ function ecrireReglagesGroupe() {
   nomenclature.append('Ses dépôts s’appellent ',
     el('code', { texte: nomenclatureDuGroupe(groupe) }), '.');
   preparerMigration(groupe);
-  const defauts = groupe.defaults || {};
-  for (const [cle, id] of Object.entries(champsGroupe)) {
-    $(id).value = defauts[cle] || '';
-  }
-  $('gr-collaborateur').checked = defauts.add_collaborator !== false;
+  suiviDefauts.remplir();
 }
 
 // enregistrerGroupe renvoie tout ce qu'on retient du groupe : le serveur
@@ -5359,9 +5409,12 @@ $('gr-enregistrer').addEventListener('click', async () => {
 
   const modifie = await enregistrerGroupe({ defaults: defauts });
   if (!modifie) return;
+  // Seule cette boîte se relit, dans ce que le serveur a retenu. Rouvrir le
+  // groupe redessinait toute la vue — et emportait ce qu'on avait laissé en
+  // suspens dans l'équipe enseignante, sans qu'aucun « Annuler » l'ait voulu.
+  etat.groupe.defaults = modifie.defaults;
+  suiviDefauts.remplir();
   message('Réglages du groupe enregistrés.');
-  await ouvrirGroupe(modifie.scope, true, true);
-  afficherVue('groupe-reglages');
 });
 
 // ------------------------------------------------------------------ migration
@@ -5595,17 +5648,36 @@ async function changerOrganisation(org) {
 }
 
 // Les deux boîtes — ce qui se distribue, ce qui ne vaut que pour ce poste —
-// enregistrent le même fichier : l'une ou l'autre écrit le tout, et les deux
-// disent où.
-async function enregistrerReglages() {
-  etat.reglages.delay_seconds = Number($('reglage-delay').value) || 0;
-  etat.reglages.clone_dir = $('reglage-clone-dir').value.trim();
-  etat.reglages.no_sign = !$('reglage-signature').checked;
-  const bilan = await tenter(() => api('PUT', '/api/settings', etat.reglages), 'Réglages');
+// enregistrent le même fichier, mais chacune n'y écrit que ce qu'elle montre.
+// Écrire le tout depuis l'une emportait ce qu'on avait laissé en suspens dans
+// l'autre, sans qu'on l'ait voulu, et son « Annuler » n'avait plus rien à
+// défaire.
+const suiviDistribution = suivreModifications($('reglages-annuler').closest('.boite'),
+  $('reglages-annuler'), () => {
+    $('reglage-delay').value = etat.reglages.delay_seconds ?? 1;
+    // Le réglage est écrit à l'envers côté serveur — « ne pas signer » — pour
+    // qu'un fichier de réglages écrit avant qu'elle existe se relise avec la
+    // marque active. La case, elle, dit ce qu'on fait.
+    $('reglage-signature').checked = !etat.reglages.no_sign;
+  });
+
+const suiviPoste = suivreModifications($('reglages-poste-annuler').closest('.boite'),
+  $('reglages-poste-annuler'), () => {
+    $('reglage-clone-dir').value = etat.reglages.clone_dir || '';
+  });
+
+// enregistrerReglages pose les champs d'une boîte sur ce qui a été enregistré,
+// puis reprend ce que le serveur en a retenu : une marge négative y devient
+// nulle, et c'est elle que la boîte doit montrer, et qu'« Annuler » rétablit.
+async function enregistrerReglages(suivi, note, champs) {
+  const bilan = await tenter(() => api('PUT', '/api/settings',
+    Object.assign({}, etat.reglages, champs)), 'Réglages');
   if (!bilan) return;
-  direEnregistrement(bilan.saved
+  Object.assign(etat.reglages, bilan.settings);
+  suivi.remplir();
+  $(note).textContent = bilan.saved
     ? `Enregistrés dans ${bilan.path}`
-    : 'Enregistrement désactivé (--no-save-config)');
+    : 'Enregistrement désactivé (--no-save-config)';
 }
 
 function direEnregistrement(texte) {
@@ -5613,8 +5685,13 @@ function direEnregistrement(texte) {
   $('reglages-poste-etat').textContent = texte;
 }
 
-$('reglages-enregistrer').addEventListener('click', enregistrerReglages);
-$('reglages-enregistrer-poste').addEventListener('click', enregistrerReglages);
+$('reglages-enregistrer').addEventListener('click', () => enregistrerReglages(
+  suiviDistribution, 'reglages-etat', {
+    delay_seconds: Number($('reglage-delay').value) || 0,
+    no_sign: !$('reglage-signature').checked,
+  }));
+$('reglages-enregistrer-poste').addEventListener('click', () => enregistrerReglages(
+  suiviPoste, 'reglages-poste-etat', { clone_dir: $('reglage-clone-dir').value.trim() }));
 
 $('cache-vider').addEventListener('click', async () => {
   const bilan = await tenter(() => api('POST', '/api/cache/clear'), 'Cache');
@@ -7523,12 +7600,8 @@ async function demarrer() {
 // ecrireReglagesGeneraux remplit l'écran des réglages de la session.
 function ecrireReglagesGeneraux() {
   const contexte = etat.contexte || {};
-  $('reglage-delay').value = etat.reglages.delay_seconds ?? 1;
-  // Le réglage est écrit à l'envers côté serveur — « ne pas signer » — pour
-  // qu'un fichier de réglages écrit avant qu'elle existe se relise avec la
-  // marque active. La case, elle, dit ce qu'on fait.
-  $('reglage-signature').checked = !etat.reglages.no_sign;
-  $('reglage-clone-dir').value = etat.reglages.clone_dir || '';
+  suiviDistribution.remplir();
+  suiviPoste.remplir();
   // Un réglage vide n'est pas un manque : le serveur propose alors un dossier,
   // et l'écran doit dire lequel.
   $('reglage-clone-dir-aide').textContent = 'Là où « Cloner » proposera de déposer les dépôts' +
@@ -8709,7 +8782,7 @@ const motsDeTravail = {
 async function ouvrirReglesPlagiat(sansHistorique) {
   const reponse = await api('GET', `/api/orgs/${encode(etat.organisation)}/rules`);
   etat.plagiat.regles = reponse;
-  dessinerReglesPlagiat();
+  suiviRegles.remplir();
   afficherVue('plagiat-regles', sansHistorique);
 }
 
@@ -8815,6 +8888,11 @@ $('pl-regles-travaux-ajouter').addEventListener('click', () => {
   zone.append(rangeeDeRegle({}, motsDeTravail));
 });
 
+// Les deux listes s'écrivent d'un seul geste, et se défont de même : « Annuler »
+// les redessine telles que le registre les a rendues la dernière fois.
+const suiviRegles = suivreModifications($('vue-plagiat-regles'), $('pl-regles-annuler'),
+  dessinerReglesPlagiat);
+
 $('pl-regles-ecrire').addEventListener('click', () => tenter(async () => {
   const declarees = etat.plagiat.regles.declared || {};
   const corps = {
@@ -8831,7 +8909,7 @@ $('pl-regles-ecrire').addEventListener('click', () => tenter(async () => {
     `/api/orgs/${encode(etat.organisation)}/rules`, corps);
   // Les options portent les profils et les équivalences : elles ne valent plus.
   etat.plagiat.options = null;
-  dessinerReglesPlagiat();
+  suiviRegles.remplir();
   message('Règles écrites dans le registre de l’organisation.', 'succes');
 }, 'Écriture des règles'));
 

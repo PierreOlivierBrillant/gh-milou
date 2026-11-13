@@ -1413,6 +1413,29 @@ func TestDestinationProposeeHorsDesReglages(t *testing.T) {
 	}
 }
 
+// La page montre ce que le serveur a retenu, et non ce qu'elle a envoyé : c'est
+// là qu'« Annuler » ramène une boîte, et une marge négative n'y est jamais.
+func TestReglagesRendusTelsQuRetenus(t *testing.T) {
+	h := nouveau(t, nil)
+	reglages := config.Default()
+	reglages.Org, reglages.CloneDir = "acme", t.TempDir()
+	reglages.DelaySeconds = -3
+
+	var bilan struct {
+		Saved    bool            `json:"saved"`
+		Settings config.Settings `json:"settings"`
+	}
+	h.json(http.MethodPut, "/api/settings", reglages, &bilan)
+	if !bilan.Saved {
+		t.Fatal("réglages non enregistrés")
+	}
+	attendus := reglages
+	attendus.DelaySeconds = 0
+	if bilan.Settings != attendus {
+		t.Fatalf("réglages rendus : %+v\nattendus : %+v", bilan.Settings, attendus)
+	}
+}
+
 func TestReglagesInvalidesRefuses(t *testing.T) {
 	h := nouveau(t, nil)
 	reglages := config.Default()
