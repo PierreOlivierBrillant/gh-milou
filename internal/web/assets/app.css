@@ -14,6 +14,12 @@ body {
   background: var(--fond-page);
   color: var(--texte);
   font: var(--taille-texte)/1.5 var(--police);
+  /* Un nom de dépôt, un compte, un chemin n'ont souvent ni espace ni tiret où
+     se couper. Partout, un mot qui ne tient pas sur sa ligne s'y coupe plutôt
+     que de sortir de sa boîte. « break-word » ne change aucune largeur
+     calculée : un élément flexible qui porte un tel nom doit encore dire
+     min-width: 0 pour accepter de rétrécir. */
+  overflow-wrap: break-word;
 }
 
 h1, h2, h3 { font-family: var(--police-titres); font-weight: var(--graisse-titre); letter-spacing: -.01em; }
@@ -349,7 +355,9 @@ h2.intertitre.sensible { color: var(--erreur); }
 }
 
 .equipe-membre:hover { background: var(--fond-doux); }
-.membre-nom { min-width: 11rem; }
+/* Un nom d'un seul tenant passerait outre les 11rem et pousserait la puce hors
+   de sa boîte : il se coupe. */
+.membre-nom { min-width: 11rem; overflow-wrap: anywhere; }
 .membre-comptes {
   font-family: var(--police-mono);
   font-size: .8125rem;
@@ -906,7 +914,11 @@ body.avec-operation main { padding-bottom: 20rem; }
   background: var(--fond-doux);
 }
 
-.operation-entete strong { flex: 1 1 auto; font-size: .875rem; }
+/* Le titre nomme souvent un chemin, d'un seul tenant : sans min-width: 0, il
+   garderait sa largeur et pousserait les boutons hors du panneau. C'est lui
+   qui se replie ; l'état et les boutons gardent leur ligne. */
+.operation-entete strong { flex: 1 1 auto; min-width: 0; font-size: .875rem; overflow-wrap: anywhere; }
+.operation-entete > :not(strong) { flex: none; white-space: nowrap; }
 #operation progress { width: 100%; height: 4px; display: block; }
 
 .journal {
