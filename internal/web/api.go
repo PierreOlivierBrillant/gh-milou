@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PierreOlivierBrillant/gh-milou/internal/brand"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/cache"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/clone"
@@ -61,6 +62,11 @@ type contextPayload struct {
 	// réécrite dans config.json au premier enregistrement, comme si quelqu'un
 	// l'avait choisie, et y resterait figée même sur une autre machine.
 	CloneParent string `json:"clone_parent"`
+	// Command est la commande qui a lancé l'interface. Quelques notes de la
+	// page renvoient au terminal d'où elle a été tapée : elle vient de la
+	// marque, comme partout, pour qu'un renommage de l'outil ne laisse pas la
+	// page parler d'une commande qui n'existe plus.
+	Command string `json:"command"`
 }
 
 // handleContext décrit la session en cours.
@@ -73,6 +79,7 @@ func (s *Server) handleContext(writer http.ResponseWriter, _ *http.Request) {
 		Viewer:       s.deps.Viewer,
 		Host:         s.deps.Host,
 		Version:      s.deps.Version,
+		Command:      brand.Command,
 		Settings:     s.Settings(),
 		Token:        s.tokenState(nil),
 		Paths:        s.paths(),

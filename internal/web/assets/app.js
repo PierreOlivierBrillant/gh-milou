@@ -374,7 +374,7 @@ const etat = {
 etat.plagiat = {
   options: null, rapport: '', donnees: null, apercu: null,
   gauche: '', droite: '', cheminG: '', cheminD: '', archives: [], indexes: [],
-  paire: null, fichier: null, seuil: null, mode: 'commun', fragment: 0,
+  sourcesDe: '', paire: null, fichier: null, seuil: null, mode: 'commun', fragment: 0,
 };
 
 // ------------------------------------------------------- opérations et journal
@@ -2419,11 +2419,11 @@ async function rattacherLesOrphelins() {
 // dit par l'écart quand il est proche — « il y a 2 h » —, la date restant au
 // survol.
 function dernierEnvoiDuDepot(repo) {
-  if (!repo.pushed_at) return { classe: 'vide', texte: 'jamais' };
+  if (!repo.pushed_at) return { classe: 'date vide', texte: 'jamais' };
   const envoi = lireDate(repo.pushed_at);
   const remise = lireDate(repo.last);
   if (envoi && remise && Math.abs(envoi.moment - remise.moment) < 60000) return {};
-  return { texte: dateLisible(repo.pushed_at, { relatif: 'seul' }),
+  return { classe: 'date', texte: dateLisible(repo.pushed_at, { relatif: 'seul' }),
     title: dateLisible(repo.pushed_at) };
 }
 
@@ -6934,7 +6934,7 @@ async function regenererJeton(portees) {
   // quoi la page semblerait ne rien faire.
   const attente = el('div', { classe: 'avis', texte:
     "Renouvellement en cours : suivez les instructions dans le terminal d'où " +
-    'gh milou a été lancé.' });
+    `${etat.contexte.command} a été lancé.` });
   $('messages').append(attente);
   $('jeton-etat').textContent = 'Suivez les instructions dans le terminal…';
   try {
@@ -6974,7 +6974,7 @@ async function proposerRegeneration(portee, contexte) {
     conteneur,
     el('p', { classe: 'note',
       texte: "GitHub demande une confirmation dans le navigateur : le code à recopier " +
-        "paraît dans le terminal d'où gh milou a été lancé." }));
+        `paraît dans le terminal d'où ${etat.contexte.command} a été lancé.` }));
   const cochees = casesDePortees(conteneur, jeton, portee);
 
   if (!await demander('Générer un nouveau jeton', corps, 'Générer le jeton')) return false;
@@ -7807,6 +7807,18 @@ async function preparerPlagiat(sansHistorique) {
   const travail = etat.travail;
   if (!travail) return;
 
+  // Les copies reçues et les index de collègues valent pour le travail où on
+  // les a ajoutés : ce sont les copies d'un même énoncé. Rejouer l'analyse
+  // depuis son rapport les retrouve ; préparer celle d'un autre travail
+  // repart de rien, sans quoi les copies d'un tp1 entreraient dans l'analyse
+  // d'un tp2. Le profil et les langages, eux, restent : ce sont des
+  // préférences, pas des copies.
+  if (etat.plagiat.sourcesDe !== travail.id) {
+    etat.plagiat.archives = [];
+    etat.plagiat.indexes = [];
+    etat.plagiat.catalogue = null;
+    etat.plagiat.sourcesDe = travail.id;
+  }
 
   const profil = $('pl-profil');
   if (!profil.options.length) {
@@ -9208,7 +9220,7 @@ async function ajouterArchive() {
   const suite = await demander('Ajouter des copies reçues',
     el('div', {},
       el('p', {
-        texte: 'Un ZIP de copies anonymisées, tel que « gh milou » le produit '
+        texte: `Un ZIP de copies anonymisées, tel que « ${etat.contexte.command} » le produit `
           + '— ou un ZIP ordinaire, un dossier par copie. Les copies reçues '
           + 'entrent dans l’analyse par le même chemin que les vôtres.',
       }),

@@ -775,6 +775,10 @@ textarea.champ { resize: vertical; font-family: var(--police-mono); }
 .tableau th { color: var(--texte-doux); font-weight: 600; font-size: .8125rem; background: var(--fond-doux); }
 .tableau tbody tr:hover { background: var(--fond-doux); }
 .tableau .etroit { width: 1%; white-space: nowrap; }
+/* Une date coupée après sa virgule se lit comme deux renseignements. Elle ne
+   se coupe pas, mais sa colonne garde sa largeur : « etroit » la réduirait à
+   « il y a 2 h », et c'est l'en-tête qui passerait sur deux lignes. */
+.tableau .date { white-space: nowrap; }
 .tableau th.chiffre, .tableau td.chiffre { text-align: right; font-variant-numeric: tabular-nums; }
 /* Une colonne qui ne montre que des exceptions disparaît quand il n'y en a
    aucune : vide sur toutes ses lignes, elle ne dirait rien. */

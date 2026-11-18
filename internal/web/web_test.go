@@ -419,6 +419,7 @@ func TestContexteDecritLaSession(t *testing.T) {
 	var contexte struct {
 		Viewer   string          `json:"viewer"`
 		Version  string          `json:"version"`
+		Command  string          `json:"command"`
 		Token    jeton           `json:"token"`
 		Settings config.Settings `json:"settings"`
 	}
@@ -426,6 +427,9 @@ func TestContexteDecritLaSession(t *testing.T) {
 
 	if contexte.Viewer != "prof" {
 		t.Fatalf("compte %q, attendu « prof »", contexte.Viewer)
+	}
+	if contexte.Command != brand.Command {
+		t.Fatalf("commande %q, attendu « %s »", contexte.Command, brand.Command)
 	}
 	if etat := contexte.Token.etat("repo"); etat != scopes.Present {
 		t.Fatalf("portée repo : %q", etat)
