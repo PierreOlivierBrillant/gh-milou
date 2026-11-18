@@ -350,6 +350,19 @@ func Unmatched(courses []classroom.Classroom, repos []groups.RepoInfo,
 	return orphelins
 }
 
+// Orphans nomme, sur tous les groupes, les derniers niveaux que personne ne
+// réclame — ce que « Unmatched » ne fait que compter. C'est en les nommant
+// qu'on peut les rattacher, et l'annuaire est le bon grain pour le faire : il
+// est à l'échelle de l'organisation, comme le registre.
+func Orphans(courses []classroom.Classroom, repos []groups.RepoInfo,
+	equipes []teams.Team) []classroom.Orphan {
+	listes := make([][]classroom.Orphan, 0, len(courses))
+	for _, cours := range courses {
+		listes = append(listes, cours.Orphans(repos, equipes))
+	}
+	return classroom.MergeOrphans(listes...)
+}
+
 // fusionner réunit deux lignes de la même personne, vues par deux groupes.
 func fusionner(gauche, droite Row) Row {
 	if gauche.FullName == "" {

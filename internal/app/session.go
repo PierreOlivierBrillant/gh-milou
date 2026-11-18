@@ -367,7 +367,10 @@ func (s *Session) chooseMode() (string, error) {
 	if strings.TrimSpace(s.Options.Student) != "" {
 		return "etudiant", nil
 	}
-	if s.Options.StudentsRequested {
+	// Rattacher des dépôts sans étudiant est un geste de l'annuaire : c'est lui
+	// qui les relève, sur toute l'organisation.
+	if s.Options.StudentsRequested || s.Options.AdoptOrphans ||
+		strings.TrimSpace(s.Options.Attach) != "" {
 		return "etudiants", nil
 	}
 	if s.Options.TeachersOn {

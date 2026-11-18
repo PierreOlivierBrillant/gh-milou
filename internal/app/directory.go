@@ -61,6 +61,7 @@ var directoryMenu = ui.Options(
 	"fiche", "Ouvrir la fiche de quelqu'un",
 	"reunir", "Réunir deux comptes d'une même personne",
 	"separer", "Séparer un compte réuni à tort",
+	"rattacher", "Rattacher les dépôts sans étudiant",
 	"apres", "Ne garder que les envois postérieurs à une date",
 	"avant", "Ne garder que les envois antérieurs à une date",
 	"muets", "N'afficher que ceux qui n'ont jamais rien envoyé",
@@ -78,9 +79,12 @@ type directorySession struct {
 	rows      []users.Row
 	loaded    bool
 	orphelins int
-	filter    users.Filter
-	sortKey   users.Key
-	sortDesc  bool
+	// orphans sont ces mêmes dépôts, un par dernier niveau plutôt qu'un par
+	// dépôt : c'est sur eux que porte le rattachement.
+	orphans  []classroom.Orphan
+	filter   users.Filter
+	sortKey  users.Key
+	sortDesc bool
 	// set est le registre qui a nommé les lignes : réunir deux comptes en part.
 	set *registry.Set
 	// avis dit ce qu'il faut savoir du registre : illisible, périmé, troué.
@@ -102,8 +106,21 @@ func newDirectorySession(session *Session) *directorySession {
 // la liste est écrite une fois et l'on s'arrête là : il n'y a personne pour
 // répondre.
 func (d *directorySession) run() (int, error) {
+	fragment, compte, err := d.session.Options.attachment()
+	if err != nil {
+		return ExitValidation, err
+	}
 	if err := d.load(false); err != nil {
 		return ExitFailure, err
+	}
+	// Un rattachement demandé par drapeau se fait et s'arrête là : la commande
+	// a dit ce qu'elle voulait, il n'y a pas d'annuaire à explorer ensuite.
+	if fragment != "" {
+		return d.attachOrphan(classroom.AttachRequest{
+			Fragment: fragment, Login: compte, FullName: d.session.Options.FullName})
+	}
+	if d.session.Options.AdoptOrphans {
+		return d.adoptOrphans()
 	}
 	d.show()
 	if !d.session.Interactive() {
@@ -122,6 +139,7 @@ func (d *directorySession) load(force bool) error {
 	d.avis, d.set = vue.avis, vue.set
 	d.rows = vue.rows()
 	d.orphelins = users.Unmatched(vue.visibles, vue.repos, vue.equipes)
+	d.orphans = users.Orphans(vue.visibles, vue.repos, vue.equipes)
 	d.loaded = true
 	return nil
 }
@@ -183,8 +201,12 @@ func (d *directorySession) show() {
 	// Un dépôt dont le dernier niveau ne désigne personne n'est pas quelqu'un de
 	// plus : le taire ferait lire une liste trouée comme si elle était entière.
 	if d.orphelins > 0 {
-		console.Note("%s à aucun étudiant connu.", valid.Plural(d.orphelins,
-			"dépôt ne se rattache", "dépôts ne se rattachent"))
+		geste := "« Rattacher les dépôts sans étudiant » cherche leurs comptes sur GitHub"
+		if !d.session.Interactive() {
+			geste = "« --adopt-orphans » cherche leurs comptes sur GitHub"
+		}
+		console.Note("%s à aucun étudiant connu : %s.", valid.Plural(d.orphelins,
+			"dépôt ne se rattache", "dépôts ne se rattachent"), geste)
 	}
 	console.Note("%s", d.criteria())
 }
@@ -318,6 +340,12 @@ func (d *directorySession) menu() (int, error) {
 				if err := d.load(false); err != nil {
 					d.session.Console.Failure("%v", err)
 				}
+			}
+		case "rattacher":
+			// Un refus — un registre qu'on ne peut pas écrire, GitHub qui ne
+			// répond pas — se dit et rend l'annuaire : il n'y a rien à quitter.
+			if _, err := d.adoptOrphans(); err != nil {
+				d.session.Console.Failure("%v", err)
 			}
 		case "tri":
 			if err := d.askSort(); err != nil {

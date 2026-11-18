@@ -695,10 +695,45 @@ func Name(person roster.Person, elsewhere ...roster.Person) Change {
 	return change
 }
 
-// LearnSlug retient qu'un slug désigne un compte. C'est ce qu'on apprend en
-// adoptant des dépôts déjà nommés autrement que par le nom complet.
-func LearnSlug(username, slug string) Change {
-	return Change{Learn: []User{{Username: username, Slugs: []string{slug}}}}
+// Attachment dit qu'un dernier niveau de nom de dépôt désigne une personne.
+type Attachment struct {
+	Fragment string
+	Person   roster.Person
+}
+
+// Attach fait connaître des personnes et rattache à chacune le dernier niveau
+// de ses dépôts, en un seul changement.
+//
+// C'est ce qu'on apprend en rattachant des dépôts que rien ne réclamait : leur
+// dernier niveau n'est pas forcément ce que le nom complet produirait — un
+// compte GitHub, un nom orthographié autrement. Le dire ici rattache les dépôts
+// sans les renommer, et les prochains porteront le nom.
+//
+// Un fragment que le compte donne déjà n'est pas répété : le registre indexe
+// le compte comme un slug, marque de doublon comprise, et l'écrire deux fois
+// n'ajouterait rien au fichier.
+func Attach(attachments ...Attachment) Change {
+	fiches := make([]User, 0, len(attachments))
+	for _, attachment := range attachments {
+		fiche := From(attachment.Person)
+		compte := strings.TrimSpace(attachment.Person.Username)
+		slug := strings.ToLower(strings.TrimSpace(attachment.Fragment))
+		base, _ := roster.WithoutDuplicateMarker(slug)
+		if slug != "" && !strings.EqualFold(slug, compte) && !strings.EqualFold(base, compte) {
+			fiche.Slugs = append(fiche.Slugs, slug)
+		}
+		fiches = append(fiches, fiche)
+	}
+	change := Change{Learn: fiches}
+	switch len(attachments) {
+	case 0:
+	case 1:
+		change.Reason = "Rattache « " + strings.TrimSpace(attachments[0].Fragment) +
+			" » à @" + strings.TrimSpace(attachments[0].Person.Username)
+	default:
+		change.Reason = "Rattache à leurs dépôts " + valid.Plural(len(attachments), "compte")
+	}
+	return change
 }
 
 // SetRole compose le changement qui fait d'un compte un enseignant, ou l'en

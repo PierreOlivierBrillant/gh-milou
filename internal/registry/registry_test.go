@@ -139,7 +139,8 @@ func TestLaMarqueDeDoublonNeFaitPasQuelquUnDAutre(t *testing.T) {
 func TestUnSlugApprisRattacheLesDepots(t *testing.T) {
 	set, _, _ := appliquer(t, registry.Empty(),
 		registry.Learn(personne("Aminata Diallo", "aminata-d")))
-	set, bouge, err := appliquer(t, set, registry.LearnSlug("aminata-d", "diallo-aminata"))
+	set, bouge, err := appliquer(t, set, registry.Attach(registry.Attachment{
+		Fragment: "diallo-aminata", Person: roster.Person{Username: "aminata-d"}}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +153,29 @@ func TestUnSlugApprisRattacheLesDepots(t *testing.T) {
 	// Le nom n'a pas bougé : apprendre un slug n'est pas renommer.
 	if set.Name("aminata-d") != "Aminata Diallo" {
 		t.Errorf("nom = %q", set.Name("aminata-d"))
+	}
+}
+
+// Rattacher un dépôt qui porte le compte, marque de doublon comprise, n'ajoute
+// aucun slug : le compte en est déjà un, et le registre le relit avec ou sans
+// la marque. Seul un dernier niveau d'une autre forme s'écrit.
+func TestRattacherNEcritQueLesFragmentsQueLeCompteNeDonnePas(t *testing.T) {
+	set, _, err := appliquer(t, registry.Empty(), registry.Attach(
+		registry.Attachment{Fragment: "WRiker-1", Person: personne("William Riker", "wriker")},
+		registry.Attachment{Fragment: "deanna-t", Person: roster.Person{Username: "dtroi"}}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	riker, _ := set.Find("wriker")
+	if strings.Join(riker.Slugs, ",") != "william-riker" {
+		t.Errorf("slugs de wriker = %v", riker.Slugs)
+	}
+	if fiche, trouve := set.Resolve("wriker-1"); !trouve || fiche.Username != "wriker" {
+		t.Errorf("Resolve(wriker-1) = %+v, %v", fiche, trouve)
+	}
+	troi, _ := set.Find("dtroi")
+	if strings.Join(troi.Slugs, ",") != "deanna-t" || troi.FullName != "" {
+		t.Errorf("fiche de dtroi = %+v", troi)
 	}
 }
 

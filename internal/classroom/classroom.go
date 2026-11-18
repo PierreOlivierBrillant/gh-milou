@@ -613,7 +613,10 @@ func (c Classroom) Assignments(repos []groups.RepoInfo, equipes []teams.Team) []
 			parNom[cle] = travail
 		}
 		travail.Repos++
-		_, inscrit := connus[strings.ToLower(parts.Student)]
+		// Le même jugement que la ligne du dépôt, marque de doublon comprise :
+		// sinon le travail compterait hors liste un dépôt que sa ligne nomme,
+		// et les dépôts à rattacher ne seraient pas ceux qu'on a comptés.
+		_, inscrit := connus.personne(parts.Student)
 		switch {
 		case nomsDEquipes[strings.ToLower(parts.Student)]:
 			travail.Teams++
