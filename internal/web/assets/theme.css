@@ -101,6 +101,40 @@
   --serie-4: var(--orange);
   --serie-5: var(--rouge);
   --serie-6: var(--sarcelle);
+
+  /* ---- défilement ----------------------------------------------------------- */
+  /* La place de la barre est réservée en permanence : sa piste se fond dans
+     la page, et seul le pouce paraît quand il y a de quoi défiler. */
+  --defilement-pouce: var(--gris);
+  --defilement-piste: transparent;
+
+  /* ---- mouvement ------------------------------------------------------------ */
+  /* Ce qui s'ouvre arrive vite et se pose : le temps de voir d'où cela vient,
+     pas celui de l'attendre. Ce qui se ferme part plus vite encore — on l'a
+     déjà quitté des yeux. */
+  --duree-ouverture: 160ms;
+  --duree-fermeture: 110ms;
+  --courbe-ouverture: cubic-bezier(.2, .8, .2, 1);
+  --courbe-fermeture: cubic-bezier(.4, 0, 1, 1);
+  /* Ce qui se déplace d'un point à un autre — le trait sous l'onglet choisi —
+     prend un peu plus de temps : assez pour que l'œil le suive. */
+  --duree-deplacement: 220ms;
+  /* D'où arrive ce qui paraît : un menu de sous son bouton, un dialogue d'un
+     rien plus bas, un message ou un panneau du bord de la fenêtre. */
+  --glisse: 6px;
+  --glisse-bord: 1.25rem;
+  --echelle-ouverture: .97;
+}
+
+/* Certaines personnes règlent leur système pour bannir le mouvement. Ce qui
+   paraît s'y fond alors sur place, sans glisser ni grandir : on voit encore
+   que quelque chose a changé, rien ne bouge pour le dire. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --glisse: 0px;
+    --glisse-bord: 0px;
+    --echelle-ouverture: 1;
+  }
 }
 
 /* La nuit sur Moulinsart : le papier devient bleu nuit, l'encre s'éclaircit
@@ -142,6 +176,7 @@
     --sombre-survol: rgba(236, 230, 216, .1);
     --voile: rgba(0, 0, 0, .6);
     --ombre: #0c0f1a;
+    --defilement-pouce: var(--encre-douce);
 
     --ombre-bouton: 2px 2px 0 #090b12;
     --ombre-boite: 4px 4px 0 #0c0f1a;

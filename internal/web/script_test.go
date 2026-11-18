@@ -32,6 +32,28 @@ func TestLeScriptNeDeclareAucuneFonctionDeuxFois(t *testing.T) {
 	}
 }
 
+// L'assistant d'un travail et la reprise de dépôts ont chacun leurs étapes,
+// sous la même classe. Une recherche qui ne dit pas laquelle des deux vues
+// elle vise les attrape toutes : en cachant celles de l'assistant, elle a vidé
+// la page de reprise ouverte ensuite.
+func TestLesEtapesSeCherchentDansLeurVue(t *testing.T) {
+	script, err := assets.ReadFile("assets/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recherche := regexp.MustCompile(`querySelector(?:All)?\(\s*['"\x60]([^'"\x60]*)['"\x60]`)
+	etape := regexp.MustCompile(`\.etape(?:[^-\w]|$)`)
+	for numero, ligne := range strings.Split(string(script), "\n") {
+		for _, trouve := range recherche.FindAllStringSubmatch(ligne, -1) {
+			selecteur := trouve[1]
+			if etape.MatchString(selecteur) && !strings.HasPrefix(strings.TrimSpace(selecteur), "#") {
+				t.Errorf("app.js:%d cherche « %s » dans toute la page : les étapes de "+
+					"l'assistant et celles de la reprise s'y confondent", numero+1, selecteur)
+			}
+		}
+	}
+}
+
 // Une zone de dépôt se clique par un vrai bouton. Une zone qui se ferait passer
 // pour un bouton ne le serait pas aux yeux du navigateur : posée dans un
 // <label>, son clic partirait aussi vers le premier bouton du label.

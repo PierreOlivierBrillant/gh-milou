@@ -138,7 +138,22 @@ function icone(nom) {
 function message(texte, ton = 'succes', duree = 6000) {
   const avis = el('div', { classe: 'avis ' + ton, texte });
   $('messages').append(avis);
-  setTimeout(() => avis.remove(), duree);
+  setTimeout(() => sortir(avis), duree);
+}
+
+// sortir fait partir un élément avant de l'ôter : « sortant » lui donne, dans
+// app.css, le mouvement de son départ, et l'élément n'est retiré qu'une fois
+// ce mouvement fini. Sans mouvement à attendre — un moteur qui n'en joue pas,
+// un élément qui n'en a pas —, il part tout de suite.
+function sortir(element) {
+  element.classList.add('sortant');
+  const enCours = element.getAnimations();
+  if (enCours.length === 0) {
+    element.remove();
+    return;
+  }
+  const oter = () => element.remove();
+  Promise.all(enCours.map((animation) => animation.finished)).then(oter, oter);
 }
 
 // api envoie une requête et renvoie le JSON, ou lève l'erreur du serveur.
@@ -548,8 +563,10 @@ $('operation-annuler').addEventListener('click', () => {
 // « close » quand un formulaire « method=dialog » referme la fenêtre.
 // « preparer » reçoit le bouton de confirmation juste avant l'ouverture : un
 // contenu qui exige un choix peut ainsi le tenir éteint tant que rien n'est
-// désigné. Le bouton est remis d'aplomb à chaque question — celle d'avant a pu
-// le laisser éteint.
+// désigné. Les boutons sont remis d'aplomb à chaque question — celle d'avant a
+// pu éteindre l'un, cacher l'autre. Ils le sont ici, à l'ouverture, et jamais à
+// la fermeture : le dialogue s'efface en un instant, et ce qu'on y changerait
+// en partant se verrait changer.
 function demander(titre, contenu, libelle = 'Confirmer', preparer = null) {
   const dialogue = $('dialogue');
   const valider = $('dialogue-ok');
@@ -561,6 +578,8 @@ function demander(titre, contenu, libelle = 'Confirmer', preparer = null) {
   corps.append(contenu);
   valider.textContent = libelle;
   valider.disabled = false;
+  valider.classList.add('vert');
+  annuler.hidden = false;
 
   return new Promise((resolve) => {
     let repondu = false;
@@ -598,16 +617,10 @@ function demander(titre, contenu, libelle = 'Confirmer', preparer = null) {
 // bouton, neutre, le referme. « Annuler » à côté de « Fermer » ferait chercher
 // lequel des deux défait quelque chose, alors qu'aucun ne défait rien.
 async function montrer(titre, contenu) {
-  const annuler = $('dialogue-annuler');
-  const fermer = $('dialogue-ok');
-  annuler.hidden = true;
-  fermer.classList.remove('vert');
-  try {
-    await demander(titre, contenu, 'Fermer');
-  } finally {
-    annuler.hidden = false;
-    fermer.classList.add('vert');
-  }
+  await demander(titre, contenu, 'Fermer', (fermer) => {
+    $('dialogue-annuler').hidden = true;
+    fermer.classList.remove('vert');
+  });
 }
 
 // -------------------------------------------------------------- formulaires
@@ -965,11 +978,61 @@ window.addEventListener('popstate', () => { allerA(lireAdresse()); });
 // vues-là prennent toute la fenêtre, en-tête compris.
 const vuesPleineLargeur = new Set(['plagiat-fichier']);
 
+// releverTrait note où se trouve le trait qui souligne le choix courant, avant
+// qu'on en change : c'est de là que glisserTrait le fera partir. Un choix
+// caché n'a pas de trait à suivre.
+function releverTrait(bouton) {
+  if (!bouton || !bouton.offsetWidth) return null;
+  return {
+    bouton,
+    rangee: bouton.parentElement,
+    gauche: bouton.offsetLeft,
+    haut: bouton.offsetTop - bouton.parentElement.offsetTop,
+    largeur: bouton.offsetWidth,
+  };
+}
+
+// glisserTrait fait passer le trait de l'ancien choix au nouveau. Le nouveau le
+// reçoit d'abord à la place et à la largeur de l'ancien, sans transition ;
+// rendu à lui-même, il y revient au rythme qu'app.css lui donne. Le geste est
+// tout entier dans la feuille : ici, on ne fait que dire d'où il part.
+function glisserTrait(avant, nouveau) {
+  if (!avant || !nouveau || nouveau === avant.bouton || !nouveau.offsetWidth) return;
+  // D'une rangée à une autre — les onglets d'un groupe, ceux d'un travail —,
+  // ou d'une ligne à la suivante quand la rangée passe à la ligne, il n'y a
+  // pas de chemin à suivre : le trait se pose.
+  if (nouveau.parentElement !== avant.rangee) return;
+  if (nouveau.offsetTop - avant.rangee.offsetTop !== avant.haut) return;
+  // Dans la barre, le trait ne souligne que le mot : la marge qu'il laisse de
+  // part et d'autre compte dans sa largeur.
+  const marge = parseFloat(getComputedStyle(nouveau, '::after').left) || 0;
+  const largeur = nouveau.offsetWidth - 2 * marge;
+  if (largeur <= 0) return;
+  nouveau.classList.add('trait-pose');
+  nouveau.style.setProperty('--trait-depart', `${avant.gauche - nouveau.offsetLeft}px`);
+  nouveau.style.setProperty('--trait-echelle', String((avant.largeur - 2 * marge) / largeur));
+  // Lire le style du trait le fixe à cette place : sans quoi le navigateur ne
+  // verrait que l'état final, et n'aurait rien à faire glisser.
+  void getComputedStyle(nouveau, '::after').translate;
+  nouveau.classList.remove('trait-pose');
+  nouveau.style.removeProperty('--trait-depart');
+  nouveau.style.removeProperty('--trait-echelle');
+}
+
+// La rangée d'onglets visible a un seul onglet choisi ; celle qui est cachée
+// garde le sien, sans trait à suivre.
+function ongletChoisi() {
+  return [...document.querySelectorAll('#entete-page .onglets button.actif')]
+    .find((bouton) => bouton.offsetWidth) || null;
+}
+
 function afficherVue(nom, sansHistorique) {
   // Tant qu'aucune organisation n'est choisie, rien d'autre n'est accessible :
   // tout ce que fait l'outil s'y passe.
   if (!etat.organisation && nom !== 'organisation') nom = 'organisation';
   const onglet = ongletDeLaVue[nom];
+  const sectionAvant = releverTrait($('barre-sections').querySelector('[aria-current="page"]'));
+  const ongletAvant = releverTrait(ongletChoisi());
   document.body.classList.toggle('pleine-largeur', vuesPleineLargeur.has(nom));
   $('ouvrir-reglages').hidden = !etat.organisation;
   $('accueil').disabled = !etat.organisation;
@@ -987,6 +1050,9 @@ function afficherVue(nom, sansHistorique) {
   }
   etat.vue = nom;
   dessinerEntete(nom, onglet);
+  // L'en-tête est dessiné : les rangées qui restent ont leur place finale.
+  glisserTrait(sectionAvant, $('barre-sections').querySelector('[aria-current="page"]'));
+  glisserTrait(ongletAvant, ongletChoisi());
   if (!sansHistorique) naviguer(cheminDeLaVue(nom));
   window.scrollTo(0, 0);
   // Les comptages d'une vue changent pendant qu'on est ailleurs : chaque
@@ -3267,9 +3333,12 @@ for (const bouton of document.querySelectorAll('[data-continuer]')) {
   bouton.addEventListener('click', () => afficherEtape(Number(bouton.dataset.continuer)));
 }
 
+// Les étapes se cherchent dans l'assistant seul : la reprise de dépôts a aussi
+// les siennes, nommées et non numérotées, et ce qui suit les aurait toutes
+// cachées — la reprise ouverte après l'assistant s'affichait vide.
 function afficherEtape(numero) {
   etat.etape = numero;
-  for (const boite of document.querySelectorAll('.etape')) {
+  for (const boite of document.querySelectorAll('#vue-assistant .etape')) {
     boite.hidden = Number(boite.dataset.etape) !== numero;
   }
   for (const item of $('etapes').children) {
@@ -6956,7 +7025,7 @@ async function regenererJeton(portees) {
     message(`Renouvellement du jeton : ${erreur.message}`, 'erreur', 12000);
     return null;
   } finally {
-    attente.remove();
+    sortir(attente);
     $('jeton-etat').textContent = '';
   }
 }
@@ -8823,9 +8892,11 @@ function dessinerFichiersPlagiat() {
   $('pl-fichier-droite-titre').textContent =
     `${nomDeCopie(etat.plagiat.paire.project.right)} — ${vue.right.path}`;
 
+  const modeAvant = releverTrait(document.querySelector('.pl-modes button.actif'));
   for (const bouton of document.querySelectorAll('.pl-modes button')) {
     bouton.classList.toggle('actif', bouton.dataset.mode === mode);
   }
+  glisserTrait(modeAvant, document.querySelector('.pl-modes button.actif'));
   rendreCote($('pl-fichier-gauche'), vue.left, vue.spans, 'left', mode);
   rendreCote($('pl-fichier-droite'), vue.right, vue.spans, 'right', mode);
   viserFragment(etat.plagiat.fragment, false);
