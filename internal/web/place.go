@@ -2,7 +2,6 @@ package web
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
@@ -72,16 +71,13 @@ func (s *Server) enrichi(cours classroom.Classroom, repos []groups.RepoInfo) cla
 // L'écriture est idempotente : redire au registre ce qu'il sait déjà n'y écrit
 // rien, et le cas courant ne coûte donc qu'une lecture.
 func (s *Server) apprendre(org string, people ...roster.Person) error {
-	nommees := make([]roster.Person, 0, len(people))
-	for _, person := range people {
-		if strings.TrimSpace(person.Username) != "" {
-			nommees = append(nommees, person)
-		}
-	}
-	if len(nommees) == 0 {
+	// Qui n'a pas de compte n'y entre pas (voir registry.Learn) : une liste
+	// du collège entière ne coûte alors pas même la lecture.
+	change := registry.Learn(people...)
+	if change.Empty() {
 		return nil
 	}
-	_, err := s.registryOf(org).Apply(registry.Learn(nommees...))
+	_, err := s.registryOf(org).Apply(change)
 	return err
 }
 

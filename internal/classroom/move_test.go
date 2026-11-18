@@ -297,6 +297,136 @@ func TestUneCorrectionParLeMatriculeNeRenommeQueSesDepots(t *testing.T) {
 	}
 }
 
+// Corriger le seul nom de quelqu'un qui n'a pas de compte était refusé :
+// « Compte GitHub : la valeur est vide. ». Son matricule la désigne, et c'est
+// lui qui la retrouve une fois corrigée.
+func TestCorrigerLeSeulNomDeQuiNAPasDeCompte(t *testing.T) {
+	inventaire := depots("a26.5n6.01.tp1.nadia-pepin")
+	cours := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		{FullName: "Nadia Pepin", StudentID: "2100110"},
+	}).Enrich(annuaire{}, inventaire)
+
+	// Un accent ne change pas le nom du dépôt : il n'y a rien à renommer, et
+	// rien à perdre à ne pas le faire.
+	correction, err := classroom.PlanCorrection(cours, "2100110",
+		roster.Person{FullName: "Nadia Pépin"}, false, inventaire)
+	if err != nil {
+		t.Fatalf("correction refusée : %v", err)
+	}
+	if apres := correction.After; apres.FullName != "Nadia Pépin" || apres.Username != "" ||
+		apres.StudentID != "2100110" {
+		t.Fatalf("fiche corrigée : %+v", apres)
+	}
+	if nadia, _ := correction.Classroom.Find("2100110"); nadia.FullName != "Nadia Pépin" {
+		t.Errorf("la liste corrigée la nomme encore « %s »", nadia.FullName)
+	}
+	if _, sien := correction.Classroom.StudentOf("a26.5n6.01.tp1.nadia-pepin"); !sien {
+		t.Error("son dépôt doit rester le sien")
+	}
+
+	// Un vrai changement de nom renomme ses dépôts quand on le demande…
+	correction, err = classroom.PlanCorrection(cours, "2100110",
+		roster.Person{FullName: "Nadia Pépin-Dupont"}, true, inventaire)
+	if err != nil {
+		t.Fatalf("correction refusée : %v", err)
+	}
+	if len(correction.Moves) != 1 ||
+		correction.Moves[0].Target != "a26.5n6.01.tp1.nadia-pepin-dupont" {
+		t.Fatalf("renommages : %+v", correction.Moves)
+	}
+}
+
+// …et se refuse sans eux. Le registre ne range que des comptes : rien n'y
+// garderait l'ancien nom, seul à rattacher ses dépôts à sa fiche, et ils
+// deviendraient des dépôts hors liste.
+func TestCorrigerLeNomDeQuiNAPasDeCompteSansSesDepotsLesGarde(t *testing.T) {
+	inventaire := depots("a26.5n6.01.tp1.nadia-pepin", "a26.5n6.01.tp2.nadia-pepin")
+	cours := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Nadia Pépin", StudentID: "2100110"},
+	}).Enrich(annuaire{}, inventaire)
+
+	_, err := classroom.PlanCorrection(cours, "2100110",
+		roster.Person{FullName: "Nadia Pépin-Dupont"}, false, inventaire)
+	attendu := "Nadia Pépin n'a pas encore de compte : seul son nom rattache ses dépôts " +
+		"à sa fiche, et le corriger sans eux les laisserait hors liste. Renommez aussi " +
+		"ses 2 dépôts, ou rattachez-lui d'abord un compte."
+	if err == nil || err.Error() != attendu {
+		t.Fatalf("refus : %v\nattendu : %s", err, attendu)
+	}
+
+	// Rien ne change, et le message la nomme plutôt que de laisser « @ » seul.
+	_, err = classroom.PlanCorrection(cours, "2100110",
+		roster.Person{FullName: "Nadia Pépin"}, false, inventaire)
+	if err == nil || err.Error() != "Ni le nom ni le compte de Nadia Pépin n'ont changé." {
+		t.Fatalf("refus : %v", err)
+	}
+}
+
+// Inscrite deux fois — sa ligne du collège, puis son compte —, une personne
+// corrigée par son compte voit tous ses dépôts suivre, et son nouveau nom
+// s'impose. La ligne du collège, lue la première, gardait l'ancien : c'est lui
+// qui la nommait encore, et qui nommait le dépôt renommé ; celui de la ligne du
+// collège, lui, ne suivait pas.
+func TestCorrigerParLeCompteQuiEstInscriteDeuxFois(t *testing.T) {
+	inventaire := depots("a26.5n6.01.tp1.nadia-pepin-roy", "a26.5n6.01.tp2.npepin")
+	cours := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Nadia Pépin-Roy", StudentID: "2100110"},
+		{FullName: "Nadia Pépin", Username: "npepin", StudentID: "2100110"},
+	}).Enrich(annuaire{}, inventaire)
+
+	correction, err := classroom.PlanCorrection(cours, "npepin",
+		roster.Person{FullName: "Nadia Pépin-Dupont"}, true, inventaire)
+	if err != nil {
+		t.Fatalf("correction refusée : %v", err)
+	}
+	if correction.After.FullName != "Nadia Pépin-Dupont" {
+		t.Errorf("fiche corrigée : %+v", correction.After)
+	}
+	cibles := map[string]string{}
+	for _, ligne := range correction.Moves {
+		cibles[ligne.Repo] = ligne.Target
+	}
+	if len(cibles) != 2 ||
+		cibles["a26.5n6.01.tp1.nadia-pepin-roy"] != "a26.5n6.01.tp1.nadia-pepin-dupont" ||
+		cibles["a26.5n6.01.tp2.npepin"] != "a26.5n6.01.tp2.nadia-pepin-dupont" {
+		t.Fatalf("renommages : %v", cibles)
+	}
+	for _, ligne := range correction.Classroom.Students {
+		if ligne.FullName != "Nadia Pépin-Dupont" {
+			t.Errorf("une de ses lignes garde « %s »", ligne.FullName)
+		}
+	}
+
+	// Changer son seul compte ne la renomme pas d'après la ligne qui le porte.
+	correction, err = classroom.PlanCorrection(cours, "npepin",
+		roster.Person{Username: "nadia-p"}, false, inventaire)
+	if err != nil {
+		t.Fatalf("correction refusée : %v", err)
+	}
+	if correction.After.FullName != "Nadia Pépin-Roy" {
+		t.Errorf("son nom a changé en passant : %+v", correction.After)
+	}
+}
+
+// Deux lignes réunies par un compte sont une même personne : la corriger ne
+// bute pas sur le compte que sa seconde ligne porte à bon droit.
+func TestRenommerUnePersonneSurDeuxLignesReunies(t *testing.T) {
+	cours := groupe("a26", "5n6", "01", []roster.Person{
+		{FullName: "Jean-Luc Picard", Username: "jlpicard", Also: []string{"jl-perso"}},
+		{FullName: "Jean-Luc Picard", Username: "jl-perso"},
+	})
+
+	modifie, err := cours.Rename("jlpicard", roster.Person{FullName: "Jean-Luc Picard-Crusher",
+		Username: "jlpicard", Also: []string{"jl-perso"}})
+	if err != nil {
+		t.Fatalf("renommage refusé : %v", err)
+	}
+	if jl, _ := modifie.Find("jl-perso"); jl.FullName != "Jean-Luc Picard-Crusher" {
+		t.Errorf("fiche corrigée : %+v", jl)
+	}
+}
+
 // Déplacer quelqu'un qui n'a pas de compte emporte ses dépôts, et pas ceux des
 // autres personnes sans compte.
 func TestDeplacerParLeMatriculeNEmporteQueSesDepots(t *testing.T) {

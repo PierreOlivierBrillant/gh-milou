@@ -33,7 +33,7 @@ func (s *Session) create() (int, error) {
 	if err != nil {
 		return ExitOK, err
 	}
-	if err := s.configure(); err != nil {
+	if err := s.configure(people); err != nil {
 		return ExitOK, err
 	}
 
@@ -396,7 +396,10 @@ func (s *Session) verifyAccounts(people []roster.Person) ([]roster.Person, error
 }
 
 // configure recueille les paramètres des dépôts à créer.
-func (s *Session) configure() error {
+//
+// « people » sont ceux qu'on va servir, déjà lus : le gabarit proposé doit
+// pouvoir les nommer tous. Une distribution aux équipes n'en a pas.
+func (s *Session) configure(people []roster.Person) error {
 	s.Console.Heading("Paramètres des dépôts")
 	options := s.Options
 
@@ -451,9 +454,14 @@ func (s *Session) configure() error {
 		s.Settings.NamePattern = pattern
 	case s.Interactive():
 		s.Console.Note("Champs : %s", placeholderHint())
+		propose := plan.PatternFor(s.Settings.NamePattern, people)
+		if propose != s.Settings.NamePattern {
+			s.Console.Note("Le gabarit proposé nomme par le nom : tout le monde n'a pas " +
+				"encore de compte GitHub.")
+		}
 		answer, err := s.Prompt.Ask(ui.Question{
 			Title:   "Gabarit de nom des dépôts",
-			Default: s.Settings.NamePattern,
+			Default: propose,
 			Validate: func(value string) (string, error) {
 				return plan.ValidatePattern(value, "Gabarit de nom", true)
 			},

@@ -267,3 +267,52 @@ func TestLaFicheDitCommentRenommerLesDepots(t *testing.T) {
 	}
 	meme.absent("--rename-repos")
 }
+
+// Le seul nom d'une inscrite que seul son matricule désigne se corrige comme
+// celui des autres, ses dépôts avec. C'était refusé — « Compte GitHub : la
+// valeur est vide. » —, et rien ne montait au registre, qui ne range que des
+// comptes : c'est la liste du groupe qui porte son nom.
+func TestCorrigerLeSeulNomDeQuiNAPasDeCompte(t *testing.T) {
+	h := omnivox(t)
+	corriger(h, "a26.5n6.01", "2100110")
+	h.Options.FullName = "Nadia Pépin-Dupont"
+	h.Options.RenameRepos = true
+	h.Options.Yes = true
+
+	if code := h.muet(); code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	h.contient("Fiche de Nadia Pépin dans", "Nadia Pépin → Nadia Pépin-Dupont",
+		"Fiche de Nadia Pépin-Dupont corrigée", "1 dépôt renommé.")
+	h.absent("@ ", "la valeur est vide")
+	if noms := strings.Join(h.depots(), ","); noms !=
+		"a26.5n6.01.tp1.jean-luc-picard,a26.5n6.01.tp1.nadia-pepin-dupont" {
+		t.Fatalf("dépôts : %s", noms)
+	}
+	cours, _ := classroom.Open(classroom.PathNextTo(h.Reglages)).Find("acme", "a26.5n6.01")
+	if nadia, inscrite := cours.Find("2100110"); !inscrite || nadia.FullName != "Nadia Pépin-Dupont" {
+		t.Fatalf("liste du groupe :\n%s", h.groupesLocaux())
+	}
+	if contenu := h.State.Files("acme/"+registry.RepoName,
+		registry.Branch)[registry.UsersFile]; strings.Contains(contenu, "Nadia") {
+		t.Errorf("le registre a reçu une fiche sans compte :\n%s", contenu)
+	}
+}
+
+// Sans ses dépôts, la correction se refuse : rien d'autre que son nom ne les
+// rattache à elle, et ils deviendraient des dépôts hors liste.
+func TestCorrigerLeNomDeQuiNAPasDeCompteDemandeSesDepots(t *testing.T) {
+	h := omnivox(t)
+	corriger(h, "a26.5n6.01", "2100110")
+	h.Options.FullName = "Nadia Pépin-Dupont"
+	h.Options.Yes = true
+
+	if code := h.muet(); code != app.ExitValidation {
+		t.Fatalf("code = %d, attendu un refus\n%s", code, h.texte())
+	}
+	h.contient("Nadia Pépin n'a pas encore de compte", "Renommez aussi son dépôt")
+	if noms := strings.Join(h.depots(), ","); noms !=
+		"a26.5n6.01.tp1.jean-luc-picard,a26.5n6.01.tp1.nadia-pepin" {
+		t.Fatalf("dépôts : %s", noms)
+	}
+}

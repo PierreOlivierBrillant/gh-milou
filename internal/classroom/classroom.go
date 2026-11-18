@@ -1054,6 +1054,42 @@ func Places(repos []groups.RepoInfo) []string {
 	return trouvees
 }
 
+// OneAssignment refuse un geste qui porte sur un seul travail quand le préfixe
+// qu'on lui donne en réunit plusieurs — un groupe, un cours, une session —, et
+// nomme ceux qu'on peut lui donner à la place. Sans cette garde, un groupe
+// entier passait pour un travail : le déplacer fondait tous ses travaux en un
+// seul, et y ajouter des dépôts les nommait « a26.5n6.01-jlpicard », un nom
+// qu'aucun groupe ne relit.
+//
+// « groupes » sont ceux qu'occupent les dépôts listés : chaque dépôt s'y range
+// par le sien, comme Of le retrouve. Un préfixe hérité ne dit pas à quel groupe
+// il appartient : aucun travail ne s'y lit, la garde le laisse passer, et
+// chaque geste dit alors ce qui lui manque.
+func OneAssignment(geste, prefix string, groupes []Classroom, repos []groups.RepoInfo) error {
+	if _, _, travail := naming.SplitAssignment(prefix); travail {
+		return nil
+	}
+	travaux := make([]string, 0)
+	for _, cours := range groupes {
+		for _, travail := range cours.Assignments(repos, nil) {
+			travaux = append(travaux, travail.ID)
+		}
+	}
+	switch len(travaux) {
+	case 0:
+		return nil
+	case 1:
+		return valid.Errorf("%s porte sur un seul travail, et « %s » n'en est pas un : "+
+			"gérez « %s ».", geste, prefix, travaux[0])
+	}
+	montres := travaux
+	if len(montres) > 4 {
+		montres = append(append([]string(nil), travaux[:4]...), "…")
+	}
+	return valid.Errorf("%s porte sur un seul travail, et « %s » en réunit %d : gérez "+
+		"l'un d'eux — %s.", geste, prefix, len(travaux), strings.Join(montres, ", "))
+}
+
 // Rename remplace la fiche d'un étudiant du groupe : son nom complet, son
 // compte GitHub, ou les deux. C'est la seule façon de corriger une inscription
 // sans repasser par le fichier — remplacer la liste entière pour un accent
@@ -1088,10 +1124,22 @@ func (c Classroom) Rename(username string, person roster.Person) (Classroom, err
 	if position < 0 {
 		return c, valid.Errorf("@%s n'est pas dans « %s ».", strings.TrimSpace(username), c.Label())
 	}
+	// Une personne inscrite deux fois — sa ligne du collège, puis son compte —
+	// n'a qu'une fiche, et ses lignes ne se départagent pas : elles sont la
+	// même personne. Seule la ligne désignée change, mais le nom suit sur les
+	// autres. Sans cela, la ligne du collège, lue la première, gardait l'ancien
+	// nom, et c'est lui qui nommait encore la personne une fois corrigée.
+	identites := c.Identities()
+	sienne, _ := rang(identites, Handle(c.Students[position]))
+	memePersonne := func(student roster.Person) bool {
+		autre, reconnue := rang(identites, Handle(student))
+		return reconnue && autre == sienne
+	}
 	// Aucun de ses comptes ne peut être celui de quelqu'un d'autre : ce serait
-	// donner à deux personnes les mêmes dépôts.
+	// donner à deux personnes les mêmes dépôts. Ses autres lignes, elles,
+	// portent ses comptes à bon droit.
 	for index, student := range c.Students {
-		if index == position {
+		if index == position || memePersonne(student) {
 			continue
 		}
 		for _, compte := range person.Accounts() {
@@ -1100,7 +1148,13 @@ func (c Classroom) Rename(username string, person roster.Person) (Classroom, err
 			}
 		}
 	}
-	c.Students = append([]roster.Person(nil), c.Students...)
-	c.Students[position] = person
+	etudiants := append([]roster.Person(nil), c.Students...)
+	for index, student := range etudiants {
+		if index != position && person.FullName != "" && memePersonne(student) {
+			etudiants[index].FullName = person.FullName
+		}
+	}
+	etudiants[position] = person
+	c.Students = etudiants
 	return c, nil
 }

@@ -130,7 +130,7 @@ func (s *Session) correctStudent(cours classroom.Classroom, repos []groups.RepoI
 		if err := s.ecrireCorrection(cours.Org, correction); err != nil {
 			return nil, ExitFailure, err
 		}
-		console.Success("Fiche de @%s corrigée.", apres.Username)
+		console.Success("Fiche de %s corrigée.", designer(apres))
 	}
 	if len(correction.Moves) == 0 {
 		return nil, ExitOK, nil
@@ -145,10 +145,12 @@ func (s *Session) ecrireCorrection(org string, correction classroom.Correction) 
 	listes := s.groupStore()
 	// Le registre retient le nouveau nom sans oublier les anciens slugs — ceux
 	// que les listes de ce poste lui donnaient compris : les dépôts déjà créés
-	// restent rattachés à la personne, qu'on les renomme ou non.
-	if _, err := s.registryOf(org).Apply(
-		registry.Name(correction.After, listes.People(org)...)); err != nil {
-		return err
+	// restent rattachés à la personne, qu'on les renomme ou non. Sans compte,
+	// il n'a rien à retenir : la liste seule porte le nom.
+	if change := registry.Name(correction.After, listes.People(org)...); !change.Empty() {
+		if _, err := s.registryOf(org).Apply(change); err != nil {
+			return err
+		}
 	}
 	if _, err := listes.Save(correction.Classroom); err != nil {
 		return err

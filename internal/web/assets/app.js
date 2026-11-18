@@ -5111,7 +5111,13 @@ function ligneDeMembre(personne, etats = {}) {
 // lienDeProfil rend un compte GitHub cliquable. C'est la personne qu'on lit
 // derrière le compte, et la vérifier veut dire ouvrir sa page : l'hôte vient du
 // contexte, parce qu'il n'est pas toujours github.com.
+//
+// Une inscrite que seule la liste du collège connaît n'a pas encore de compte.
+// Un « @ » tout seul, menant à l'accueil de GitHub, se lirait comme un bogue
+// d'affichage : la case dit ce qui manque, du même mot que la liste du groupe
+// et que le terminal.
 function lienDeProfil(compte) {
+  if (!compte) return el('span', { classe: 'vide', texte: 'à rattacher' });
   const hote = (etat.contexte && etat.contexte.host) || 'github.com';
   return el('a', {
     classe: 'compte lien-compte', texte: '@' + compte,

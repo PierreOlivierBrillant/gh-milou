@@ -106,12 +106,21 @@ func (p Person) String() string { return p.FullName + " <@" + p.Username + ">" }
 // Validate met une personne en forme et refuse ce qui ne peut pas la désigner.
 // Le nom complet, lui, peut manquer : il se retrouve ensuite depuis le profil
 // GitHub, et son absence n'empêche que de nommer un dépôt.
+//
+// Le compte aussi, quand le matricule est là : c'est tout ce qu'une liste du
+// collège donne, et c'est lui qui désigne alors la personne. L'exiger
+// empêchait de corriger le seul nom de quelqu'un qui n'a pas encore de compte.
 func (p Person) Validate() (Person, error) {
-	username, err := valid.Login(p.Username, "Compte GitHub")
-	if err != nil {
-		return p, err
+	username := ""
+	if strings.TrimSpace(p.Username) != "" || strings.TrimSpace(p.StudentID) == "" {
+		compte, err := valid.Login(p.Username, "Compte GitHub")
+		if err != nil {
+			return p, err
+		}
+		username = compte
 	}
 	fullName := strings.TrimSpace(p.FullName)
+	var err error
 	if fullName != "" {
 		if fullName, err = valid.FullName(fullName); err != nil {
 			return p, err

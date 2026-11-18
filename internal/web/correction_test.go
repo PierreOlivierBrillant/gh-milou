@@ -151,3 +151,49 @@ func TestCorrigerUnNomGardeLeMatricule(t *testing.T) {
 		}
 	}
 }
+
+// Le « Renommer… » de la liste corrige le seul nom de qui n'a que son
+// matricule, ses dépôts avec : c'était refusé, « Compte GitHub : la valeur est
+// vide. ». Sans ses dépôts, il se refuse, puisque rien d'autre que son nom ne
+// les rattache à sa fiche.
+func TestRenommerCorrigeLeNomDeQuiNAPasDeCompte(t *testing.T) {
+	state := fakegh.NewState()
+	state.AddRepo("acme", "a26.5n6.01.tp1.nadia-pepin", true)
+	h := nouveau(t, state)
+	place := h.groupe("a26", "5n6", "01", "Jean-Luc Picard", "jlpicard")
+	h.poserListe(place, inscritParCompte("Jean-Luc Picard", "jlpicard"),
+		inscritParMatricule("Nadia Pépin", "2100110"))
+	adresse := "/api/classrooms/" + place + "/students/rename"
+
+	reponse, contenu := h.requete(http.MethodPost, adresse,
+		map[string]any{"username": "2100110", "full_name": "Nadia Pépin-Dupont"})
+	if reponse.StatusCode != http.StatusBadRequest ||
+		!strings.Contains(string(contenu), "Nadia Pépin n'a pas encore de compte") {
+		t.Fatalf("statut %d — %s", reponse.StatusCode, contenu)
+	}
+
+	bilan := h.travail(http.MethodPost, adresse, map[string]any{
+		"username": "2100110", "full_name": "Nadia Pépin-Dupont", "repos": true})
+	if resultat, _ := bilan["result"].(map[string]any); resultat["renamed"] != float64(1) {
+		t.Fatalf("bilan : %+v", bilan)
+	}
+	if noms := h.depots(); strings.Join(noms, ",") != "a26.5n6.01.tp1.nadia-pepin-dupont" {
+		t.Fatalf("dépôts : %v", noms)
+	}
+	var liste struct {
+		Students []struct {
+			FullName  string `json:"full_name"`
+			StudentID string `json:"student_id"`
+		} `json:"students"`
+	}
+	h.json(http.MethodGet, "/api/classrooms/"+place+"/students", nil, &liste)
+	nommee := ""
+	for _, ligne := range liste.Students {
+		if ligne.StudentID == "2100110" {
+			nommee = ligne.FullName
+		}
+	}
+	if nommee != "Nadia Pépin-Dupont" {
+		t.Errorf("la liste la nomme « %s » : %+v", nommee, liste.Students)
+	}
+}

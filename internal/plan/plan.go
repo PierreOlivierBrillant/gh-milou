@@ -298,10 +298,37 @@ func sansCompte(pattern string, targets []Target) error {
 	}
 	return valid.Errorf(
 		"Le gabarit « %s » nomme chaque dépôt par un compte GitHub, et %s : %s. "+
-			"Nommez les dépôts par le nom des étudiants — {name} plutôt que {username} —, "+
+			"Nommez les dépôts par le nom des étudiants — « %s » —, "+
 			"ou rattachez d'abord les comptes manquants.",
 		pattern, valid.Plural(len(noms), "personne n'en a pas encore",
-			"personnes n'en ont pas encore"), cites)
+			"personnes n'en ont pas encore"), cites, parLeNom(pattern))
+}
+
+// PatternFor rend le gabarit à proposer pour nommer ces personnes : celui
+// qu'on a retenu quand il les nomme toutes, et sinon le même par le nom.
+//
+// Le gabarit retenu par défaut nomme par le compte. Une liste du collège n'en
+// donne aucun : le proposer tel quel, c'était proposer un refus, qui
+// n'arrivait qu'au bout de l'assistant, la liste lue et les comptes vérifiés.
+func PatternFor(pattern string, people []roster.Person) string {
+	cibles := make([]Target, 0, len(people))
+	for _, person := range people {
+		cibles = append(cibles, Target{Person: person})
+	}
+	if sansCompte(pattern, cibles) == nil {
+		return pattern
+	}
+	return parLeNom(pattern)
+}
+
+// parLeNom rend le même gabarit, qui nomme par le nom plutôt que par le
+// compte. Un gabarit qui portait déjà le nom à côté du compte n'a rien à
+// remplacer : c'est alors le gabarit par défaut, par le nom, qui convient.
+func parLeNom(pattern string) string {
+	if strings.Contains(pattern, "{name}") {
+		pattern = config.DefaultNamePattern
+	}
+	return strings.ReplaceAll(pattern, "{username}", "{name}")
 }
 
 // Build construit le plan complet et refuse toute collision de noms de dépôts.

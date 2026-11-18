@@ -367,20 +367,33 @@ func (d *directorySession) menu() (int, error) {
 
 // openProfile ouvre la fiche de quelqu'un depuis l'annuaire. C'est le chemin du
 // terminal vers ce que le navigateur atteint en cliquant sur un nom.
+//
+// Une fiche se tient sous un compte : qui n'en a pas encore — une inscrite que
+// seule la liste du collège connaît — n'en a pas, et le navigateur ne fait pas
+// de son nom un lien. La proposer ici, c'était l'offrir sous « (@) » et finir
+// sur « Compte GitHub : la valeur est vide. ».
 func (d *directorySession) openProfile() error {
 	visibles := users.Apply(d.rows, d.filter, d.sortKey, d.sortDesc)
-	if len(visibles) == 0 {
-		d.session.Console.Warning("Personne à ouvrir.")
-		return nil
-	}
 	options := make([]ui.Option, 0, len(visibles))
 	for _, ligne := range visibles {
+		if strings.TrimSpace(ligne.Username) == "" {
+			continue
+		}
 		nom := ligne.FullName
 		if nom == "" {
 			nom = ligne.Username
 		}
 		options = append(options, ui.Option{
 			Value: ligne.Username, Label: nom + "  (@" + ligne.Username + ")"})
+	}
+	if len(options) == 0 {
+		if len(visibles) > 0 {
+			d.session.Console.Warning("Personne à ouvrir : une fiche se tient sous un " +
+				"compte GitHub, et aucune des personnes montrées n'en a encore.")
+		} else {
+			d.session.Console.Warning("Personne à ouvrir.")
+		}
+		return nil
 	}
 	compte, err := d.session.Prompt.Choose("Quelle fiche ?", options, options[0].Value)
 	if err != nil {

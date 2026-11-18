@@ -145,6 +145,10 @@ func garnirPourLaComparaison(state *fakegh.State) {
 	state.AddRepo("acme", "modele-tp1", true)
 	state.SeedCommit("acme/modele-tp1",
 		map[string]string{"src/Inventaire.java": modele}, "main")
+	// C'est le modèle que « gabarit » déclare : GitHub doit le savoir modèle,
+	// sans quoi distribuer dans l'aperçu échoue en 422 pour une raison qui
+	// n'a rien à voir avec l'outil.
+	state.Templates["acme/modele-tp1"] = true
 
 	// Une copie d'il y a deux ans, sous le sigle que le cours portait alors :
 	// c'est ce que la portée « toutes les sessions » doit retrouver, et elle ne

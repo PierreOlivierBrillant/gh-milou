@@ -719,11 +719,13 @@ func (s *Server) handleRenameStudent(writer http.ResponseWriter, request *http.R
 
 	// Le registre retient le nouveau nom sans oublier l'ancien slug — celui que
 	// les listes de ce poste lui donnaient compris : les dépôts déjà créés
-	// restent rattachés à leur personne, qu'on les renomme ou non.
-	if _, err := s.registryOf(cours.Org).Apply(
-		registry.Name(apres, s.classrooms.People(cours.Org)...)); err != nil {
-		fail(writer, err)
-		return
+	// restent rattachés à leur personne, qu'on les renomme ou non. Sans compte,
+	// il n'a rien à retenir : la liste seule porte le nom.
+	if change := registry.Name(apres, s.classrooms.People(cours.Org)...); !change.Empty() {
+		if _, err := s.registryOf(cours.Org).Apply(change); err != nil {
+			fail(writer, err)
+			return
+		}
 	}
 	enregistre, err := s.classrooms.Save(correction.Classroom)
 	if err != nil {
@@ -745,7 +747,7 @@ func (s *Server) handleRenameStudent(writer http.ResponseWriter, request *http.R
 		return
 	}
 
-	label := "Dépôts de @" + apres.Username + " au nom de " + apres.FullName
+	label := "Dépôts de " + classroom.Mention(avant) + " au nom de " + apres.FullName
 	job := s.jobs.Start("renommage", label, func(job *Job) (any, error) {
 		renommes, echecs := 0, 0
 		var suivis []groups.Renamed

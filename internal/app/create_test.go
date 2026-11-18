@@ -1075,3 +1075,37 @@ func sansMarque(contenu string) string {
 	}
 	return strings.Join(nettoyees, "\n")
 }
+
+// Sur un préfixe hérité, l'assistant propose un gabarit qui nomme tout le
+// monde. Il proposait celui qu'on avait retenu, par le compte : pour une liste
+// du collège, qui n'en donne aucun, accepter le défaut menait au refus, au bout
+// de l'assistant. Le gabarit retenu est celui qu'on accepte.
+func TestCreerPourUneListeDuCollegeProposeLeGabaritParLeNom(t *testing.T) {
+	h := nouveau(t, nil)
+	liste := h.liste("nom_complet,matricule\nNadia Pépin,2100110\nJean-Luc Picard,2100111\n")
+
+	code, scripte := h.script(
+		"creer",   // Que voulez-vous faire ?
+		"fichier", // Source de la liste
+		liste,     // Chemin du fichier CSV
+		"tp1",     // Identifiant du travail
+		"",        // Gabarit de nom (celui qui est proposé)
+		"",        // Dépôt modèle (aucun)
+		"",        // Dossier de fichiers de départ (aucun)
+		"",        // Visibilité (privé)
+		"oui",     // Inviter chaque personne ?
+		"push",    // Droit accordé
+		"oui",     // Confirmation finale
+	)
+	if question, posee := scripte.AskedFor("Gabarit de nom des dépôts"); !posee ||
+		question.Default != "{assignment}-{name}" {
+		t.Errorf("gabarit proposé : %+v (%v)", question, posee)
+	}
+	if code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	if noms := strings.Join(h.depots(), ","); noms != "tp1-jean-luc-picard,tp1-nadia-pepin" {
+		t.Fatalf("dépôts = %s\n%s", noms, h.texte())
+	}
+	h.contient("Le gabarit proposé nomme par le nom")
+}
