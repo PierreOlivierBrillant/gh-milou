@@ -8,6 +8,16 @@
 
 * { box-sizing: border-box; }
 
+/* La place de la barre de défilement est réservée d'emblée. Sans quoi elle
+   n'arrivait qu'avec une page assez longue — une liste chargée, un repli
+   ouvert —, et tout ce qui est centré glissait alors de quelques pixels vers
+   la gauche. Sa piste se fond dans la page : avec ou sans rien à faire
+   défiler, le bord droit reste le même. */
+html {
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--defilement-pouce) var(--defilement-piste);
+}
+
 body {
   margin: 0;
   padding: 0 0 6rem;
@@ -175,9 +185,26 @@ body.pleine-largeur .entete-page-corps, body.pleine-largeur main { max-width: no
 .onglets button:hover { color: var(--texte); }
 .onglets button.actif { color: var(--texte); font-weight: 700; border-bottom-color: var(--onglet-actif); }
 
+/* Le soulignement passe d'un onglet à l'autre en fondu, au rythme de la vue
+   qui change dessous. */
+.onglets button {
+  transition: color var(--duree-ouverture) var(--courbe-ouverture),
+    border-color var(--duree-ouverture) var(--courbe-ouverture);
+}
+
 /* ------------------------------------------------------------------ contenu */
 
 main { padding: 1.5rem; }
+
+/* Une vue qui remplace la précédente se fond en place. Deux écrans faits des
+   mêmes boîtes se ressemblent assez pour qu'un changement sec passe inaperçu ;
+   elle ne glisse pas pour autant, l'en-tête au-dessus restant immobile. Une
+   étape de l'assistant change l'écran de la même façon. Rien ne se rejoue
+   quand la vue ouverte se redessine : seul ce qui paraît se fond. */
+.vue, .boite.etape { transition: opacity var(--duree-ouverture) var(--courbe-ouverture); }
+@starting-style {
+  .vue, .boite.etape { opacity: 0; }
+}
 
 .fil { margin-bottom: .75rem; font-size: .875rem; color: var(--texte-doux); }
 .fil .separateur { margin: 0 .4rem; }
@@ -595,6 +622,31 @@ textarea.champ { resize: vertical; font-family: var(--police-mono); }
   box-shadow: var(--ombre-flottante);
 }
 
+/* Le menu se déplie de sous son bouton, et s'efface plus vite qu'il n'est
+   venu. Le temps de s'effacer, il reste affiché malgré « hidden » — une
+   transition l'emporte sur « !important » —, mais ne prend plus aucun clic :
+   celui qui l'a refermé visait déjà ce qui est dessous. */
+.menu-flottant {
+  transform-origin: top right;
+  transition-property: opacity, translate, scale, display;
+  transition-duration: var(--duree-ouverture);
+  transition-timing-function: var(--courbe-ouverture);
+  transition-behavior: allow-discrete;
+}
+
+.menu-flottant[hidden] {
+  opacity: 0;
+  translate: 0 calc(-1 * var(--glisse));
+  scale: var(--echelle-ouverture);
+  pointer-events: none;
+  transition-duration: var(--duree-fermeture);
+  transition-timing-function: var(--courbe-fermeture);
+}
+
+@starting-style {
+  .menu-flottant { opacity: 0; translate: 0 calc(-1 * var(--glisse)); scale: var(--echelle-ouverture); }
+}
+
 .menu-flottant > * + * { margin-top: .7rem; }
 .menu-flottant .champ { width: 100%; }
 .menu-pied { display: flex; justify-content: flex-end; border-top: 1px solid var(--bord);
@@ -735,6 +787,40 @@ textarea.champ { resize: vertical; font-family: var(--police-mono); }
 .etape-corps { display: none; padding: 0 1rem 1rem; }
 .etape.ouverte .etape-corps { display: flex; flex-direction: column; gap: .9rem; }
 .etape-corps > .depot { margin-top: 0; }
+
+/* L'étape qu'on ouvre se déplie pendant que celle qu'on quitte se replie, au
+   même pas : la page garde sa hauteur pendant l'échange au lieu de sauter.
+   Le repli rogne ce qui dépasse, à quelques pixels près — le halo d'un champ
+   qui a le focus. Là où une hauteur « auto » ne s'anime pas, et pour qui
+   bannit le mouvement, l'étape ouverte paraît seulement en fondu, et celle
+   qu'on quitte se ferme d'un coup : restée dépliée le temps de s'effacer, elle
+   ferait d'abord grandir la page de toute sa hauteur. */
+.etape-corps {
+  opacity: 0;
+  transition: opacity var(--duree-ouverture) var(--courbe-ouverture);
+}
+.etape.ouverte .etape-corps { opacity: 1; }
+@starting-style {
+  .etape.ouverte .etape-corps { opacity: 0; }
+}
+
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    .etape-corps {
+      interpolate-size: allow-keywords;
+      block-size: 0;
+      padding-bottom: 0;
+      overflow: clip;
+      overflow-clip-margin: .25rem;
+      transition-property: opacity, block-size, padding-bottom, display;
+      transition-behavior: allow-discrete;
+    }
+    .etape.ouverte .etape-corps { block-size: auto; padding-bottom: 1rem; }
+    @starting-style {
+      .etape.ouverte .etape-corps { block-size: 0; padding-bottom: 0; }
+    }
+  }
+}
 .etape[aria-disabled="true"] .etape-tete { cursor: not-allowed; opacity: .55; }
 
 /* Les listes longues défilent chez elles, en-tête figé. */
@@ -881,9 +967,31 @@ details .corps > * + * { margin-top: .25rem; }
 summary.entete-repliable { list-style: none; padding: 0; }
 summary.entete-repliable::-webkit-details-marker { display: none; }
 summary.entete-repliable > .boite-entete::before {
-  content: '▸'; color: var(--texte-doux); transition: transform .12s;
+  content: '▸'; color: var(--texte-doux);
+  transition: transform var(--duree-ouverture) var(--courbe-ouverture);
 }
 details[open] > summary.entete-repliable > .boite-entete::before { transform: rotate(90deg); }
+
+/* Un repli glisse en s'ouvrant comme en se fermant, sa flèche tournant avec
+   lui : ce qu'il découvre pousse la suite de la page au lieu de la faire
+   sauter. Le contenu reste rendu le temps de se replier, et n'est rogné qu'à
+   quelques pixels près — le halo d'un champ qui a le focus. Ailleurs, il
+   s'ouvre d'un coup, comme avant. */
+@supports (interpolate-size: allow-keywords) and selector(::details-content) {
+  @media (prefers-reduced-motion: no-preference) {
+    details { interpolate-size: allow-keywords; }
+    details::details-content {
+      block-size: 0;
+      overflow: clip;
+      overflow-clip-margin: .25rem;
+      transition-property: block-size, content-visibility;
+      transition-duration: var(--duree-ouverture);
+      transition-timing-function: var(--courbe-ouverture);
+      transition-behavior: allow-discrete;
+    }
+    details[open]::details-content { block-size: auto; }
+  }
+}
 
 /* ------------------------------------------------------ opération en cours */
 
@@ -898,6 +1006,26 @@ details[open] > summary.entete-repliable > .boite-entete::before { transform: ro
   box-shadow: var(--ombre-flottante);
   overflow: hidden;
   z-index: 10;
+}
+
+/* Le panneau monte du bas de la fenêtre, et y redescend quand on le ferme. */
+#operation {
+  transition-property: opacity, translate, display;
+  transition-duration: var(--duree-ouverture);
+  transition-timing-function: var(--courbe-ouverture);
+  transition-behavior: allow-discrete;
+}
+
+#operation[hidden] {
+  opacity: 0;
+  translate: 0 var(--glisse-bord);
+  pointer-events: none;
+  transition-duration: var(--duree-fermeture);
+  transition-timing-function: var(--courbe-fermeture);
+}
+
+@starting-style {
+  #operation { opacity: 0; translate: 0 var(--glisse-bord); }
 }
 
 /* Le panneau flotte au-dessus de la page. Tant qu'il est ouvert, elle garde en
@@ -951,6 +1079,26 @@ body.avec-operation main { padding-bottom: 20rem; }
 
 .messages .avis { box-shadow: var(--ombre-flottante); }
 
+/* Un message arrive du bord de la fenêtre et y repart, sans recouvrir d'un
+   coup ce qu'on lisait. Son départ, c'est le script qui le donne (sortir) : il
+   pose « sortant » et attend la fin du mouvement pour l'ôter. */
+.messages .avis {
+  transition-property: opacity, translate;
+  transition-duration: var(--duree-ouverture);
+  transition-timing-function: var(--courbe-ouverture);
+}
+
+.messages .avis.sortant {
+  opacity: 0;
+  translate: var(--glisse-bord) 0;
+  transition-duration: var(--duree-fermeture);
+  transition-timing-function: var(--courbe-fermeture);
+}
+
+@starting-style {
+  .messages .avis { opacity: 0; translate: var(--glisse-bord) 0; }
+}
+
 /* --------------------------------------------------------------- dialogue */
 
 dialog {
@@ -964,6 +1112,50 @@ dialog {
 }
 
 dialog::backdrop { background: var(--voile); }
+
+/* Un dialogue monte d'un rien en se posant, pendant que le voile tombe sur la
+   page ; il repart plus vite. « overlay » et « display » le gardent à l'écran
+   le temps de partir — un moteur qui ne sait pas les retenir le ferme d'un
+   coup, comme avant. Ce qui part ne prend plus aucun clic. */
+dialog {
+  opacity: 0;
+  translate: 0 var(--glisse);
+  scale: var(--echelle-ouverture);
+  transition-property: opacity, translate, scale, overlay, display;
+  transition-duration: var(--duree-fermeture);
+  transition-timing-function: var(--courbe-fermeture);
+  transition-behavior: allow-discrete;
+}
+
+dialog[open] {
+  opacity: 1;
+  translate: none;
+  scale: none;
+  transition-duration: var(--duree-ouverture);
+  transition-timing-function: var(--courbe-ouverture);
+}
+
+dialog:not([open]) { pointer-events: none; }
+
+dialog::backdrop {
+  opacity: 0;
+  transition-property: opacity, overlay, display;
+  transition-duration: var(--duree-fermeture);
+  transition-timing-function: var(--courbe-fermeture);
+  transition-behavior: allow-discrete;
+}
+
+dialog[open]::backdrop {
+  opacity: 1;
+  transition-duration: var(--duree-ouverture);
+  transition-timing-function: var(--courbe-ouverture);
+}
+
+@starting-style {
+  dialog[open] { opacity: 0; translate: 0 var(--glisse); scale: var(--echelle-ouverture); }
+  dialog[open]::backdrop { opacity: 0; }
+}
+
 dialog h3 { margin-top: 0; font-size: 1.05rem; }
 dialog menu { display: flex; justify-content: flex-end; gap: .5rem; padding: 0; margin: 1.25rem 0 0; }
 dialog .corps-dialogue > * + * { margin-top: .75rem; }
@@ -1161,6 +1353,12 @@ dialog .corps-dialogue > * + * { margin-top: .75rem; }
      sort du cadre à chaque tour, et une barre qui clignote se lit mal. */
   background: var(--fond-creux);
   z-index: 30;
+  /* Il paraît en fondu : déjà retardé, il n'a pas à surgir. */
+  transition: opacity var(--duree-ouverture) var(--courbe-ouverture);
+}
+
+@starting-style {
+  .attente-reseau { opacity: 0; }
 }
 
 .attente-reseau::before {
@@ -1525,7 +1723,8 @@ dialog .corps-dialogue > * + * { margin-top: .75rem; }
 /* Un résumé en ligne perd le triangle du navigateur : il porte le sien. */
 .pl-signaux-groupe summary::-webkit-details-marker { display: none; }
 .pl-signaux-groupe summary::before {
-  content: '▸'; color: var(--texte-doux); transition: transform .12s;
+  content: '▸'; color: var(--texte-doux);
+  transition: transform var(--duree-ouverture) var(--courbe-ouverture);
 }
 .pl-signaux-groupe[open] > summary::before { transform: rotate(90deg); }
 .pl-signaux-groupe summary .lien { margin-left: auto; font-size: .8125rem; }
