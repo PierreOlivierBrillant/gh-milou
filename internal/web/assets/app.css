@@ -72,13 +72,48 @@ a:hover { text-decoration: underline; }
   opacity: .8;
 }
 .barre-sections button:hover { opacity: 1; background: var(--sombre-survol); }
-.barre-sections button[aria-current="page"] {
-  opacity: 1;
-  font-weight: 700;
-  text-decoration: underline;
-  text-decoration-thickness: 2px;
-  text-underline-offset: .4rem;
+.barre-sections button[aria-current="page"] { opacity: 1; font-weight: 700; }
+
+/* Le trait qui souligne le choix courant — une section de la barre, un onglet
+   de l'en-tête, le mode d'une comparaison — se déplace d'un choix à l'autre
+   au lieu de s'éteindre sous l'un pour s'allumer sous l'autre : il glisse en
+   prenant la largeur du nouveau, et l'œil suit où l'on va. Le script
+   (glisserTrait) le pose d'abord sous l'ancien, sans transition — c'est
+   « trait-pose » —, puis le rend à sa place, qu'il rejoint en glissant. Pour
+   qui bannit le mouvement, il saute d'un coup, comme avant. */
+.barre-sections button, .onglets button { position: relative; }
+
+.barre-sections button::after, .onglets button::after {
+  content: '';
+  position: absolute;
+  opacity: 0;
+  transform-origin: left center;
+  translate: var(--trait-depart, 0px) 0;
+  scale: var(--trait-echelle, 1) 1;
+  pointer-events: none;
 }
+
+.barre-sections button[aria-current="page"]::after,
+.onglets button.actif::after { opacity: 1; }
+
+/* Dans la barre, le trait ne souligne que le mot, un peu sous lui. */
+.barre-sections button::after {
+  left: .6rem;
+  right: .6rem;
+  bottom: .15rem;
+  height: 2px;
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .barre-sections button::after, .onglets button::after {
+    transition: translate var(--duree-deplacement) var(--courbe-ouverture),
+      scale var(--duree-deplacement) var(--courbe-ouverture);
+  }
+}
+
+.barre-sections button.trait-pose::after,
+.onglets button.trait-pose::after { transition: none; }
 
 /* Une demande de collègue attend une décision : elle se voit de partout. */
 .pastille-demandes {
@@ -183,14 +218,20 @@ body.pleine-largeur .entete-page-corps, body.pleine-largeur main { max-width: no
 }
 
 .onglets button:hover { color: var(--texte); }
-.onglets button.actif { color: var(--texte); font-weight: 700; border-bottom-color: var(--onglet-actif); }
+.onglets button.actif { color: var(--texte); font-weight: 700; }
 
-/* Le soulignement passe d'un onglet à l'autre en fondu, au rythme de la vue
-   qui change dessous. */
-.onglets button {
-  transition: color var(--duree-ouverture) var(--courbe-ouverture),
-    border-color var(--duree-ouverture) var(--courbe-ouverture);
+/* Sous un onglet, le trait couvre toute la largeur et vient se poser sur la
+   bordure, qui lui garde sa place sur chaque onglet. */
+.onglets button::after {
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--onglet-trait));
+  height: var(--onglet-trait);
+  background: var(--onglet-actif);
 }
+
+/* Le nom de l'onglet change de teinte au rythme de la vue qui change dessous. */
+.onglets button { transition: color var(--duree-ouverture) var(--courbe-ouverture); }
 
 /* ------------------------------------------------------------------ contenu */
 

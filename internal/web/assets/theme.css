@@ -116,6 +116,9 @@
   --duree-fermeture: 110ms;
   --courbe-ouverture: cubic-bezier(.2, .8, .2, 1);
   --courbe-fermeture: cubic-bezier(.4, 0, 1, 1);
+  /* Ce qui se déplace d'un point à un autre — le trait sous l'onglet choisi —
+     prend un peu plus de temps : assez pour que l'œil le suive. */
+  --duree-deplacement: 220ms;
   /* D'où arrive ce qui paraît : un menu de sous son bouton, un dialogue d'un
      rien plus bas, un message ou un panneau du bord de la fenêtre. */
   --glisse: 6px;
