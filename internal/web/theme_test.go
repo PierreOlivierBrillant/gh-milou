@@ -27,6 +27,31 @@ func TestLaPaletteDuWebEstCelleDeLaMarque(t *testing.T) {
 	}
 }
 
+// La page reçoit la commande dans « /api/context » : écrite en dur, elle
+// survivrait au prochain renommage de l'outil, comme « gh milou » avait
+// survécu, dans trois notes, au passage de Nestor à Milou. Les commentaires
+// peuvent la citer ; ce que la page affiche, non.
+func TestLaPageNEcritPasLaCommandeEnDur(t *testing.T) {
+	commande := strings.ToLower(brand.Command)
+	for _, fichier := range []string{"assets/app.js", "assets/index.html"} {
+		contenu, err := assets.ReadFile(fichier)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for numero, ligne := range strings.Split(string(contenu), "\n") {
+			nue := strings.TrimSpace(ligne)
+			if strings.HasPrefix(nue, "//") || strings.HasPrefix(nue, "*") ||
+				strings.HasPrefix(nue, "/*") || strings.HasPrefix(nue, "<!--") {
+				continue
+			}
+			if strings.Contains(strings.ToLower(ligne), commande) {
+				t.Errorf("%s:%d écrit « %s » en dur : %s", fichier, numero+1,
+					brand.Command, nue)
+			}
+		}
+	}
+}
+
 func TestLaPageChargeSonThemeAvantSesComposants(t *testing.T) {
 	page, err := assets.ReadFile("assets/index.html")
 	if err != nil {
