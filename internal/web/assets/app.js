@@ -394,7 +394,8 @@ function ouvrirOperation(fiche) {
   $('operation').hidden = false;
   document.body.classList.add('avec-operation');
   operationMilou('trotte');
-  $('operation-titre').textContent = fiche.label;
+  // Le titre nomme souvent la destination : « 19 dépôts vers /chemin/… ».
+  $('operation-titre').replaceChildren(...coupable(fiche.label));
   $('operation-etat').textContent = fiche.status;
   $('operation-annuler').hidden = false;
   $('operation-barre').value = 0;
@@ -8751,16 +8752,17 @@ function dessinerSeuls(idTitre, idListe, cote, seuls) {
   zone.append(liste);
 }
 
-// cheminCoupable écrit un chemin qui peut passer à la ligne après chaque
-// barre. Sans espace, il ne se couperait nulle part : il élargirait son
-// tableau, ou dépasserait de sa boîte, qui le rognerait.
+// coupable rend un texte qui peut passer à la ligne après chaque barre, « / »
+// comme « \ » : un chemin n'a pas d'espace, et sans ces points de coupe il ne
+// se couperait nulle part — il élargirait son tableau, ou dépasserait de sa
+// boîte — ou, au mieux, au hasard d'une lettre.
+function coupable(texte) {
+  return String(texte || '').split(/(?<=[/\\])/)
+    .flatMap((morceau, rang) => (rang > 0 ? [el('wbr'), morceau] : [morceau]));
+}
+
 function cheminCoupable(chemin) {
-  const bout = el('span', { classe: 'pl-chemin' });
-  String(chemin || '').split('/').forEach((morceau, rang) => {
-    if (rang > 0) bout.append('/', el('wbr'));
-    bout.append(morceau);
-  });
-  return bout;
+  return el('span', { classe: 'pl-chemin' }, coupable(chemin));
 }
 
 function nomDeCopie(cote) { return cote.label || cote.id; }
