@@ -30,6 +30,14 @@ type Options struct {
 	// StudentsRequested ouvre l'annuaire : les utilisateurs de l'organisation
 	// entière, avec les cours que chacun a suivis.
 	StudentsRequested bool
+	// AdoptOrphans rattache les dépôts que personne ne réclame : il demande à
+	// GitHub qui se cache derrière chaque dernier niveau, et confie au registre
+	// ceux qui sont des comptes. C'est le geste de l'annuaire, sans l'annuaire.
+	AdoptOrphans bool
+	// Attach rattache à la main un dépôt sans étudiant, sous la forme
+	// « dernier-niveau=compte » : c'est ce qui reste quand GitHub ne reconnaît
+	// pas le dernier niveau. Le nom vient du profil, ou de FullName.
+	Attach string
 	// User ouvre la fiche d'un compte : son rôle, ses comptes, et la
 	// chronologie de son passage — cours suivis et cours donnés mêlés.
 	User string
@@ -301,6 +309,8 @@ Utilisation :
   gh milou --manage tp1                     gérer le groupe « tp1 »
   gh milou --students --session a26         utilisateurs de la session a26
   gh milou --students --role enseignant     les enseignants de l'organisation
+  gh milou --adopt-orphans --dry-run        les dépôts sans étudiant que GitHub reconnaît
+  gh milou --attach william-riker=wriker    ce dépôt sans étudiant est celui de @wriker
   gh milou --user ecote                     la fiche de @ecote et son passage
   gh milou --user jdupont --teacher         reconnaître @jdupont comme enseignant
   gh milou --user aleksilesaj --full-name "Aleksi Lesaj"
@@ -345,9 +355,14 @@ Drapeaux :
   --org ORG                organisation GitHub cible
   --manage [PREFIXE]       gérer un groupe existant au lieu d'en créer un
   --students               lister les utilisateurs de l'organisation et ce qu'ils ont suivi
+  --adopt-orphans          rattacher à leur étudiant les dépôts sans étudiant dont le
+                           dernier niveau est un compte GitHub (aperçu avec --dry-run)
+  --attach NIVEAU=COMPTE   rattacher à la main un dépôt sans étudiant à un compte ;
+                           son nom vient du profil, ou de --full-name
   --user COMPTE            fiche d'un utilisateur : son rôle, ses comptes, son passage
   --full-name NOM          donner son nom complet au compte de --user (ne renomme aucun
-                           dépôt), ou corriger celui de l'étudiant de --student
+                           dépôt), corriger celui de l'étudiant de --student, ou
+                           nommer celui de --attach
   --student COMPTE         corriger la fiche d'un étudiant du groupe de --manage :
                            son nom (--full-name), son compte (--student-account) ;
                            sans compte encore, son matricule le désigne
@@ -550,8 +565,13 @@ func Parse(args []string, out io.Writer) (*Options, error) {
 	set.BoolVar(&options.StudentsRequested, "students", false,
 		"lister les utilisateurs de l'organisation")
 	set.StringVar(&options.User, "user", "", "ouvrir la fiche d'un compte")
+	set.BoolVar(&options.AdoptOrphans, "adopt-orphans", false,
+		"rattacher les dépôts sans étudiant dont le dernier niveau est un compte")
+	set.StringVar(&options.Attach, "attach", "",
+		"rattacher un dépôt sans étudiant : « dernier-niveau=compte »")
 	set.StringVar(&options.FullName, "full-name", "",
-		"donner son nom complet au compte de --user, ou à l'étudiant de --student")
+		"donner son nom complet au compte de --user, à l'étudiant de --student, "+
+			"ou à celui de --attach")
 	set.StringVar(&options.Student, "student", "",
 		"corriger la fiche d'un étudiant du groupe de --manage")
 	set.StringVar(&options.StudentAccount, "student-account", "",
@@ -1002,4 +1022,23 @@ func liste(value string) []string {
 		}
 	}
 	return items
+}
+
+// attachment lit « --attach dernier-niveau=compte ». Les deux moitiés sont
+// exigées : rattacher sans dire à qui n'a pas de sens, et un drapeau à demi
+// écrit doit se plaindre plutôt que d'ouvrir l'annuaire comme si de rien
+// n'était.
+func (o *Options) attachment() (fragment, login string, err error) {
+	valeur := strings.TrimSpace(o.Attach)
+	if valeur == "" {
+		return "", "", nil
+	}
+	fragment, login, coupe := strings.Cut(valeur, "=")
+	fragment, login = strings.TrimSpace(fragment), strings.TrimSpace(login)
+	if !coupe || fragment == "" || login == "" {
+		return "", "", valid.Errorf(
+			"--attach : « %s » ne dit pas qui rattacher (attendu dernier-niveau=compte).",
+			o.Attach)
+	}
+	return fragment, login, nil
 }

@@ -2235,9 +2235,10 @@ function dessinerSynthese() {
 //
 // « hors liste » dit que le dépôt n'est rattaché à personne, pas que son nom
 // complet manque : un dépôt nommé par le compte GitHub d'un inscrit lui
-// appartient, et le dire autrement ferait croire à un intrus. Un dépôt
-// d'équipe, lui, nomme l'équipe et ses membres : il n'appartient à personne en
-// particulier, et c'est normal.
+// appartient, et le dire autrement ferait croire à un intrus. C'est le serveur
+// qui le dit : qui n'a que son matricule n'a pas de compte non plus, et il est
+// bien de la liste. Un dépôt d'équipe, lui, nomme l'équipe et ses membres : il
+// n'appartient à personne en particulier, et c'est normal.
 function destinataireDuDepot(repo) {
   if (repo.team) {
     return [el('strong', { texte: repo.full_name }),
@@ -2254,11 +2255,163 @@ function destinataireDuDepot(repo) {
                 compte.toLowerCase() === personne.username.toLowerCase()),
             })))];
   }
-  if (!repo.username) {
+  if (repo.orphan) {
+    // Il se rattache d'ici : c'est le seul endroit où on le voit, et il n'y a
+    // rien d'autre à en faire tant qu'il n'appartient à personne.
     return [el('span', { classe: 'vide', texte: repo.student + ' (hors liste)',
-      title: repo.name })];
+      title: repo.name }),
+    el('div', {}, el('button', {
+      type: 'button', classe: 'lien', texte: 'Rattacher…',
+      title: `Dire à qui est ${repo.name}`, onclick: () => rattacherDepot(repo),
+    }))];
+  }
+  if (!repo.username) {
+    return [lienVersLaFiche(repo), el('span', { classe: 'sous-nom', texte: 'sans compte' })];
   }
   return [lienVersLaFiche(repo), el('span', { classe: 'sous-nom', texte: '@' + repo.username })];
+}
+
+// ------------------------------------------- dépôts sans étudiant
+
+// Un dépôt « hors liste » porte au dernier niveau un nom que personne ne
+// réclame — le plus souvent le compte GitHub de quelqu'un que le registre ne
+// connaît pas encore, créé avant lui. Le rattacher, c'est faire connaître ce
+// compte au registre : aucun dépôt n'est renommé, et tous ceux qui portent ce
+// dernier niveau rejoignent la personne d'un coup. Ce qui est orphelin, ce que
+// GitHub reconnaît et ce qu'un rattachement exige est décidé par le serveur.
+
+// rattacherDepot dit à qui est un dépôt hors liste. Le compte est proposé quand
+// le dernier niveau en est un, avec le nom de son profil ; sinon il se donne.
+async function rattacherDepot(repo) {
+  const adresse = `/api/orphans/${encode(repo.student)}`;
+  const fiche = await tenter(() => api('GET', adresse), 'Dépôt sans étudiant');
+  if (!fiche) return;
+  const reconnu = fiche.account;
+  const orphelin = fiche.orphan;
+
+  const compte = el('input', { classe: 'champ', type: 'text', autocomplete: 'off',
+    value: reconnu ? reconnu.username : '', placeholder: 'compte GitHub' });
+  const nom = el('input', { classe: 'champ', type: 'text',
+    value: reconnu ? reconnu.full_name || '' : '', placeholder: 'Prénom Nom' });
+  // Le nom proposé est celui du profil du compte proposé : donner un autre
+  // compte sans l'effacer nommerait quelqu'un du nom d'un autre.
+  const nomPropose = nom.value;
+  let valider = null;
+  const maj = () => {
+    if (reconnu && nom.value === nomPropose &&
+      compte.value.trim().toLowerCase() !== reconnu.username.toLowerCase()) nom.value = '';
+    if (valider) valider.disabled = !compte.value.trim();
+  };
+  compte.addEventListener('input', maj);
+
+  const corps = el('div', {},
+    el('p', {}, el('code', { texte: orphelin.fragment }), reconnu
+      ? ` est un compte GitHub${reconnu.full_name ? ', celui de ' + reconnu.full_name : ''}.`
+      : " n'est pas un compte GitHub : donnez celui de la personne."),
+    orphelin.repos.length > 1
+      ? el('p', { classe: 'note', texte: `Il nomme ${pluriel(orphelin.repos.length, 'dépôt')} ` +
+          `(${orphelin.assignments.join(', ')}) : tous rejoindront la personne.` })
+      : null,
+    el('label', { classe: 'champ-bloc' },
+      el('span', { classe: 'etiquette', texte: 'Compte GitHub' }), compte,
+      el('span', { classe: 'aide', texte: 'Vérifié sur GitHub avant d’être écrit.' })),
+    el('label', { classe: 'champ-bloc' },
+      el('span', { classe: 'etiquette', texte: 'Nom complet' }), nom,
+      el('span', { classe: 'aide', texte:
+        'Vide, il vient de son profil GitHub. Il monte au registre de l’organisation ' +
+        'et nommera ses prochains dépôts ; ceux qui existent gardent le leur.' })));
+
+  if (!await demander(`Rattacher « ${repo.name} »`, corps, 'Rattacher', (bouton) => {
+    valider = bouton;
+    maj();
+    (reconnu ? nom : compte).focus();
+  })) return;
+
+  const bilan = await tenter(() => api('POST', adresse,
+    { username: compte.value.trim(), full_name: nom.value.trim() }), 'Rattachement');
+  if (!bilan) return;
+  message(`${pluriel(bilan.repos, 'dépôt rattaché', 'dépôts rattachés')} à ` +
+    `${bilan.person.full_name || '@' + bilan.person.username}.`);
+  // Le groupe compte ses étudiants et ses dépôts hors liste : relu, il connaît
+  // la personne retrouvée, et l'en-tête ne compte plus ce qui vient d'être
+  // rattaché.
+  const groupe = await tenter(() => api('GET',
+    `/api/classrooms/${encode(etat.groupe.scope)}`), 'Groupe');
+  if (groupe) etat.groupe = groupe;
+  rechargerTravail();
+}
+
+// rattacherLesOrphelins rattache d'un coup, depuis l'annuaire, les dépôts sans
+// étudiant dont le dernier niveau est un compte GitHub. Tout est coché
+// d'avance : le cas courant est le dépôt qui porte le compte de son étudiant.
+// Le nom du profil est là pour juger les autres — un compte qui porte le slug
+// d'un nom n'est pas forcément celui de l'étudiant.
+async function rattacherLesOrphelins() {
+  const bouton = $('annuaire-rattacher');
+  const libelle = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = 'Recherche des comptes…';
+  let plan;
+  try {
+    plan = await tenter(() => api('GET', '/api/orphans'), 'Dépôts sans étudiant');
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = libelle;
+  }
+  if (!plan) return;
+  const trouves = plan.found || [];
+  const restes = plan.unknown || [];
+
+  const sansCompte = restes.length === 0 ? null : el('p', { classe: 'note', texte:
+    `${pluriel(restes.length, 'dernier niveau', 'derniers niveaux')} ` +
+    `${accord(restes.length, 'ne mène', 'ne mènent')} ` +
+    `à aucun compte : ${quelquesNoms(restes.map((reste) => reste.fragment))}. ` +
+    'Chacun se rattache depuis la ligne de son dépôt, avec « Rattacher… », en donnant ' +
+    'le compte de la personne.' });
+  if (trouves.length === 0) {
+    await montrer('Rattacher les dépôts sans étudiant', el('div', {},
+      el('p', { texte: restes.length
+        ? 'Aucun de ces derniers niveaux n’est un compte GitHub.'
+        : 'Tous les dépôts de l’organisation ont leur étudiant.' }), sansCompte));
+    return;
+  }
+
+  let valider = null;
+  const cases = trouves.map((trouve) => {
+    const coche = el('input', { type: 'checkbox', checked: true,
+      value: trouve.orphan.fragment, onchange: () => maj() });
+    return { coche, ligne: el('label', { classe: 'case' }, coche, el('span', {},
+      el('strong', { texte: trouve.orphan.fragment }),
+      el('span', { classe: 'compte', texte: ' → @' + trouve.person.username }),
+      el('span', { classe: 'aide', texte:
+        `${trouve.person.full_name || 'profil sans nom'} · ` +
+        `${pluriel(trouve.orphan.repos.length, 'dépôt')} (${trouve.orphan.assignments.join(', ')})` }))) };
+  });
+  const maj = () => {
+    if (valider) valider.disabled = !cases.some(({ coche }) => coche.checked);
+  };
+
+  const corps = el('div', {},
+    el('p', { texte: `${pluriel(trouves.length, 'dernier niveau est un compte', 'derniers niveaux sont des comptes')} ` +
+      `GitHub, pour ${pluriel(plan.repos, 'dépôt')}.` }),
+    plageDeCases(el('div', { classe: 'liste-cases' }, cases.map(({ ligne }) => ligne))),
+    el('p', { classe: 'aide', texte:
+      'Chaque compte coché monte au registre de l’organisation, et ses dépôts rejoignent ' +
+      'son étudiant. Aucun dépôt n’est renommé. Décochez un compte dont le profil n’est pas ' +
+      'celui de l’étudiant.' }),
+    sansCompte);
+  if (!await demander('Rattacher les dépôts sans étudiant', corps, 'Rattacher', (ok) => {
+    valider = ok;
+    maj();
+  })) return;
+
+  const retenus = cases.filter(({ coche }) => coche.checked).map(({ coche }) => coche.value);
+  const bilan = await tenter(() => api('POST', '/api/orphans', { fragments: retenus }),
+    'Rattachement');
+  if (!bilan) return;
+  message(`${pluriel(bilan.repos, 'dépôt rattaché', 'dépôts rattachés')} à leur étudiant, ` +
+    `sous ${pluriel(bilan.accounts, 'compte')}.`);
+  chargerAnnuaire();
 }
 
 // dernierEnvoiDuDepot ne montre le dernier envoi que s'il dit autre chose que
@@ -4136,6 +4289,8 @@ function resumerAnnuaire(donnees) {
   // liste trouée comme si elle était entière.
   if (donnees.unmatched) parts.push(`${pluriel(donnees.unmatched, 'dépôt')} sans étudiant connu`);
   $('annuaire-resume').textContent = parts.join(' · ');
+  // Le geste n'est offert que s'il a quelque chose à rattacher.
+  $('annuaire-rattacher').hidden = !donnees.unmatched;
   direVide($('annuaire-vide'), donnees.total === 0
     ? "Aucun utilisateur connu dans cette organisation. Déclarez un groupe et importez sa liste."
     : 'Personne ne répond à ces critères.', 'roi');
@@ -4903,6 +5058,7 @@ function dessinerEquipes() {
 
 $('equipes-nouvelle').addEventListener('click', () => nouvelleEquipe());
 $('equipes-adopter').addEventListener('click', () => adopterEquipe());
+$('annuaire-rattacher').addEventListener('click', () => rattacherLesOrphelins());
 
 // ligneDeMembre écrit un membre d'équipe : son nom, ses comptes, et ce qui
 // cloche s'il y a lieu.

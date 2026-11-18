@@ -900,6 +900,9 @@ type assignmentRepo struct {
 	Student  string `json:"student"`
 	FullName string `json:"full_name"`
 	Username string `json:"username"`
+	// Orphan dit que le dépôt n'est rattaché à personne : son dernier niveau ne
+	// désigne ni une équipe, ni quelqu'un de la liste ou du registre.
+	Orphan bool `json:"orphan,omitempty"`
 	// Team nomme l'équipe destinataire, et Members ses membres : un dépôt
 	// d'équipe ne porte le nom de personne, il faut donc dire qui il concerne —
 	// et le dire par leur nom, pas par leur seul compte.
@@ -1083,6 +1086,11 @@ func (s *Server) handleAssignment(writer http.ResponseWriter, request *http.Requ
 			ligne.Waiting = equipe.Pending
 		} else if student, inscrit := cours.StudentOf(repo.Name); inscrit {
 			ligne.FullName, ligne.Username = student.FullName, student.Username
+		} else {
+			// Ni équipe, ni étudiant : la ligne offre de le rattacher. Le dire
+			// ici plutôt que de le déduire d'un compte vide — qui n'a que son
+			// matricule n'a pas de compte non plus, et il est bien de la liste.
+			ligne.Orphan = true
 		}
 		lignes = append(lignes, ligne)
 	}

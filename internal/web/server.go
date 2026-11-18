@@ -245,6 +245,13 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/users/{account}/same-as", s.handleSameCandidates)
 	mux.HandleFunc("POST /api/users/{account}/same-as", s.handleJoin)
 	mux.HandleFunc("DELETE /api/users/{account}/same-as", s.handleSplit)
+	// Les dépôts sans étudiant se rattachent à l'échelle de l'organisation,
+	// comme le registre qui les rattache : tous d'un coup depuis l'annuaire, un
+	// à un depuis la ligne d'un dépôt.
+	mux.HandleFunc("GET /api/orphans", s.handleOrphans)
+	mux.HandleFunc("POST /api/orphans", s.handleAdoptOrphans)
+	mux.HandleFunc("GET /api/orphans/{fragment}", s.handleOrphan)
+	mux.HandleFunc("POST /api/orphans/{fragment}", s.handleAttachOrphan)
 
 	// --- groupes
 	// Un groupe se désigne par sa place — « a26.5n6.1010 » —, celle-là même qui

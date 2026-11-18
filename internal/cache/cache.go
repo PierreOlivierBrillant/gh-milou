@@ -56,6 +56,12 @@ func RegistryKey(org string) string { return "registry:" + strings.ToLower(org) 
 // ProfileKey est la clé du nom complet associé à un compte GitHub.
 func ProfileKey(login string) string { return "profile:" + strings.ToLower(login) }
 
+// AccountKey est la clé de ce qu'on sait d'un compte GitHub : s'il existe, et
+// sous quel nom. Elle est distincte de « ProfileKey », qui ne porte que le nom
+// et ne distingue donc pas un compte sans nom affiché d'un compte absent — ce
+// dont dépend le rattachement d'un dépôt à son étudiant.
+func AccountKey(login string) string { return "account:" + strings.ToLower(login) }
+
 // AccessKey est la clé des comptes qui ont accès à un dépôt.
 func AccessKey(org, repo string) string {
 	return "access:" + strings.ToLower(org) + "/" + strings.ToLower(repo)
