@@ -115,6 +115,34 @@ func TestBuildRefuseDeNommerParUnCompteAbsent(t *testing.T) {
 	}
 }
 
+// Le gabarit proposé doit pouvoir nommer tout le monde : par le compte quand
+// chacun en a un, par le nom sinon. Ce qui l'entoure reste ce qu'on a choisi.
+func TestLeGabaritProposeNommeToutLeMonde(t *testing.T) {
+	comptes := []roster.Person{{FullName: "Jean-Luc Picard", Username: "jlpicard"}}
+	college := append(comptes, roster.Person{FullName: "Nadia Pépin", StudentID: "2100110"})
+	cas := []struct {
+		retenu string
+		gens   []roster.Person
+		attend string
+	}{
+		{"{assignment}-{username}", comptes, "{assignment}-{username}"},
+		{"{assignment}-{username}", college, "{assignment}-{name}"},
+		{"inf1-{assignment}_{username}", college, "inf1-{assignment}_{name}"},
+		{"{assignment}-{name}-{username}", college, "{assignment}-{name}"},
+		{"{assignment}-{index}", college, "{assignment}-{index}"},
+	}
+	for _, c := range cas {
+		if obtenu := plan.PatternFor(c.retenu, c.gens); obtenu != c.attend {
+			t.Errorf("« %s » : %q, attendu %q", c.retenu, obtenu, c.attend)
+		}
+	}
+	// Le refus cite le gabarit à prendre, tel qu'on le passe à --pattern.
+	_, err := plan.Build(college, reglages("{assignment}-{username}"))
+	if err == nil || !strings.Contains(err.Error(), "« {assignment}-{name} »") {
+		t.Errorf("refus : %v", err)
+	}
+}
+
 func TestBuildRefuseUnNomDeDepotInvalide(t *testing.T) {
 	gens := []roster.Person{{FullName: "Émilie Côté", Username: "emilie-cote"}}
 	settings := reglages("{fullname} {username}")

@@ -40,39 +40,14 @@ func (m *manageSession) travail(group *groups.Group) (classroom.Classroom, strin
 }
 
 // plusieursTravaux refuse un geste qui porte sur un seul travail quand le
-// préfixe géré en réunit plusieurs — un groupe, un cours, une session —, et
-// nomme ceux qu'on peut gérer à la place. Sans cette garde, un groupe entier
-// passait pour un travail : le déplacer fondait tous ses travaux en un seul.
-//
-// Un préfixe hérité ne dit pas à quel groupe il appartient : la garde le laisse
-// passer, et chaque geste dit alors ce qui lui manque.
+// préfixe géré en réunit plusieurs : c'est « classroom.OneAssignment » qui en
+// décide, pour que chaque geste refuse la même chose.
 func (m *manageSession) plusieursTravaux(group *groups.Group, geste string) error {
-	if _, _, travail := naming.SplitAssignment(group.Prefix); travail {
-		return nil
-	}
 	infos := make([]groups.RepoInfo, 0, group.Len())
 	for _, repo := range group.Repos {
 		infos = append(infos, groups.RepoInfo{Name: repo.Name})
 	}
-	travaux := make([]string, 0)
-	for _, cours := range m.groupesDe(group) {
-		for _, travail := range cours.Assignments(infos, nil) {
-			travaux = append(travaux, travail.ID)
-		}
-	}
-	switch len(travaux) {
-	case 0:
-		return nil
-	case 1:
-		return valid.Errorf("%s porte sur un seul travail, et « %s » n'en est pas un : "+
-			"gérez « %s ».", geste, group.Prefix, travaux[0])
-	}
-	montres := travaux
-	if len(montres) > 4 {
-		montres = append(append([]string(nil), travaux[:4]...), "…")
-	}
-	return valid.Errorf("%s porte sur un seul travail, et « %s » en réunit %d : gérez "+
-		"l'un d'eux — %s.", geste, group.Prefix, len(travaux), strings.Join(montres, ", "))
+	return classroom.OneAssignment(geste, group.Prefix, m.groupesDe(group), infos)
 }
 
 // groupesDe compose les groupes auxquels appartiennent les dépôts listés. Un

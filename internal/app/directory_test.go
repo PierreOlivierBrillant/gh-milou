@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/app"
@@ -91,6 +92,35 @@ func TestAnnuaireDitLeCompteARattacher(t *testing.T) {
 	}
 	h.contient("@jlpicard", "Nadia Pépin      à rattacher")
 	h.absent("@ ")
+}
+
+// Une fiche se tient sous un compte. L'annuaire proposait d'ouvrir celle de
+// Nadia sous « Nadia Pépin  (@) », et la choisir finissait sur « Compte
+// GitHub : la valeur est vide. ». Elle n'est plus proposée, comme le navigateur
+// ne fait pas de son nom un lien.
+func TestAnnuaireNOuvreQueLesFichesDesComptes(t *testing.T) {
+	h := nouveau(t, nil)
+	h.Options.StudentsRequested = true
+	h.declarer(classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{
+			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+			{FullName: "Nadia Pépin", StudentID: "2100110"},
+		},
+	})
+	code, scripte := h.script("fiche", "jlpicard", "non", "non", "rien", "quitter")
+	if code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	menu, propose := scripte.MenuFor("Quelle fiche")
+	if !propose {
+		t.Fatalf("aucun menu « Quelle fiche ? »\n%s", h.texte())
+	}
+	if etiquettes := strings.Join(menu.Labels(), "\n"); strings.Contains(etiquettes, "Nadia") ||
+		!strings.Contains(etiquettes, "Jean-Luc Picard  (@jlpicard)") {
+		t.Errorf("fiches proposées :\n%s", etiquettes)
+	}
+	h.absent("la valeur est vide")
 }
 
 // Les critères de la ligne de commande valent aussi pour l'annuaire : c'est le

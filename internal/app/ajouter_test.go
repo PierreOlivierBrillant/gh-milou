@@ -184,3 +184,27 @@ func TestAjouterReconnaitQuiADejaSonDepotDuTravail(t *testing.T) {
 		})
 	}
 }
+
+// Des dépôts s'ajoutent à un travail. Sur la place d'un groupe entier,
+// « ajouter » tenait le groupe pour un préfixe hérité : il demandait un
+// gabarit et proposait « a26.5n6.01-jlpicard », un nom qu'aucun groupe ne
+// relit. Il refuse désormais, comme les autres gestes qui portent sur un seul
+// travail, en nommant ceux qu'on peut gérer, sans rien demander ni créer.
+func TestAjouterAUnGroupeEntierNommeSesTravaux(t *testing.T) {
+	state := cohorteNommee(t)
+	h := gestion(t, state, "a26.5n6.01")
+
+	code, scripte := h.script("depots", "ajouter", "quitter")
+	if question, posee := scripte.AskedFor("Gabarit de nom"); posee {
+		t.Errorf("le gabarit est demandé, « %s » proposé", question.Default)
+	}
+	if code != app.ExitOK {
+		t.Fatalf("code = %d\n%s", code, h.texte())
+	}
+	h.contient("Un ajout de dépôts porte sur un seul travail, et « a26.5n6.01 » en " +
+		"réunit 2 : gérez l'un d'eux — a26.5n6.01.tp1, a26.5n6.01.tp2.")
+	if noms := strings.Join(h.depots(), ","); noms !=
+		"a26.5n6.01.tp1.emilie-cote,a26.5n6.01.tp1.jlpicard,a26.5n6.01.tp2.jlpicard" {
+		t.Errorf("dépôts = %s", noms)
+	}
+}

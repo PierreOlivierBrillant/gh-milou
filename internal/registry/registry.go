@@ -664,9 +664,17 @@ type Link struct {
 }
 
 // Learn compose le changement qui fait connaître des personnes.
+//
+// Le registre ne range que des comptes : qui n'en a pas encore — toute une
+// cohorte venue du collège — n'y a pas de fiche, et vit dans la liste de son
+// groupe jusqu'au jour où on lui en rattache un. Le taire ici plutôt que de
+// refuser tout le changement laisse les autres y entrer.
 func Learn(people ...roster.Person) Change {
 	fiches := make([]User, 0, len(people))
 	for _, person := range people {
+		if strings.TrimSpace(person.Username) == "" {
+			continue
+		}
 		fiches = append(fiches, From(person))
 	}
 	return Change{Learn: fiches}
@@ -678,7 +686,13 @@ func Learn(people ...roster.Person) Change {
 // Les noms que des listes de groupe lui donnaient y laissent leur slug. Le
 // registre ne les a peut-être jamais reçus, et ce sont pourtant eux qui ont
 // nommé ses dépôts : le nom corrigé ne doit pas les détacher de lui.
+//
+// Sans compte, il n'y a rien à nommer ici (voir Learn) : le changement est
+// vide, et c'est la liste du groupe qui porte le nom corrigé.
 func Name(person roster.Person, elsewhere ...roster.Person) Change {
+	if strings.TrimSpace(person.Username) == "" {
+		return Change{}
+	}
 	fiche := From(person)
 	for _, ailleurs := range elsewhere {
 		if !ailleurs.Owns(person.Username) {

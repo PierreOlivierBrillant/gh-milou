@@ -709,6 +709,11 @@ func (m *manageSession) detectTemplate(group *groups.Group) string {
 // addRepos ajoute des dépôts au groupe, pour les personnes non encore servies.
 func (m *manageSession) addRepos(group *groups.Group) error {
 	session, console := m.session, m.session.Console
+	// Des dépôts s'ajoutent à un travail : sur la place d'un groupe entier, le
+	// préfixe passait pour hérité, et Jean-Luc recevait « a26.5n6.01-jlpicard ».
+	if err := m.plusieursTravaux(group, "Un ajout de dépôts"); err != nil {
+		return err
+	}
 	console.Heading("Ajouter des dépôts à « " + group.Prefix + " »")
 	session.Settings.Assignment = group.Prefix
 

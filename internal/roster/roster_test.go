@@ -203,3 +203,20 @@ func TestDeuxNomsCompletsPeuventEtreLaMemePersonne(t *testing.T) {
 		t.Error("deux noms différents sont deux personnes")
 	}
 }
+
+// Une personne se désigne par son compte ou, à défaut, par son matricule :
+// c'est tout ce qu'une liste du collège donne. Sans l'un ni l'autre, rien ne
+// la désigne, et elle est refusée.
+func TestValiderUnePersonneSansCompte(t *testing.T) {
+	nadia, err := roster.Person{FullName: " Nadia Pépin ", StudentID: " 2100110 "}.Validate()
+	if err != nil {
+		t.Fatalf("refusée malgré son matricule : %v", err)
+	}
+	if nadia.FullName != "Nadia Pépin" || nadia.Username != "" || nadia.StudentID != "2100110" {
+		t.Errorf("mise en forme : %+v", nadia)
+	}
+	if _, err := (roster.Person{FullName: "Nadia Pépin"}).Validate(); err == nil ||
+		err.Error() != "Compte GitHub : la valeur est vide." {
+		t.Errorf("ni compte ni matricule : %v", err)
+	}
+}

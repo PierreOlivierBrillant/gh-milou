@@ -125,6 +125,41 @@ func TestTravauxDuGroupe(t *testing.T) {
 	}
 }
 
+// Un geste qui porte sur un seul travail le refuse à la place d'un groupe — ou
+// d'un cours, qui en réunit plusieurs — en nommant ceux qu'on peut lui donner.
+// Un travail passe, et un préfixe hérité aussi : rien n'y dit de groupe.
+func TestUnGesteSurUnTravailRefuseUnGroupeEntier(t *testing.T) {
+	inventaire := depots(
+		"a26.5n6.01.tp1.emilie-cote", "a26.5n6.01.tp2.emilie-cote",
+		"a26.5n6.02.tp1.jean-luc-picard",
+	)
+	premier := groupe("a26", "5n6", "01", cohorte)
+	second := groupe("a26", "5n6", "02", cohorte)
+	tous := []classroom.Classroom{premier, second}
+
+	cas := []struct {
+		prefixe string
+		groupes []classroom.Classroom
+		attendu string
+	}{
+		{"a26.5n6.01.tp1", tous, ""},
+		{"tp1", nil, ""},
+		{"a26.5n6.02", []classroom.Classroom{second}, "Un ajout porte sur un seul travail, " +
+			"et « a26.5n6.02 » n'en est pas un : gérez « a26.5n6.02.tp1 »."},
+		{"a26.5n6", tous, "Un ajout porte sur un seul travail, et « a26.5n6 » en réunit 3 : " +
+			"gérez l'un d'eux — a26.5n6.01.tp1, a26.5n6.01.tp2, a26.5n6.02.tp1."},
+	}
+	for _, c := range cas {
+		err := classroom.OneAssignment("Un ajout", c.prefixe, c.groupes, inventaire)
+		switch {
+		case c.attendu == "" && err != nil:
+			t.Errorf("« %s » : refusé à tort — %v", c.prefixe, err)
+		case c.attendu != "" && (err == nil || err.Error() != c.attendu):
+			t.Errorf("« %s » : %v\nattendu : %s", c.prefixe, err, c.attendu)
+		}
+	}
+}
+
 func TestDepotHorsListeCompteApart(t *testing.T) {
 	inventaire := depots(
 		"a26.5n6.01.tp1.emilie-cote",

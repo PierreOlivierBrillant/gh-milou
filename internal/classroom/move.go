@@ -1,6 +1,7 @@
 package classroom
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
@@ -102,13 +103,18 @@ func (c Classroom) Movers(handles []string) ([]roster.Person, error) {
 // complet change. Le nom de l'étudiant est le dernier niveau du nom d'un dépôt :
 // corriger sa fiche ne suffit pas, les dépôts déjà créés portent l'ancien.
 //
-// La personne est désignée par ce qui la désignait — le compte qu'elle avait, à
-// défaut son matricule : c'est ce qui la retrouve dans le groupe tel qu'il est
-// encore.
+// La personne est retrouvée par tout ce qui la désignait — ses comptes et son
+// matricule —, comme PlanMove : c'est ce qui la retrouve dans le groupe tel
+// qu'il est encore. Une seule désignation ne suffit pas : inscrite deux fois,
+// sa ligne du collège et son compte, et corrigée par son compte, une personne
+// laissait sous l'ancien nom le dépôt de sa ligne du collège.
 func PlanRenameStudent(cours Classroom, avant, apres roster.Person,
 	repos []groups.RepoInfo) ([]Move, error) {
-	return planRenames(cours, cours,
-		map[string]string{Designation(avant): fragmentDe(apres)}, repos)
+	fragments := map[string]string{}
+	for _, cle := range designationsDe(avant) {
+		fragments[cle] = fragmentDe(apres)
+	}
+	return planRenames(cours, cours, fragments, repos)
 }
 
 // Correction est la fiche corrigée d'une personne du groupe : ce qu'elle était,
@@ -153,6 +159,10 @@ func PlanCorrection(cours Classroom, username string, wanted roster.Person,
 			break
 		}
 	}
+	// Le nom de départ est celui qu'on lui voit : inscrite deux fois, la ligne
+	// de son compte peut l'écrire autrement, et une correction de compte n'a
+	// pas à changer son nom en passant.
+	apres.FullName = avant.FullName
 	if nom := strings.TrimSpace(wanted.FullName); nom != "" {
 		apres.FullName = nom
 	}
@@ -169,10 +179,22 @@ func PlanCorrection(cours Classroom, username string, wanted roster.Person,
 	}
 	apres, _ = modifie.Find(Handle(apres))
 	correction := Correction{Before: avant, After: apres, Classroom: modifie}
+	// Le registre ne range que des comptes : c'est lui qui garde l'ancien nom
+	// des autres, et leurs dépôts restent à eux sous celui qu'ils portent.
+	// Sans compte jusqu'ici, seul le nom de la liste rattachait les dépôts à
+	// leur personne, et le corriger sans eux les laissait hors liste.
+	sansRegistre := strings.TrimSpace(avant.Username) == ""
+	suivraient, err := PlanRenameStudent(cours, avant, apres, repos)
+	if err != nil && (withRepos || sansRegistre) {
+		return Correction{}, err
+	}
 	if withRepos {
-		if correction.Moves, err = PlanRenameStudent(cours, avant, apres, repos); err != nil {
-			return Correction{}, err
-		}
+		correction.Moves = suivraient
+	} else if len(suivraient) > 0 && sansRegistre {
+		return Correction{}, valid.Errorf("%s n'a pas encore de compte : seul son nom "+
+			"rattache ses dépôts à sa fiche, et le corriger sans eux les laisserait hors "+
+			"liste. Renommez aussi %s, ou rattachez-lui d'abord un compte.", Mention(avant),
+			valid.Agree(len(suivraient), "son dépôt", "ses "+strconv.Itoa(len(suivraient))+" dépôts"))
 	}
 
 	// Une correction qui ne change rien n'a rien à écrire : la laisser passer
@@ -180,12 +202,25 @@ func PlanCorrection(cours Classroom, username string, wanted roster.Person,
 	if !correction.Changed() && len(correction.Moves) == 0 {
 		if withRepos {
 			return Correction{}, valid.Errorf("Rien à corriger : ni le nom ni le compte de "+
-				"@%s n'ont changé, et ses dépôts portent déjà son nom.", avant.Username)
+				"%s n'ont changé, et ses dépôts portent déjà son nom.", Mention(avant))
 		}
 		return Correction{}, valid.Errorf(
-			"Ni le nom ni le compte de @%s n'ont changé.", avant.Username)
+			"Ni le nom ni le compte de %s n'ont changé.", Mention(avant))
 	}
 	return correction, nil
+}
+
+// Mention nomme une personne dans un message : son compte, à défaut son nom, à
+// défaut son matricule. Un « @ » tout seul ne désignerait personne, et c'est
+// tout ce qu'une liste du collège laissait voir.
+func Mention(personne roster.Person) string {
+	if compte := strings.TrimSpace(personne.Username); compte != "" {
+		return "@" + compte
+	}
+	if nom := strings.TrimSpace(personne.FullName); nom != "" {
+		return nom
+	}
+	return "matricule " + strings.TrimSpace(personne.StudentID)
 }
 
 // fragmentDe rend le fragment qui nomme une personne dans un dépôt. Il est vide

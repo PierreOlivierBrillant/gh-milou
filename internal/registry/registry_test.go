@@ -35,6 +35,25 @@ func TestApprendreRetientLeSlugDuNom(t *testing.T) {
 	}
 }
 
+// Le registre ne range que des comptes. Qui n'en a pas encore — une liste du
+// collège entière — n'y entre pas, et ne fait plus refuser le changement des
+// autres : nommer quelqu'un sans compte échouait sur « Compte GitHub : la
+// valeur est vide. », la correction de son nom avec.
+func TestQuiNAPasDeCompteNEntrePasAuRegistre(t *testing.T) {
+	nadia := roster.Person{FullName: "Nadia Pépin", StudentID: "2100110"}
+	if change := registry.Name(nadia); !change.Empty() {
+		t.Errorf("nommer qui n'a pas de compte écrit : %+v", change)
+	}
+	set, _, err := appliquer(t, registry.Empty(),
+		registry.Learn(nadia, personne("Jean-Luc Picard", "jlpicard")))
+	if err != nil {
+		t.Fatalf("apprentissage refusé : %v", err)
+	}
+	if fiches := set.All(); len(fiches) != 1 || fiches[0].Username != "jlpicard" {
+		t.Fatalf("fiches = %+v", fiches)
+	}
+}
+
 // Le cœur de l'affaire : corriger l'orthographe d'un nom ne doit pas rendre
 // orphelins les dépôts déjà créés sous l'ancien slug.
 func TestCorrigerUnNomGardeLAncienSlug(t *testing.T) {

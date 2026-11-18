@@ -141,15 +141,7 @@ func nommer(personne roster.Person) string {
 // designer dit une personne en un mot, là où une phrase n'en attend qu'un : son
 // compte, à défaut son nom. Une inscrite que seule la liste du collège connaît
 // n'a pas encore de compte, et « @ » tout seul ne désignerait personne.
-func designer(personne roster.Person) string {
-	if compte := arobase(personne.Username); compte != "" {
-		return compte
-	}
-	if nom := strings.TrimSpace(personne.FullName); nom != "" {
-		return nom
-	}
-	return "matricule " + strings.TrimSpace(personne.StudentID)
-}
+func designer(personne roster.Person) string { return classroom.Mention(personne) }
 
 // arobase écrit un compte GitHub comme partout ailleurs, et rien du tout quand
 // il n'y en a pas.
@@ -855,7 +847,7 @@ func (s *Session) createTeams() (int, error) {
 	if err != nil {
 		return ExitValidation, err
 	}
-	if err := s.configure(); err != nil {
+	if err := s.configure(nil); err != nil {
 		return ExitOK, err
 	}
 	// Le gabarit de nom n'est pas négociable pour un travail d'équipe — c'est
