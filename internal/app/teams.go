@@ -7,6 +7,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/cache"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/ghapi"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/groups"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/naming"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/plan"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
@@ -32,6 +33,9 @@ type desk struct {
 	// l'organisation — l'adoption a besoin de voir les autres.
 	list  []teams.Team
 	infos []teams.Info
+	// repos est l'inventaire de l'organisation, lu une fois pour enrichir le
+	// groupe : ce qui suit — déplacer, cloisonner — en repart sans le relire.
+	repos []groups.RepoInfo
 }
 
 // teamDesk résout le groupe désigné par une place et lit ses équipes.
@@ -48,18 +52,25 @@ func (s *Session) teamDesk(place string) (*desk, error) {
 				"nommé « session%[2]scours%[2]sgroupe » — « a26.5n6.01 » par exemple.",
 			place, naming.Separator)
 	}
-	cours, err := classroom.AtScope(s.Settings.Org, place,
-		classroom.DefaultsFrom(s.Settings))
+	// Une place mal écrite est refusée avant de lire quoi que ce soit.
+	if _, err := classroom.AtScope(s.Settings.Org, place,
+		classroom.DefaultsFrom(s.Settings)); err != nil {
+		return nil, err
+	}
+	// Le groupe est vu comme le navigateur le voit : sa liste s'il en a une
+	// ici, les noms du registre, et ceux que seuls ses dépôts révèlent. Sans
+	// ces derniers, un poste qui ne retient pas la liste d'un groupe n'en
+	// connaîtrait personne : ses équipes refuseraient ses étudiants, et aucun
+	// ne paraîtrait sans équipe.
+	repos, err := s.orgRepos(s.Settings.Org, false)
 	if err != nil {
 		return nil, err
 	}
-	// La liste du groupe vient du fichier local quand il en tient une : sans
-	// elle, un membre d'équipe n'a que son compte, et rien ne pourrait suivre
-	// l'équipe qui change de groupe.
-	if connu, existe := s.groupStore().Find(cours.Org, cours.Scope()); existe {
-		cours = connu
+	cours, err := s.groupeEnrichi(place, repos)
+	if err != nil {
+		return nil, err
 	}
-	bureau := &desk{session: s, cours: cours}
+	bureau := &desk{session: s, cours: cours, repos: repos}
 	return bureau, bureau.reload()
 }
 
@@ -177,7 +188,7 @@ func (d *desk) create(short string, membres []string) error {
 	if err := teams.Available(d.list, short); err != nil {
 		return err
 	}
-	comptes, err := d.members(membres)
+	comptes, err := d.cours.TeamMembers(membres)
 	if err != nil {
 		return err
 	}
@@ -207,7 +218,7 @@ func (d *desk) compose(short string, membres []string) error {
 	if _, existe := teams.Find(d.list, short); !existe {
 		return d.create(short, membres)
 	}
-	comptes, err := d.members(membres)
+	comptes, err := d.cours.TeamMembers(membres)
 	if err != nil {
 		return err
 	}
@@ -216,7 +227,7 @@ func (d *desk) compose(short string, membres []string) error {
 
 // assign inscrit des personnes dans une équipe ; elles quittent la leur.
 func (d *desk) assign(short string, membres []string) error {
-	comptes, err := d.members(membres)
+	comptes, err := d.cours.TeamMembers(membres)
 	if err != nil {
 		return err
 	}
@@ -225,7 +236,7 @@ func (d *desk) assign(short string, membres []string) error {
 
 // remove retire des personnes de leur équipe.
 func (d *desk) remove(short string, membres []string) error {
-	comptes, err := d.members(membres)
+	comptes, err := d.cours.TeamMembers(membres)
 	if err != nil {
 		return err
 	}
@@ -304,12 +315,8 @@ func (d *desk) transfer(short, place string) error {
 		return err
 	}
 
-	repos, err := d.session.orgRepos(d.cours.Org, false)
-	if err != nil {
-		return err
-	}
 	membres := d.cours.TeamMovers(equipe)
-	lignes, err := classroom.PlanMoveTeam(d.cours, arrivee, equipe, membres, repos)
+	lignes, err := classroom.PlanMoveTeam(d.cours, arrivee, equipe, membres, d.repos)
 	if err != nil {
 		return err
 	}
@@ -499,30 +506,6 @@ func verbe(kind string) string {
 		return "rejoint"
 	}
 	return "quitte"
-}
-
-// members vérifie que les comptes donnés sont des étudiants du groupe. Un
-// groupe dont la liste n'est pas retenue localement n'en connaît aucun : les
-// comptes sont alors pris tels quels, car rien ne permet de les démentir.
-func (d *desk) members(usernames []string) ([]string, error) {
-	propres := make([]string, 0, len(usernames))
-	for _, brut := range usernames {
-		username, err := valid.Login(brut, "Compte GitHub")
-		if err != nil {
-			return nil, err
-		}
-		if len(d.cours.Students) > 0 {
-			personne, inscrit := d.cours.Find(username)
-			if !inscrit {
-				return nil, valid.Errorf(
-					"@%s n'est pas dans « %s » : inscrivez-le au groupe d'abord.",
-					username, d.cours.Label())
-			}
-			username = personne.Username
-		}
-		propres = append(propres, username)
-	}
-	return propres, nil
 }
 
 // ------------------------------------------------------------ ligne de commande

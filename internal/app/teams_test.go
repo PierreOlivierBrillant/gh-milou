@@ -8,6 +8,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/app"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/classroom"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/fakegh"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/registry"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 )
 
@@ -43,8 +44,68 @@ func (h *harnais) composer(place, equipe string, membres ...string) int {
 	return code
 }
 
+// inscrireLeGroupe déclare la liste du groupe où ces tests composent leurs
+// équipes : une équipe n'accueille que des étudiants du groupe, et un groupe
+// que ni liste ni dépôt ne peuple n'en compte aucun.
+func (h *harnais) inscrireLeGroupe() {
+	h.t.Helper()
+	h.declarer(classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{
+			{FullName: "Émilie Côté", Username: "emilie-cote"},
+			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+			{FullName: "Aminata Diallo", Username: "aminata-d"},
+		},
+	})
+}
+
+// Un poste qui ne retient pas la liste d'un groupe en connaît pourtant les
+// étudiants : ses dépôts les révèlent, et le registre les nomme. Le terminal
+// les voit comme le navigateur — sans équipe d'abord, puis accueillis.
+func TestTerminalComposeAvecCeuxQueSeulsLesDepotsRevelent(t *testing.T) {
+	state := fakegh.NewState()
+	state.AddRepo("acme", "a26.5n6.01.tp1.emilie-cote", true)
+	state.AddRepo("acme", "a26.5n6.01.tp1.jean-luc-picard", true)
+	state.AddRepo("acme", registry.RepoName, true)
+	state.SeedCommit("acme/"+registry.RepoName, map[string]string{
+		registry.UsersFile: `{
+  "version": 1,
+  "students": [
+    {"username": "emilie-cote", "full_name": "Émilie Côté", "slugs": ["emilie-cote"]},
+    {"username": "jlpicard", "full_name": "Jean-Luc Picard", "slugs": ["jean-luc-picard"]}
+  ]
+}`,
+	}, registry.Branch)
+	h := nouveau(t, state)
+
+	if code := h.composer("a26.5n6.01", "eq1", "emilie-cote"); code != app.ExitOK {
+		t.Fatalf("code de retour %d :\n%s", code, h.texte())
+	}
+	membres := h.State.TeamMembers("acme", fakegh.TeamSlug("a26.5n6.01.eq1"))
+	if strings.Join(membres, ",") != "emilie-cote" {
+		t.Fatalf("membres inattendus : %v", membres)
+	}
+	h.contient("Émilie Côté (@emilie-cote)", "Sans équipe : @jlpicard")
+}
+
+// Une équipe n'accueille que des étudiants du groupe, au terminal comme au
+// navigateur : un compte que rien ne rattache au groupe est refusé, et
+// l'équipe n'est pas créée pour autant.
+func TestTerminalRefuseUnInconnuDansUneEquipe(t *testing.T) {
+	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
+	if code := h.composer("a26.5n6.01", "eq1", "emilie-cote", "inconnu-quelconque"); code == app.ExitOK {
+		t.Fatalf("un compte étranger au groupe devait être refusé :\n%s", h.texte())
+	}
+	h.contient("@inconnu-quelconque n'est pas dans « Groupe 01 »", "inscrivez-le au groupe")
+	if noms := equipesDuGroupe(h, "a26.5n6.01"); len(noms) != 0 {
+		t.Fatalf("aucune équipe ne devait être créée : %v", noms)
+	}
+}
+
 func TestTerminalComposeUneEquipe(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	if code := h.composer("a26.5n6.01", "eq1", "emilie-cote", "jlpicard"); code != app.ExitOK {
 		t.Fatalf("code de retour %d :\n%s", code, h.texte())
 	}
@@ -109,6 +170,7 @@ func TestTerminalDitEnseignantLEnseignantDUneEquipe(t *testing.T) {
 
 func TestTerminalDeplaceUnEtudiantDEquipe(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.composer("a26.5n6.01", "eq1", "emilie-cote", "jlpicard")
 	h.composer("a26.5n6.01", "eq2", "aminata-d")
 
@@ -131,6 +193,7 @@ func TestTerminalDeplaceUnEtudiantDEquipe(t *testing.T) {
 
 func TestTerminalRenommeEtSupprimeUneEquipe(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.composer("a26.5n6.01", "eq1", "emilie-cote")
 
 	h.Options.ManageRequested, h.Options.Manage = true, "a26.5n6.01"
@@ -229,6 +292,7 @@ func comptesDe(cours classroom.Classroom) []string {
 // les laisse, « --team-delete-repos » les emporte.
 func TestTerminalSupprimeUneEquipeAvecSesDepots(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.composer("a26.5n6.01", "eq1", "emilie-cote")
 	h.composer("a26.5n6.01", "eq2", "aminata-d")
 	h.State.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
@@ -288,6 +352,7 @@ func TestTerminalAdopteUneEquipeExistante(t *testing.T) {
 // liste : ses destinataires sont les équipes, et elles vivent sur GitHub.
 func TestTerminalDistribueUnTravailDEquipe(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.composer("a26.5n6.01", "eq1", "emilie-cote")
 	h.composer("a26.5n6.01", "eq2", "jlpicard", "aminata-d")
 
@@ -318,6 +383,7 @@ func TestTerminalDistribueUnTravailDEquipe(t *testing.T) {
 
 func TestTerminalDistribueAQuelquesEquipes(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.composer("a26.5n6.01", "eq1", "emilie-cote")
 	h.composer("a26.5n6.01", "eq2", "jlpicard")
 
@@ -337,6 +403,7 @@ func TestTerminalDistribueAQuelquesEquipes(t *testing.T) {
 // dépôts sont déjà là et bien nommés, mais rien ne les a jamais partagés.
 func TestTerminalRepartageUnTravailAdopte(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.composer("a26.5n6.01", "eq1", "emilie-cote")
 	h.State.AddRepo("acme", "a26.5n6.01.tp1.eq1", true)
 
@@ -408,6 +475,7 @@ func TestDrapeauxDEquipeSeLisentEnListe(t *testing.T) {
 // et la place se choisit parmi celles que les dépôts dessinent.
 func TestAssistantMeneAuxEquipes(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.State.AddRepo("acme", "a26.5n6.01.tp1.emilie-cote", true)
 
 	code, scripte := h.script(

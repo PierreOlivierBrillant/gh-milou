@@ -33,11 +33,7 @@ func (s *Session) teachingMode(place string) (int, error) {
 	if err != nil {
 		return ExitValidation, err
 	}
-	cours := bureau.cours
-	repos, err := s.orgRepos(cours.Org, false)
-	if err != nil {
-		return ExitFailure, err
-	}
+	cours, repos := bureau.cours, bureau.repos
 	set, _ := s.names(cours.Org)
 	s.printTeaching(cours, cours.TeachingOf(bureau.infos, repos, set), set)
 
