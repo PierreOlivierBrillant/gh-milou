@@ -19,11 +19,21 @@ import (
 // heurte, ce qui doit précéder quoi, tout cela se décide dans « teams ».
 
 // squadOf résout le groupe demandé et ses équipes.
+//
+// Le groupe est vu tel que sa fiche le montre : avec ceux que seuls ses dépôts
+// révèlent. Un poste sans liste locale pour ce groupe n'en connaît pas
+// d'autres, et les équipes refuseraient alors, comme étrangers au groupe, des
+// étudiants que l'écran du groupe affiche.
 func (s *Server) squadOf(request *http.Request) (classroom.Classroom, []teams.Team, error) {
 	cours, err := s.place(request)
 	if err != nil {
 		return cours, nil, err
 	}
+	repos, _, err := s.repos(cours.Org, false)
+	if err != nil {
+		return cours, nil, err
+	}
+	cours = s.enrichi(cours, repos)
 	infos, err := s.orgTeams(cours.Org, request.URL.Query().Get("refresh") == "1")
 	if err != nil {
 		return cours, nil, err
@@ -117,7 +127,7 @@ func (s *Server) handleCreateTeam(writer http.ResponseWriter, request *http.Requ
 		fail(writer, err)
 		return
 	}
-	membres, err := s.members(cours, body.Members)
+	membres, err := cours.TeamMembers(body.Members)
 	if err != nil {
 		fail(writer, err)
 		return
@@ -285,12 +295,14 @@ func (s *Server) handleMoveTeam(writer http.ResponseWriter, request *http.Reques
 			strings.TrimSpace(request.PathValue("team"))))
 		return
 	}
+	// Le départ est déjà enrichi par squadOf. L'enrichir une seconde fois
+	// oublierait ce qui en a été déduit, et le fichier local l'adopterait à
+	// l'enregistrement.
 	repos, _, err := s.repos(depart.Org, false)
 	if err != nil {
 		fail(writer, err)
 		return
 	}
-	depart = s.enrichi(depart, repos)
 
 	arrivee, neuf, err := s.moveTarget(body.Target, body.NewGroup, repos)
 	if err != nil {
@@ -480,7 +492,7 @@ func (s *Server) applyMembership(writer http.ResponseWriter, request *http.Reque
 		fail(writer, err)
 		return
 	}
-	membres, err := s.members(cours, usernames)
+	membres, err := cours.TeamMembers(usernames)
 	if err != nil {
 		fail(writer, err)
 		return
@@ -533,32 +545,6 @@ func (s *Server) applyTeamSteps(org string, etapes []teams.Step) ([]teams.Step, 
 		s.forgetTeams(org)
 	}
 	return applied, echecs
-}
-
-// members vérifie que les comptes donnés sont bien des étudiants du groupe.
-// Inscrire quelqu'un d'étranger au groupe dans une de ses équipes lui donnerait
-// accès à des dépôts sans qu'aucune liste ne le mentionne.
-func (s *Server) members(cours classroom.Classroom, usernames []string) ([]string, error) {
-	propres := make([]string, 0, len(usernames))
-	for _, brut := range usernames {
-		if strings.TrimSpace(brut) == "" {
-			continue
-		}
-		username, err := valid.Login(brut, "Compte GitHub")
-		if err != nil {
-			return nil, err
-		}
-		if _, inscrit := cours.Find(username); !inscrit {
-			return nil, valid.Errorf(
-				"@%s n'est pas dans « %s » : inscrivez-le au groupe avant de lui donner une équipe.",
-				username, cours.Label())
-		}
-		// Le compte demandé, non celui qui désigne la personne : c'est sous
-		// celui-là qu'elle entre dans l'équipe, et lui substituer son compte
-		// principal la refuserait dès que ce dernier y est déjà.
-		propres = append(propres, username)
-	}
-	return propres, nil
 }
 
 // ------------------------------------------------- accès des dépôts d'équipe

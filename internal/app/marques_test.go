@@ -219,6 +219,7 @@ func TestAjouterDesDepotsAuGroupeVerseLeursMarques(t *testing.T) {
 // rien ne les versait.
 func TestDistribuerAuxEquipesVerseLeursMarques(t *testing.T) {
 	h := nouveau(t, nil)
+	h.inscrireLeGroupe()
 	h.composer("a26.5n6.01", "eq1", "jlpicard")
 	h.composer("a26.5n6.01", "eq2", "emilie-cote")
 

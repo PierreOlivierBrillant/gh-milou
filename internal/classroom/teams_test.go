@@ -306,3 +306,28 @@ func TestUneEquipeDUnAutreGroupeNestPasRetenue(t *testing.T) {
 		t.Fatalf("aucune ne devrait lui être rattachée : %v", teams.Names(equipes))
 	}
 }
+
+// Une équipe n'accueille que des étudiants du groupe, sous le compte même
+// qu'on a demandé : lui substituer le compte principal de la personne la
+// refuserait dès que ce dernier est déjà dans l'équipe.
+func TestTeamMembersGardeLeCompteDemande(t *testing.T) {
+	cours := classroom.Classroom{
+		Org: "acme", Session: "a26", Course: "5n6", Group: "01",
+		Students: []roster.Person{
+			{FullName: "Émilie Côté", Username: "emilie-cote", Also: []string{"emilie-perso"}},
+			{FullName: "Jean-Luc Picard", Username: "jlpicard"},
+		},
+	}
+	comptes, err := cours.TeamMembers([]string{"emilie-perso", " ", "jlpicard"})
+	if err != nil {
+		t.Fatalf("refus inattendu : %v", err)
+	}
+	if strings.Join(comptes, ",") != "emilie-perso,jlpicard" {
+		t.Fatalf("comptes rendus : %v", comptes)
+	}
+
+	if _, err := cours.TeamMembers([]string{"jlpicard", "inconnu-quelconque"}); err == nil ||
+		!strings.Contains(err.Error(), "@inconnu-quelconque n'est pas dans « Groupe 01 »") {
+		t.Fatalf("un compte étranger au groupe devait être refusé : %v", err)
+	}
+}

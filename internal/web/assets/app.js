@@ -5255,13 +5255,27 @@ function listeDeComptes(equipe) {
 // choixDesEtudiants dresse des cases à cocher pour les étudiants du groupe,
 // avec ceux qui sont déjà ailleurs signalés : les déplacer est permis, mais il
 // faut le savoir.
+//
+// Une recherche les filtre : dans un groupe de quarante, on cherche un nom
+// plutôt qu'on ne le parcourt. Elle ne fait que masquer — une case cochée puis
+// filtrée reste cochée, et part avec les autres.
 function choixDesEtudiants(coches, sauf) {
+  const personnes = gens(etat.groupe);
   const liste = el('div', { classe: 'liste-cases' });
-  for (const personne of gens(etat.groupe)) {
+  if (personnes.length === 0) {
+    liste.append(el('p', { classe: 'note',
+      texte: "Ce groupe n'a aucun étudiant : importez sa liste avant de composer des équipes." }));
+    return liste;
+  }
+
+  // Les mots sous lesquels une personne se cherche : son nom et chacun de ses
+  // comptes, accents retirés.
+  const mots = new Map();
+  const lignes = personnes.map((personne) => {
     const ailleurs = etat.equipes.find((equipe) =>
       equipe.short !== sauf &&
       (equipe.members || []).some((compte) => compte.toLowerCase() === personne.username.toLowerCase()));
-    liste.append(el('label', { classe: 'case' },
+    const ligne = el('label', { classe: 'case' },
       el('input', {
         type: 'checkbox', value: personne.username,
         checked: coches.has(personne.username.toLowerCase()),
@@ -5269,13 +5283,43 @@ function choixDesEtudiants(coches, sauf) {
       el('span', {},
         personne.full_name ? personne.full_name + ' ' : '',
         el('span', { classe: 'compte', texte: '@' + personne.username }),
-        ailleurs ? el('span', { classe: 'note', texte: ` — actuellement dans ${ailleurs.short}` }) : null)));
+        ailleurs ? el('span', { classe: 'note', texte: ` — actuellement dans ${ailleurs.short}` }) : null));
+    mots.set(ligne, aplati([personne.full_name, personne.username, ...(personne.also || [])].join(' '))
+      .split(/[^\p{L}\p{N}]+/u).filter(Boolean));
+    return ligne;
+  });
+  const aucun = el('p', { classe: 'note', texte: 'Aucun étudiant ne correspond.' });
+  liste.append(...lignes, aucun);
+
+  const recherche = el('input', { classe: 'champ', type: 'search',
+    placeholder: 'Filtrer : nom ou compte…' });
+  function dessiner() {
+    // Chaque mot cherché doit en ouvrir un de la personne, plutôt que se
+    // trouver n'importe où dedans.
+    const termes = aplati(recherche.value.trim()).split(/\s+/).filter(Boolean);
+    let trouves = 0;
+    for (const ligne of lignes) {
+      ligne.hidden = !termes.every((terme) => mots.get(ligne).some((mot) => mot.startsWith(terme)));
+      if (!ligne.hidden) trouves++;
+    }
+    aucun.hidden = trouves > 0;
   }
-  if (gens(etat.groupe).length === 0) {
-    liste.append(el('p', { classe: 'note',
-      texte: "Ce groupe n'a aucun étudiant : importez sa liste avant de composer des équipes." }));
-  }
-  return liste;
+  recherche.addEventListener('input', dessiner);
+  // Le dialogue est un formulaire : « Entrée » y fermerait la question au lieu
+  // de servir la recherche. Elle coche ici le premier étudiant trouvé, puis
+  // vide la recherche pour le suivant : un nom, Entrée, un autre nom.
+  recherche.addEventListener('keydown', (evenement) => {
+    if (evenement.key !== 'Enter') return;
+    evenement.preventDefault();
+    const premiere = lignes.find((ligne) => !ligne.hidden);
+    if (!premiere || !recherche.value.trim()) return;
+    premiere.querySelector('input').checked = true;
+    recherche.value = '';
+    dessiner();
+  });
+  dessiner();
+
+  return el('div', { classe: 'champ-bloc' }, recherche, liste);
 }
 
 // comptesCoches relève les cases cochées d'un formulaire d'équipe.

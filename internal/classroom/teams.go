@@ -8,6 +8,7 @@ import (
 	"github.com/PierreOlivierBrillant/gh-milou/internal/plan"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/roster"
 	"github.com/PierreOlivierBrillant/gh-milou/internal/teams"
+	"github.com/PierreOlivierBrillant/gh-milou/internal/valid"
 )
 
 // Un travail d'équipe, c'est un dépôt par équipe au lieu d'un dépôt par
@@ -28,6 +29,37 @@ func (c Classroom) Teams(infos []teams.Info) []teams.Team {
 // TeamName compose le nom complet d'une équipe du groupe.
 func (c Classroom) TeamName(short string) string {
 	return naming.TeamName(c.Session, c.Course, c.Group, strings.TrimSpace(short))
+}
+
+// TeamMembers vérifie que les comptes donnés sont des étudiants du groupe, et
+// les rend tels qu'ils ont été demandés. Inscrire quelqu'un d'étranger au
+// groupe dans une de ses équipes lui donnerait accès à des dépôts sans
+// qu'aucune liste ne le mentionne.
+//
+// Le groupe doit avoir été enrichi de ses dépôts (voir Enrich) : sans eux, un
+// poste qui n'en retient pas la liste n'en connaîtrait personne, et refuserait
+// des étudiants que les écrans du groupe affichent.
+func (c Classroom) TeamMembers(usernames []string) ([]string, error) {
+	propres := make([]string, 0, len(usernames))
+	for _, brut := range usernames {
+		if strings.TrimSpace(brut) == "" {
+			continue
+		}
+		username, err := valid.Login(brut, "Compte GitHub")
+		if err != nil {
+			return nil, err
+		}
+		if _, inscrit := c.Find(username); !inscrit {
+			return nil, valid.Errorf(
+				"@%s n'est pas dans « %s » : inscrivez-le au groupe avant de lui donner une équipe.",
+				username, c.Label())
+		}
+		// Le compte demandé, non celui qui désigne la personne : c'est sous
+		// celui-là qu'elle entre dans l'équipe, et lui substituer son compte
+		// principal la refuserait dès que ce dernier y est déjà.
+		propres = append(propres, username)
+	}
+	return propres, nil
 }
 
 // TeamMovers rassemble les fiches que l'équipe emporte quand elle change de

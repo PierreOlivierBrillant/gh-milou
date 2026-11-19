@@ -48,6 +48,15 @@ func (h *harnais) equipes(place string) listeEquipes {
 	return liste
 }
 
+// actualiser fait relire l'inventaire au serveur, comme le bouton du même nom.
+// Les écrans d'équipe lisent l'inventaire dès la première équipe créée : un
+// dépôt ajouté ensuite au faux GitHub l'est dans le dos du serveur, qui ne le
+// verrait pas sans cela.
+func (h *harnais) actualiser(place string) {
+	h.t.Helper()
+	h.json(http.MethodGet, "/api/classrooms/"+place+"?refresh=1", nil, nil)
+}
+
 // creerEquipe déclare une équipe et sa composition.
 func (h *harnais) creerEquipe(place, nom string, membres ...string) ficheEquipe {
 	h.t.Helper()
@@ -165,6 +174,49 @@ func TestUneEquipeNAccueillePasQuiNEstPasDuGroupe(t *testing.T) {
 	}
 }
 
+// Un poste qui n'a aucune liste pour un groupe en connaît pourtant les
+// étudiants : ses dépôts les révèlent, et le registre les nomme. L'écran du
+// groupe les montre ; ses équipes doivent les voir et les accueillir aussi,
+// sans quoi on refuserait au nom du groupe quelqu'un qu'il affiche.
+func TestUneEquipeAccueilleCeuxQueSeulsLesDepotsRevelent(t *testing.T) {
+	state := fakegh.NewState()
+	state.AddRepo("acme", "a26.5n6.01.tp1.emilie-cote", true)
+	state.AddRepo("acme", "a26.5n6.01.tp1.jean-luc-picard", true)
+	state.AddRepo("acme", "a26.5n6.01.tp1.aminata-diallo", true)
+	premiere := nouveau(t, state)
+	place := premiere.groupe("a26", "5N6", "01",
+		"Émilie Côté", "emilie-cote",
+		"Jean-Luc Picard", "jlpicard",
+		"Aminata Diallo", "aminata-d")
+
+	collegue := autreMachine(t, state)
+	if libres := collegue.equipes(place).Unassigned; len(libres) != 3 {
+		t.Fatalf("trois étudiants sans équipe attendus, vus : %+v", libres)
+	}
+
+	reponse, contenu := collegue.requete(http.MethodPost, "/api/classrooms/"+place+"/teams",
+		map[string]any{"name": "eq1", "members": []string{"jlpicard", "emilie-cote"}})
+	if reponse.StatusCode != http.StatusCreated {
+		t.Fatalf("création : statut attendu 201, reçu %d — %s", reponse.StatusCode, contenu)
+	}
+	membres := state.TeamMembers("acme", fakegh.TeamSlug("a26.5n6.01.eq1"))
+	sort.Strings(membres)
+	if strings.Join(membres, ",") != "emilie-cote,jlpicard" {
+		t.Fatalf("membres de eq1 sur GitHub : %v", membres)
+	}
+
+	// Rejoindre une équipe existante passe par le même contrôle.
+	collegue.creerEquipe(place, "eq2")
+	reponse, contenu = collegue.requete(http.MethodPost, "/api/classrooms/"+place+"/teams/members",
+		map[string]any{"team": "eq2", "usernames": []string{"aminata-d"}})
+	if reponse.StatusCode != http.StatusOK {
+		t.Fatalf("inscription : statut attendu 200, reçu %d — %s", reponse.StatusCode, contenu)
+	}
+	if libres := collegue.equipes(place).Unassigned; len(libres) != 0 {
+		t.Fatalf("plus personne ne devrait être sans équipe : %+v", libres)
+	}
+}
+
 // Un enseignant membre d'une équipe n'est pas un compte « hors liste » : le
 // serveur le dit enseignant, à part, sous le nom que le registre lui donne.
 // Ce que le registre sait nommer l'est aussi parmi les comptes hors liste.
@@ -276,6 +328,7 @@ func TestDeplacerUneEquipeVersUnAutreGroupe(t *testing.T) {
 	h.State.AddRepo("acme", "a26.5n6.01.tp1.emilie-cote", true)
 	h.State.AddRepo("acme", "a26.5n6.01.tp1.jean-luc-picard", true)
 	h.State.AddRepo("acme", "a26.5n6.01.tp1.aminata-diallo", true)
+	h.actualiser(place)
 
 	bilan := h.travail(http.MethodPost, "/api/classrooms/"+place+"/teams/eq1/move",
 		map[string]any{"new_group": map[string]string{
@@ -350,6 +403,7 @@ func TestLeDepotDUneEquipeNommeSesMembresEtCeuxQuiAttendent(t *testing.T) {
 		"Émilie Côté", "emilie-cote", "Hugo Lamarche", "hugolamarche")
 	h.creerEquipe(place, "eq1", "emilie-cote", "hugolamarche")
 	h.State.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
+	h.actualiser(place)
 
 	var detail struct {
 		Repos []struct {
@@ -424,6 +478,7 @@ func TestSupprimerUneEquipeAvecSesDepots(t *testing.T) {
 	h.State.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
 	h.State.AddRepo("acme", "a26.5n6.01.tp1.eq1", true)
 	h.State.AddRepo("acme", "a26.5n6.01.projet.eq2", true)
+	h.actualiser(place)
 
 	reponse, _ := h.requete(http.MethodDelete, "/api/classrooms/"+place+"/teams/eq1",
 		map[string]any{"repos": true, "confirm": "eq2"})
@@ -455,6 +510,7 @@ func TestLaListeDesEquipesCompteLeursDepots(t *testing.T) {
 	h, place := groupeAvecEquipes(t)
 	h.State.AddRepo("acme", "a26.5n6.01.projet.eq1", true)
 	h.State.AddRepo("acme", "a26.5n6.01.tp1.eq1", true)
+	h.actualiser(place)
 
 	var liste struct {
 		Repos map[string]int `json:"repos"`
